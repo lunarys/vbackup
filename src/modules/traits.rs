@@ -13,8 +13,8 @@ pub trait Check {
 }
 
 pub trait Controller {
-    fn begin(&self, name: String, config_json: &Value, paths: &Paths) -> Result<(), String>;
-    fn end(&self, name: String, config_json: &Value, paths: &Paths) -> Result<(), String>;
+    fn begin(&self, name: String, config_json: &Value, paths: &Paths) -> Result<bool, String>;
+    fn end(&self, name: String, config_json: &Value, paths: &Paths) -> Result<bool, String>;
 }
 
 pub trait Sync {

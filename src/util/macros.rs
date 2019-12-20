@@ -8,3 +8,13 @@ macro_rules! try_else {
         }
     }
 }
+
+#[macro_export]
+macro_rules! rewrap {
+    ($res:expr, $err:expr) => {
+        match $res {
+            Ok(val) => return Ok(val),
+            Err(_) => return Err($err.to_string())
+        }
+    }
+}

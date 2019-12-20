@@ -56,6 +56,39 @@ impl Controller for MqttController {
     }
 
     fn end(&self, name: String, config: &Value, paths: &Paths) -> Result<(), String> {
-        unimplemented!()
+        debug!("MQTT controller end run is beginning");
+
+        let config : Configuration = try_else!(serde_json::from_value(config_json.clone()),
+            "Could not parse configuration");
+
+        let mqtt_config : MqttConfiguration = match config.auth_reference {
+            Some(value) => {
+                let auth_data = try_else!(auth_data::load(&value, &paths),
+                    "Could not get auth_data");
+                try_else!(serde_json::from_value(auth_data.clone()),
+                    "Could not parse mqtt authentication")
+            },
+            None => {
+                try_else!(serde_json::from_value(config_json.clone()),
+                    "Could not parse mqtt configuration")
+            }
+        };
+
+        debug!("MQTT controller end run is done");
+        return Ok(());
+    }
+}
+
+impl MqttController {
+    fn start(config: Configuration, mqtt_config: MqttConfiguration) -> Result<> {
+        // TODO: Maybe just pass mqtt client object
+    }
+
+    fn check(config: Configuration, mqtt_config: MqttConfiguration) -> Result<> {
+
+    }
+
+    fn end(config: Configuration, mqtt_config: MqttConfiguration) -> Result<> {
+
     }
 }

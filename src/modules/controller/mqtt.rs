@@ -1,4 +1,8 @@
 use crate::modules::traits::Controller;
+use crate::modules::object::Paths;
+
+use crate::try_else;
+
 use std::process::Command;
 use serde_json::Value;
 use serde::{Deserialize,Serialize};
@@ -25,17 +29,22 @@ struct MqttConfiguration {
 }
 
 impl Controller for MqttController {
-    fn begin(&self, name: String, config: Value) -> Result<(), String> {
+    fn begin(&self, name: String, config_json: Value, paths: Paths) -> Result<(), String> {
         debug!("MQTT controller start run is beginning");
 
-        let config: Configuration = serde_json::from_value(config).unwrap();
+        let config : Configuration = try_else!(serde_json::from_value(config_json), "Could not parse configuration");
+        let mqtt_config : MqttConfiguration = match config.auth_reference {
+            Some(value) => try_else!(serde_json::from_value(config_json), "Could not parse mqtt authentication"),
+            None => try_else!(serde_json::from_value(config_json), "Could not parse mqtt configuration")
+        };
+
         info!("Device name: {}", config.device);
 
         debug!("MQTT controller start run is done");
         return Ok(());
     }
 
-    fn end(&self, name: String, config: Value) -> Result<(), String> {
+    fn end(&self, name: String, config: Value, paths: Paths) -> Result<(), String> {
         unimplemented!()
     }
 }

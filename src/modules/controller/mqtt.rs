@@ -1,5 +1,6 @@
 use crate::modules::traits::Controller;
 use crate::modules::object::Paths;
+use crate::util::auth_data;
 
 use crate::try_else;
 
@@ -37,7 +38,9 @@ impl Controller for MqttController {
 
         let mqtt_config : MqttConfiguration = match config.auth_reference {
             Some(value) => {
-                try_else!(serde_json::from_value(config_json.clone()),
+                let auth_data = try_else!(auth_data::load(&value, &paths),
+                    "Could not get auth_data");
+                try_else!(serde_json::from_value(auth_data.clone()),
                     "Could not parse mqtt authentication")
             },
             None => {

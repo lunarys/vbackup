@@ -8,7 +8,7 @@ use std::io::prelude::Read;
 use serde_json::Value;
 
 pub fn from_file(file_name: &str) -> Result<Value, String> {
-    let file = try_else!(File::open("foo.txt"), "Could not open file");
+    let file = try_else!(File::open(file_name), "Could not open file");
 
     let mut buf_reader = BufReader::new(file);
 
@@ -16,4 +16,8 @@ pub fn from_file(file_name: &str) -> Result<Value, String> {
     //buf_reader.read_to_string(&mut contents)?;
 
     rewrap!(serde_json::from_reader(buf_reader), "Failed reading the file")
+}
+
+pub fn to_file(file_name: &str, value: &Value) -> Result<(), String> {
+    Ok(())
 }

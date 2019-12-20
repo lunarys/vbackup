@@ -29,13 +29,21 @@ struct MqttConfiguration {
 }
 
 impl Controller for MqttController {
-    fn begin(&self, name: String, config_json: Value, paths: Paths) -> Result<(), String> {
+    fn begin(&self, name: String, config_json: &Value, paths: &Paths) -> Result<(), String> {
         debug!("MQTT controller start run is beginning");
 
-        let config : Configuration = try_else!(serde_json::from_value(config_json), "Could not parse configuration");
+        let config : Configuration = try_else!(serde_json::from_value(config_json.clone()),
+            "Could not parse configuration");
+
         let mqtt_config : MqttConfiguration = match config.auth_reference {
-            Some(value) => try_else!(serde_json::from_value(config_json), "Could not parse mqtt authentication"),
-            None => try_else!(serde_json::from_value(config_json), "Could not parse mqtt configuration")
+            Some(value) => {
+                try_else!(serde_json::from_value(config_json.clone()),
+                    "Could not parse mqtt authentication")
+            },
+            None => {
+                try_else!(serde_json::from_value(config_json.clone()),
+                    "Could not parse mqtt configuration")
+            }
         };
 
         info!("Device name: {}", config.device);
@@ -44,7 +52,7 @@ impl Controller for MqttController {
         return Ok(());
     }
 
-    fn end(&self, name: String, config: Value, paths: Paths) -> Result<(), String> {
+    fn end(&self, name: String, config: &Value, paths: &Paths) -> Result<(), String> {
         unimplemented!()
     }
 }

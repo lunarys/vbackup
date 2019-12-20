@@ -30,6 +30,7 @@ fn main() {
             "device": "sundavar",
             "user": "ju",
             "password": "testpass",
+            "host": "ebrithil.elda",
             "port": 1883
        }
     "#;
@@ -42,5 +43,6 @@ fn main() {
         module_data_dir: "/module_data".to_string()
     };
 
-    modules::controller::get_module_list().get("mqtt").unwrap().begin("test".to_string(), &serde_json::from_str(data).unwrap(), paths);
+    modules::controller::get_module_list().get("mqtt").unwrap().begin("test".to_string(), &serde_json::from_str(data).unwrap(), &paths)
+        .expect("Module mqtt failed!");
 }

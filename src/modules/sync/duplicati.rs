@@ -7,7 +7,7 @@ use serde_json::Value;
 pub struct Duplicati {}
 
 impl Sync for Duplicati {
-    fn sync(&self, name: String, config: Value, paths: Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn sync(&self, name: String, config: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         debug!("Starting sync");
 
         let mut result = Command::new("echo")
@@ -19,7 +19,7 @@ impl Sync for Duplicati {
         Ok(())
     }
 
-    fn restore(&self, name: String, config: Value, paths: Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn restore(&self, name: String, config: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         unimplemented!()
     }
 }

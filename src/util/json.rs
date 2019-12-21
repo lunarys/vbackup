@@ -1,5 +1,5 @@
 use crate::rewrap;
-use crate::try_else;
+use crate::try_result;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -8,7 +8,7 @@ use std::io::prelude::Read;
 use serde_json::Value;
 
 pub fn from_file(file_name: &str) -> Result<Value, String> {
-    let file = try_else!(File::open(file_name), "Could not open file");
+    let file = try_result!(File::open(file_name), "Could not open file");
 
     let mut buf_reader = BufReader::new(file);
 

@@ -2,15 +2,17 @@ use crate::modules::traits::Controller;
 use crate::modules::object::Paths;
 use crate::util::auth_data;
 
-use crate::try_else;
+use crate::try_result;
+use crate::try_option;
 
 use std::process::Command;
 use serde_json::Value;
 use serde::{Deserialize,Serialize};
 use paho_mqtt as mqtt;
 use std::sync::mpsc::Receiver;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use paho_mqtt::Message;
+use std::ops::Add;
 
 pub struct MqttController {}
 
@@ -34,21 +36,21 @@ struct MqttConfiguration {
 }
 
 impl Controller for MqttController {
-    fn begin(&self, name: String, config_json: &Value, paths: &Paths) -> Result<bool, String> {
+    fn begin(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String> {
         debug!("MQTT controller start run is beginning");
 
-        let config : Configuration = try_else!(serde_json::from_value(config_json.clone()),
+        let config : Configuration = try_result!(serde_json::from_value(config_json.clone()),
             "Could not parse configuration");
 
         let mqtt_config : MqttConfiguration = match config.auth_reference {
-            Some(value) => {
-                let auth_data = try_else!(auth_data::load(&value, &paths),
+            Some(ref value) => {
+                let auth_data = try_result!(auth_data::load(value, &paths),
                     "Could not get auth_data");
-                try_else!(serde_json::from_value(auth_data.clone()),
+                try_result!(serde_json::from_value(auth_data.clone()),
                     "Could not parse mqtt authentication")
             },
             None => {
-                try_else!(serde_json::from_value(config_json.clone()),
+                try_result!(serde_json::from_value(config_json.clone()),
                     "Could not parse mqtt configuration")
             }
         };
@@ -56,29 +58,35 @@ impl Controller for MqttController {
         let qos = mqtt_config.qos.unwrap_or(1);
         let topic_pub = self.get_topic_pub(&config, &mqtt_config);
         let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
-            try_else!(self.get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
+            try_result!(self.get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
 
+        trace!("Publish topic is '{}'", topic_pub);
 
+        let result = if config.start {
+            self.start_boot(&client, &receiver, topic_pub, qos)
+        } else {
+            self.start_run(&client, &receiver, topic_pub, qos)
+        }?;
 
         debug!("MQTT controller start run is done");
-        return Ok(());
+        return Ok(result);
     }
 
-    fn end(&self, name: String, config: &Value, paths: &Paths) -> Result<bool, String> {
+    fn end(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String> {
         debug!("MQTT controller end run is beginning");
 
-        let config : Configuration = try_else!(serde_json::from_value(config_json.clone()),
+        let config : Configuration = try_result!(serde_json::from_value(config_json.clone()),
             "Could not parse configuration");
 
         let mqtt_config : MqttConfiguration = match config.auth_reference {
-            Some(value) => {
-                let auth_data = try_else!(auth_data::load(&value, &paths),
+            Some(ref value) => {
+                let auth_data = try_result!(auth_data::load(value, &paths),
                     "Could not get auth_data");
-                try_else!(serde_json::from_value(auth_data.clone()),
+                try_result!(serde_json::from_value(auth_data.clone()),
                     "Could not parse mqtt authentication")
             },
             None => {
-                try_else!(serde_json::from_value(config_json.clone()),
+                try_result!(serde_json::from_value(config_json.clone()),
                     "Could not parse mqtt configuration")
             }
         };
@@ -86,9 +94,11 @@ impl Controller for MqttController {
         let qos = mqtt_config.qos.unwrap_or(1);
         let topic_pub = self.get_topic_pub(&config, &mqtt_config);
         let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
-            try_else!(self.get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
+            try_result!(self.get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
 
-        let result = try_else!(self.end(client, topic_pub, qos), "Could not end in mqtt controller");
+        trace!("Publish topic is '{}'", topic_pub);
+
+        let result = try_result!(self.end(client, topic_pub, qos), "Could not end in mqtt controller");
 
         debug!("MQTT controller end run is done");
         return Ok(result);
@@ -96,18 +106,40 @@ impl Controller for MqttController {
 }
 
 impl MqttController {
-    fn start(&self, client: mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, topic: String, qos: i32) -> Result<bool, String> {
+    fn start_boot(&self, client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, topic: String, qos: i32) -> Result<bool, String> {
+        let msg = mqtt::Message::new(topic, "START_BOOT", qos);
+        if client.publish(msg).is_err() {
+            return Err("Could not send start initiation message".to_string());
+        }
 
+        // TODO: Timeout as option?
+        let timeout = Duration::new(600, 0);
+        let received: String = self.wait_for_message(receiver, timeout, None)?;
+
+        if received.to_lowercase().eq("disabled") {
+            info!("Device is disabled and thus not available");
+        }
+
+        // Return wether device is available or not
+        Ok(received.to_lowercase().eq("ready"))
     }
 
-    fn check(&self, client: mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, topic: String, qos: i32) -> Result<bool, String> {
-        let msg = mqtt::Message::new(topic, "CHECK", qos);
+    fn start_run(&self, client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, topic: String, qos: i32) -> Result<bool, String> {
+        let msg = mqtt::Message::new(topic, "START_RUN", qos);
         if client.publish(msg).is_err() {
             return Err("Could not send check initiation message".to_string());
         }
 
-        let received: Option<Message> = try_else!(receiver.recv(), "Could not receive mqtt message");
-        // TODO: Stopped here
+        // TODO: Timeout as option?
+        let timeout = Duration::new(600, 0);
+        let received: String = self.wait_for_message(receiver, timeout, None)?;
+
+        if received.to_lowercase().eq("disabled") {
+            info!("Device is disabled and thus not available");
+        }
+
+        // Return wether device is available or not
+        Ok(received.to_lowercase().eq("ready"))
     }
 
     fn end(&self, client: mqtt::Client, topic: String, qos: i32) -> Result<bool, String> {
@@ -120,12 +152,21 @@ impl MqttController {
     }
 
     fn get_client(&self, config: &Configuration, mqtt_config: &MqttConfiguration) -> Result<(mqtt::Client,Receiver<Option<mqtt::Message>>), String> {
-        let mut client: mqtt::Client = !try_else!(mqtt::Client::new("tcp://"), "Failed connecting to broker");
 
-        let mut options = mqtt::ConnectOptionsBuilder::new().clean_session(true);
-        options = options.user_name(mqtt_config.user.unwrap());
+        let mqtt_host = String::from("tcp://")
+            .add(&mqtt_config.host)
+            .add(":")
+            .add(&mqtt_config.port.unwrap_or(1883).to_string());
+
+        trace!("Trying to connect to mqtt broker with address '{}'", mqtt_host);
+
+        let mut client: mqtt::Client = try_result!(mqtt::Client::new(mqtt_host), "Failed connecting to broker");
+
+        let mut options_builder = mqtt::ConnectOptionsBuilder::new();
+        let mut options = options_builder.clean_session(true);
+        options = options.user_name(&mqtt_config.user);
         if mqtt_config.password.is_some() {
-            options = options.password(mqtt_config.password.unwrap());
+            options = options.password(mqtt_config.password.as_ref().unwrap());
         }
 
         //options.connect_timeout()
@@ -135,20 +176,48 @@ impl MqttController {
         let topic_sub = self.get_topic_sub(&config, &mqtt_config);
         let qos = mqtt_config.qos.unwrap_or(1);
 
+        trace!("Subscription topic is '{}'", topic_sub);
+
         if client.connect(options.finalize()).is_ok() {
             let receiver = client.start_consuming();
-            receiver.recv_timeout(Duration::from_secs(600)); // TODO: Timeout option?
+            //receiver.recv_timeout(Duration::from_secs(600)); // TODO: Timeout option?
 
             client.subscribe(&topic_sub, qos);
 
             Ok((client, receiver))
         } else {
+            error!("Could not connect to the mqtt broker");
             Err("Could not connect to the mqtt broker".to_string())
         }
     }
 
+    fn wait_for_message(&self, receiver: &Receiver<Option<mqtt::Message>>, timeout: Duration, expected: Option<String>) -> Result<String, String> {
+        let start_time = Instant::now();
+
+        loop {
+            let time_left = timeout - start_time.elapsed();
+
+            let received : Option<mqtt::Message> = try_result!(receiver.recv_timeout(timeout), "Timeout exceeded");
+            // TODO: What was this again?
+            let received_message: mqtt::Message = try_option!(received, "Timeout on receive operation");
+
+            debug!("Received mqtt message '{}'", received_message.to_string());
+
+            let received_string = received_message.payload_str().to_string();
+            if expected.is_some() {
+                if received_string.eq(expected.as_ref().unwrap()) {
+                    return Ok(received_string);
+                }
+            } else {
+                return Ok(received_string);
+            }
+
+            // Did not receive expected message -> Wait again
+        }
+    }
+
     fn get_topic_sub(&self, config: &Configuration, mqtt_config: &MqttConfiguration) -> String {
-        config.topic_sub.unwrap_or("device/".to_string()
+        config.topic_sub.clone().unwrap_or("device/".to_string()
             .add(&config.device)
             .add("/save/")
             .add(&mqtt_config.user)
@@ -156,7 +225,7 @@ impl MqttController {
     }
 
     fn get_topic_pub(&self, config: &Configuration, mqtt_config: &MqttConfiguration) -> String {
-        config.topic_pub.unwrap_or("device/".to_string()
+        config.topic_pub.clone().unwrap_or("device/".to_string()
             .add(&config.device)
             .add("/save/")
             .add(&mqtt_config.user)

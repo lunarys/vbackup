@@ -4,7 +4,7 @@ use crate::util::auth_data;
 use crate::modules::object::Paths;
 
 // Local macros
-use crate::try_else;
+use crate::try_result;
 
 // Other modules
 use serde_json::Value;

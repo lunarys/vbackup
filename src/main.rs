@@ -4,6 +4,9 @@ extern crate env_logger;
 extern crate serde_json;
 extern crate serde;
 
+#[macro_use]
+extern crate serde_derive;
+
 mod modules;
 mod util;
 

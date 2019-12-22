@@ -164,6 +164,9 @@ fn get_base_cmd(no_docker: bool, paths: &Paths) -> CommandWrapper {
             .arg_str("--name='vbackup-duplicati-tmp'")
             .arg_string(format!("--volume='{}:/volume'", original_path))
             .arg_string(format!("--volume='{}:/dbpath'", module_data))
+            .arg_str("-e AUTH_USERNAME")
+            .arg_str("-e AUTH_PASSWORD")
+            .arg_str("-e PASSPHRASE")
             .arg_str("duplicati/duplicati")
             .arg_str("duplicati-cli");
         return command;
@@ -177,21 +180,19 @@ fn add_default_options(command: &mut CommandWrapper, name: &String, config: &Con
         format!("/dbpath/{}.sqlite", name)
     };
 
-    command.arg_string(format!("--auth-username='{}'", &auth.user));
+    command.env("AUTH_USERNAME", auth.user.as_str());
     if auth.ssh_key.is_some() {
-        // TODO: Hide!
-        command.arg_string(format!("--ssh-key='{}'", auth.ssh_key.as_ref().unwrap()));
+        // TODO: Hide! Maybe use --ssh-keyfile
+        command.arg_string(format!("--ssh-key='sshkey://{}'", auth.ssh_key.as_ref().unwrap()));
     } else if auth.password.is_some() {
-        // TODO: Hide!
-        command.arg_string(format!("--auth-password='{}'", auth.password.as_ref().unwrap()));
+        command.env("AUTH_PASSWORD", auth.password.as_ref().unwrap());
     }
 
     command.arg_string(format!("--dbpath='{}'", &dbpath));
     command.arg_string(format!("--backup-name='{}'", name));
 
     if config.encryption_key.is_some() {
-        // TODO: Hide!
-        command.arg_string(format!("--passphrase='{}'", config.encryption_key.as_ref().unwrap()));
+        command.env("PASSPHRASE", config.encryption_key.as_ref().unwrap())
     } else {
         command.arg_str("--no-encryption=true");
     }

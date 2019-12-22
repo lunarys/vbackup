@@ -1,12 +1,12 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::Paths;
+use crate::modules::object::{Paths, CommandWrapper};
 use crate::util::auth_data;
 
 use crate::{try_result,try_option,auth_resolve,conf_resolve};
 
-use std::process::{Command, Child};
 use serde_json::Value;
 use serde::{Deserialize};
+use std::process::{Child, ExitStatus};
 
 pub struct Duplicati {}
 
@@ -21,7 +21,7 @@ struct Configuration {
     #[serde(default="default_versions")]
     keep_versions: i32,
 
-    #[serde(default="default_smart_retent")]
+    #[serde(default="default_smart_retention")]
     smart_retention: bool,
 
     #[serde(default="default_retention_policy")]
@@ -29,7 +29,7 @@ struct Configuration {
 }
 
 fn default_versions() -> i32 { 1 }
-fn default_smart_retent() -> bool { false }
+fn default_smart_retention() -> bool { false }
 fn default_retention_policy() -> String { "1W:1D,4W:1W,12M:1M".to_string() }
 
 #[derive(Deserialize)]
@@ -49,75 +49,156 @@ impl Sync for Duplicati {
         let config : Configuration = conf_resolve!(config_json);
         let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths);
 
-        info!("Auth user: {}", &auth.user);
-
+        // Base command
         let mut command = get_base_cmd(no_docker, &paths);
+
+        // Add source and destination
+        command.arg_str("backup");
+        command.arg_string(format!("'{}'", get_connection_uri(&config, &auth)));
+        if no_docker {
+            command.arg_string(format!("'{}'", &paths.save_path));
+        } else {
+            command.arg_str("/volume");
+        }
+
+        // Add options that are always required
         add_default_options(&mut command, name, &config, &auth, paths, no_docker);
 
-        /*if dry_run {
-            command.to_string();
+        // Add retention options
+        if config.smart_retention {
+            command.arg_string(format!("--retention-policy='{}'", config.retention_policy));
         } else {
-            let mut process: Child = try_result!(command.spawn(), "Duplicati sync failed...");
-            let exit_code = try_result!(process.wait(), "Duplicati sync failed");
-        }*/
+            command.arg_string(format!("--keep-versions={}", config.keep_versions));
+        }
+
+        // Additional options for backup (just for explicit declaration)
+        command.arg_str("--compression-module=zip");
+        command.arg_str("--encryption-module=aes");
+
+        if dry_run {
+            info!("DRY-RUN: {}", command.to_string());
+        } else {
+            let mut process: Child = try_result!(command.spawn(), "Starting duplicati sync failed");
+            let exit_status = try_result!(process.wait(), "Duplicati sync failed");
+
+            if !exit_status.success() {
+                return Err(String::from("Duplicati backup exit code indicated error"));
+            }
+        }
 
         debug!("Duplicati sync is done");
         Ok(())
     }
 
     fn restore(&self, name: &String, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        unimplemented!()
+        debug!("Starting duplicati restore");
+
+        let config : Configuration = conf_resolve!(config_json);
+        let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths);
+
+        // Restore / repair the local database
+        {
+            let mut command = get_base_cmd(no_docker, paths);
+
+            command.arg_str("repair");
+            command.arg_string(format!("'{}'", get_connection_uri(&config, &auth)));
+
+            add_default_options(&mut command, name, &config, &auth, paths, no_docker);
+
+            if dry_run {
+                info!("DRY-RUN: {}", command.to_string());
+            } else {
+                let mut process: Child = try_result!(command.spawn(), "Starting duplicati repair failed");
+                let exit_status: ExitStatus = try_result!(process.wait(), "Duplicati repair failed");
+
+                if !exit_status.success() {
+                    return Err(String::from("Duplicati repair exit code indicates error"));
+                }
+            }
+        }
+
+        // Restore the data
+        {
+            let mut command = get_base_cmd(no_docker, paths);
+
+            command.arg_str("restore");
+            command.arg_string(format!("'{}'", get_connection_uri(&config, &auth)));
+            command.arg_str("'*'");
+
+            add_default_options(&mut command, name, &config, &auth, paths, no_docker);
+
+            command.arg_str("--restore-permission=true");
+            if no_docker {
+                command.arg_string(format!("--restore-path='{}'", paths.save_path));
+            } else {
+                command.arg_str("--restore-path='/volume'");
+            }
+
+            if dry_run {
+                info!("DRY-RUN: {}", command.to_string());
+            } else {
+                let mut process: Child = try_result!(command.spawn(), "Starting duplicati repair failed");
+                let exit_status: ExitStatus = try_result!(process.wait(), "Duplicati repair failed");
+
+                if !exit_status.success() {
+                    return Err(String::from("Duplicati restore exit code indicates error"));
+                }
+            }
+        }
+
+        debug!("Duplicati restore is done");
+        Ok(())
     }
 }
 
-fn get_base_cmd(no_docker: bool, paths: &Paths) -> Command {
+fn get_base_cmd(no_docker: bool, paths: &Paths) -> CommandWrapper {
     let original_path= &paths.save_path;
     let module_data = &paths.module_data_dir;
 
     if no_docker {
-        return Command::new("duplicati-cli");
+        return CommandWrapper::new("duplicati-cli");
     } else {
-        let mut command = Command::new("docker");
-        command.arg("run")
-            .arg("--rm")
-            .arg("--name=vbackup-duplicati-tmp")
-            .arg(format!("--volume='{}:/volume'", original_path))
-            .arg(format!("--volume='{}:/dbpath'", module_data))
-            .arg("duplicati/duplicati")
-            .arg("duplicati-cli");
+        let mut command = CommandWrapper::new("docker");
+        command.arg_str("run")
+            .arg_str("--rm")
+            .arg_str("--name='vbackup-duplicati-tmp'")
+            .arg_string(format!("--volume='{}:/volume'", original_path))
+            .arg_string(format!("--volume='{}:/dbpath'", module_data))
+            .arg_str("duplicati/duplicati")
+            .arg_str("duplicati-cli");
         return command;
     }
 }
 
-fn add_default_options(command: &mut Command, name: &String, config: &Configuration, auth: &Authentication, paths: &Paths, no_docker: bool) {
+fn add_default_options(command: &mut CommandWrapper, name: &String, config: &Configuration, auth: &Authentication, paths: &Paths, no_docker: bool) {
     let dbpath = if no_docker {
         format!("{}/{}.sqlite", &paths.module_data_dir, name)
     } else {
         format!("/dbpath/{}.sqlite", name)
     };
 
-    command.arg(format!("--auth-username={}", auth.user));
+    command.arg_string(format!("--auth-username='{}'", &auth.user));
     if auth.ssh_key.is_some() {
         // TODO: Hide!
-        command.arg(format!("--ssh-key='{}'", auth.ssh_key.as_ref().unwrap()));
+        command.arg_string(format!("--ssh-key='{}'", auth.ssh_key.as_ref().unwrap()));
     } else if auth.password.is_some() {
         // TODO: Hide!
-        command.arg(format!("--auth-password='{}'", auth.password.as_ref().unwrap()));
+        command.arg_string(format!("--auth-password='{}'", auth.password.as_ref().unwrap()));
     }
 
-    command.arg(format!("--dbpath='{}'", dbpath));
-    command.arg(format!("--backup-name='{}'", name));
+    command.arg_string(format!("--dbpath='{}'", &dbpath));
+    command.arg_string(format!("--backup-name='{}'", name));
 
     if config.encryption_key.is_some() {
         // TODO: Hide!
-        command.arg(format!("--passphrase='{}'", config.encryption_key.as_ref().unwrap()));
+        command.arg_string(format!("--passphrase='{}'", config.encryption_key.as_ref().unwrap()));
     } else {
-        command.arg("--no-encryption=true");
+        command.arg_str("--no-encryption=true");
     }
 
-    command.arg(format!("--ssh-fingerprint='{}'", auth.fingerprint_rsa));
-    command.arg("--disable-module=console-password-input");
-    // command.arg("--log-level=???");
+    command.arg_string(format!("--ssh-fingerprint='{}'", &auth.fingerprint_rsa));
+    command.arg_str("--disable-module=console-password-input");
+    // command.arg_with_var("--log-level=???");
 }
 
 fn get_connection_uri(config: &Configuration, auth: &Authentication) -> String {

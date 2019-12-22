@@ -4,7 +4,6 @@ extern crate env_logger;
 extern crate serde_json;
 extern crate serde;
 
-#[macro_use]
 extern crate serde_derive;
 
 mod modules;
@@ -69,7 +68,7 @@ fn main() {
         info!("Controller failed to do his thing")
     }
 
-    let duplicati_result = modules::sync::get_module_list().get("duplicati").unwrap().sync(&"test".to_string(), &serde_json::from_str(duplicati_config).unwrap(), &paths, true, true);
+    let duplicati_result = modules::sync::get_module_list().get("duplicati").unwrap().sync(&"test".to_string(), &serde_json::from_str(duplicati_config).unwrap(), &paths, true, false);
     if duplicati_result.is_ok() {
         info!("Duplicati sync succeeded");
     } else {

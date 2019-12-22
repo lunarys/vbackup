@@ -4,13 +4,11 @@ use crate::util::auth_data;
 
 use crate::{try_result,try_option,conf_resolve,auth_resolve};
 
-use std::process::Command;
 use serde_json::Value;
 use serde::{Deserialize};
 use paho_mqtt as mqtt;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
-use paho_mqtt::Message;
 use std::ops::Add;
 
 pub struct MqttController {}
@@ -59,7 +57,7 @@ impl Controller for MqttController {
 
         let result = start(&client, &receiver, config.start, topic_pub, qos)?;
 
-        client.disconnect(None);
+        try_result!(client.disconnect(None), "Disconnect from broker failed");
         debug!("MQTT controller start run is done");
         return Ok(result);
     }
@@ -80,7 +78,7 @@ impl Controller for MqttController {
 
         let result = try_result!(end(&client, topic_pub, qos), "Could not end in mqtt controller");
 
-        client.disconnect(None);
+        try_result!(client.disconnect(None), "Disconnect from broker failed");
         debug!("MQTT controller end run is done");
         return Ok(result);
     }
@@ -138,11 +136,10 @@ fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result
 
     trace!("Subscription topic is '{}'", topic_sub);
 
-    let connection = try_result!(client.connect(options.finalize()),
-                                     "Could not connect to the mqtt broker");
+    try_result!(client.connect(options.finalize()), "Could not connect to the mqtt broker");
 
     let receiver = client.start_consuming();
-    client.subscribe(&topic_sub, qos);
+    try_result!(client.subscribe(&topic_sub, qos), "Could not subscribe to mqtt topic");
 
     Ok((client, receiver))
 }
@@ -153,7 +150,7 @@ fn wait_for_message(receiver: &Receiver<Option<mqtt::Message>>, timeout: Duratio
     loop {
         let time_left = timeout - start_time.elapsed();
 
-        let received : Option<mqtt::Message> = try_result!(receiver.recv_timeout(timeout), "Timeout exceeded");
+        let received : Option<mqtt::Message> = try_result!(receiver.recv_timeout(time_left), "Timeout exceeded");
         // TODO: What was this again?
         let received_message: mqtt::Message = try_option!(received, "Timeout on receive operation");
         // TODO: Reconnect on connection loss

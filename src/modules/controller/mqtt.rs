@@ -42,6 +42,8 @@ impl Controller for MqttController {
         let config : Configuration = try_result!(serde_json::from_value(config_json.clone()),
             "Could not parse configuration");
 
+        info!("MQTT controller start run for device '{}' (start={})", config.device, config.start);
+
         let mqtt_config : MqttConfiguration = match config.auth_reference {
             Some(ref value) => {
                 let auth_data = try_result!(auth_data::load(value, &paths),
@@ -153,10 +155,7 @@ impl MqttController {
 
     fn get_client(&self, config: &Configuration, mqtt_config: &MqttConfiguration) -> Result<(mqtt::Client,Receiver<Option<mqtt::Message>>), String> {
 
-        let mqtt_host = String::from("tcp://")
-            .add(&mqtt_config.host)
-            .add(":")
-            .add(&mqtt_config.port.unwrap_or(1883).to_string());
+        let mqtt_host = format!("tcp://{}:{}", mqtt_config.host, mqtt_config.port.unwrap_or(1883));
 
         trace!("Trying to connect to mqtt broker with address '{}'", mqtt_host);
 
@@ -178,17 +177,13 @@ impl MqttController {
 
         trace!("Subscription topic is '{}'", topic_sub);
 
-        if client.connect(options.finalize()).is_ok() {
-            let receiver = client.start_consuming();
-            //receiver.recv_timeout(Duration::from_secs(600)); // TODO: Timeout option?
+        let connection = try_result!(client.connect(options.finalize()),
+                                     "Could not connect to the mqtt broker");
 
-            client.subscribe(&topic_sub, qos);
+        let receiver = client.start_consuming();
+        client.subscribe(&topic_sub, qos);
 
-            Ok((client, receiver))
-        } else {
-            error!("Could not connect to the mqtt broker");
-            Err("Could not connect to the mqtt broker".to_string())
-        }
+        Ok((client, receiver))
     }
 
     fn wait_for_message(&self, receiver: &Receiver<Option<mqtt::Message>>, timeout: Duration, expected: Option<String>) -> Result<String, String> {

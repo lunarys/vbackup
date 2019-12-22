@@ -4,7 +4,10 @@ macro_rules! try_result {
     ($res:expr, $err:expr) => {
         match $res {
             Ok(val) => val,
-            Err(_) => return Err($err.to_string())
+            Err(orig) => {
+                error!("{} ({})", $err, orig.to_string());
+                return Err($err.to_string());
+            }
         }
     }
 }
@@ -14,7 +17,10 @@ macro_rules! try_option {
     ($res:expr, $err:expr) => {
         match $res {
             Some(val) => val,
-            None => return Err($err.to_string())
+            None => {
+                error!("{}", $err);
+                return Err($err.to_string());
+            }
         }
     }
 }

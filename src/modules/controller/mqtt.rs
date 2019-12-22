@@ -2,8 +2,7 @@ use crate::modules::traits::Controller;
 use crate::modules::object::Paths;
 use crate::util::auth_data;
 
-use crate::try_result;
-use crate::try_option;
+use crate::{try_result,try_option,conf_resolve,auth_resolve};
 
 use std::process::Command;
 use serde_json::Value;
@@ -23,6 +22,7 @@ struct Configuration {
     auth_reference: Option<String>,
     topic_sub: Option<String>,
     topic_pub: Option<String>,
+    auth: Option<Value>
 }
 
 #[derive(Deserialize)]
@@ -46,23 +46,9 @@ impl Controller for MqttController {
     fn begin(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String> {
         debug!("MQTT controller start run is beginning");
 
-        let config : Configuration = try_result!(serde_json::from_value(config_json.clone()),
-            "Could not parse configuration");
-
+        let config : Configuration = conf_resolve!(config_json);
         info!("MQTT controller start run for device '{}' (start={})", config.device, config.start);
-
-        let mqtt_config : MqttConfiguration = match config.auth_reference {
-            Some(ref value) => {
-                let auth_data = try_result!(auth_data::load(value, &paths),
-                    "Could not get auth_data");
-                try_result!(serde_json::from_value(auth_data.clone()),
-                    "Could not parse mqtt authentication")
-            },
-            None => {
-                try_result!(serde_json::from_value(config_json.clone()),
-                    "Could not parse mqtt configuration")
-            }
-        };
+        let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths);
 
         let qos = mqtt_config.qos;
         let topic_pub = get_topic_pub(&config, &mqtt_config);
@@ -73,6 +59,7 @@ impl Controller for MqttController {
 
         let result = start(&client, &receiver, config.start, topic_pub, qos)?;
 
+        client.disconnect(None);
         debug!("MQTT controller start run is done");
         return Ok(result);
     }
@@ -80,21 +67,9 @@ impl Controller for MqttController {
     fn end(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String> {
         debug!("MQTT controller end run is beginning");
 
-        let config : Configuration = try_result!(serde_json::from_value(config_json.clone()),
-            "Could not parse configuration");
-
-        let mqtt_config : MqttConfiguration = match config.auth_reference {
-            Some(ref value) => {
-                let auth_data = try_result!(auth_data::load(value, &paths),
-                    "Could not get auth_data");
-                try_result!(serde_json::from_value(auth_data.clone()),
-                    "Could not parse mqtt authentication")
-            },
-            None => {
-                try_result!(serde_json::from_value(config_json.clone()),
-                    "Could not parse mqtt configuration")
-            }
-        };
+        let config : Configuration = conf_resolve!(config_json);
+        info!("MQTT controller start run for device '{}' (start={})", config.device, config.start);
+        let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths);
 
         let qos = mqtt_config.qos;
         let topic_pub = get_topic_pub(&config, &mqtt_config);
@@ -103,8 +78,9 @@ impl Controller for MqttController {
 
         trace!("Publish topic is '{}'", topic_pub);
 
-        let result = try_result!(end(client, topic_pub, qos), "Could not end in mqtt controller");
+        let result = try_result!(end(&client, topic_pub, qos), "Could not end in mqtt controller");
 
+        client.disconnect(None);
         debug!("MQTT controller end run is done");
         return Ok(result);
     }
@@ -129,7 +105,7 @@ fn start(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, boot
     Ok(received.to_lowercase().eq("ready"))
 }
 
-fn end(client: mqtt::Client, topic: String, qos: i32) -> Result<bool, String> {
+fn end(client: &mqtt::Client, topic: String, qos: i32) -> Result<bool, String> {
     let msg = mqtt::Message::new(topic, "DONE", qos);
     if client.publish(msg).is_ok() {
         Ok(true)
@@ -180,6 +156,7 @@ fn wait_for_message(receiver: &Receiver<Option<mqtt::Message>>, timeout: Duratio
         let received : Option<mqtt::Message> = try_result!(receiver.recv_timeout(timeout), "Timeout exceeded");
         // TODO: What was this again?
         let received_message: mqtt::Message = try_option!(received, "Timeout on receive operation");
+        // TODO: Reconnect on connection loss
 
         debug!("Received mqtt message '{}'", received_message.to_string());
 

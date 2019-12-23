@@ -7,6 +7,7 @@ use crate::{try_result,try_option,auth_resolve,conf_resolve};
 use serde_json::Value;
 use serde::{Deserialize};
 use std::process::{Child, ExitStatus};
+use proc_macro::quote_span;
 
 pub struct Duplicati {}
 
@@ -44,7 +45,7 @@ struct Authentication {
 
 impl Sync for Duplicati {
     fn sync(&self, name: &String, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        debug!("Starting duplicati sync");
+        debug!("Starting duplicati sync for {}", name);
 
         let config : Configuration = conf_resolve!(config_json);
         let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths);
@@ -86,12 +87,12 @@ impl Sync for Duplicati {
             }
         }
 
-        debug!("Duplicati sync is done");
+        debug!("Duplicati sync for {} is done", name);
         Ok(())
     }
 
     fn restore(&self, name: &String, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        debug!("Starting duplicati restore");
+        debug!("Starting duplicati restore for {}", name);
 
         let config : Configuration = conf_resolve!(config_json);
         let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths);
@@ -146,7 +147,7 @@ impl Sync for Duplicati {
             }
         }
 
-        debug!("Duplicati restore is done");
+        debug!("Duplicati restore for {} is done", name);
         Ok(())
     }
 }
@@ -182,6 +183,12 @@ fn add_default_options(command: &mut CommandWrapper, name: &String, config: &Con
 
     command.env("AUTH_USERNAME", auth.user.as_str());
     if auth.ssh_key.is_some() {
+quote_span()
+        if no_docker {
+
+        } else {
+
+        }
         // TODO: Hide! Maybe use --ssh-keyfile
         command.arg_string(format!("--ssh-key='sshkey://{}'", auth.ssh_key.as_ref().unwrap()));
     } else if auth.password.is_some() {

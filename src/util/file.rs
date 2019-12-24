@@ -4,7 +4,7 @@ use crate::{try_result};
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, BufReader, Read};
 use std::fs::{OpenOptions, Permissions, File};
-// use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 pub fn write_with_perm(file_name: &str, mode: &str, to_write: &str, overwrite: bool) -> Result<(), String>{
@@ -13,7 +13,7 @@ pub fn write_with_perm(file_name: &str, mode: &str, to_write: &str, overwrite: b
         .truncate(overwrite)
         .write(true)
         .create(true)
-        // .mode(mode) // Only sets mode when creating the file...
+        .mode(try_result!(u32::from_str_radix(mode, 8), "Mode is not a number")) // Only sets mode when creating the file...
         .open(file_name);
     let mut file: File = try_result!(file_result, "Could not open file");
 

@@ -171,17 +171,11 @@ fn wait_for_message(receiver: &Receiver<Option<mqtt::Message>>, timeout: Duratio
 }
 
 fn get_topic_sub(config: &Configuration, mqtt_config: &MqttConfiguration) -> String {
-    config.topic_sub.clone().unwrap_or("device/".to_string()
-        .add(&config.device)
-        .add("/save/")
-        .add(&mqtt_config.user)
-        .add("/status"))
+    config.topic_sub.clone().unwrap_or(
+        format!("device/{}/controller/to/{}", config.device, mqtt_config.user))
 }
 
 fn get_topic_pub(config: &Configuration, mqtt_config: &MqttConfiguration) -> String {
-    config.topic_pub.clone().unwrap_or("device/".to_string()
-        .add(&config.device)
-        .add("/save/")
-        .add(&mqtt_config.user)
-        .add("/status/desired"))
+    config.topic_pub.clone().unwrap_or(
+        format!("device/{}/controller/from/{}", config.device, mqtt_config.user))
 }

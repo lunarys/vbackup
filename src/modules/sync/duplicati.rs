@@ -7,7 +7,6 @@ use crate::{try_result,try_option,auth_resolve,conf_resolve};
 use serde_json::Value;
 use serde::{Deserialize};
 use std::process::{Child, ExitStatus};
-use proc_macro::quote_span;
 
 pub struct Duplicati {}
 
@@ -183,7 +182,6 @@ fn add_default_options(command: &mut CommandWrapper, name: &String, config: &Con
 
     command.env("AUTH_USERNAME", auth.user.as_str());
     if auth.ssh_key.is_some() {
-quote_span()
         if no_docker {
 
         } else {

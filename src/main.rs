@@ -75,5 +75,5 @@ fn main() {
         info!("Duplicati sync failed");
     }
 
-    util::file::write_file_with_perm("/tmp/foo.txt", "600", "This is the content", true);
+    util::file::write_if_change("/tmp/foo.txt", Some("600"), "This is the content", true);
 }

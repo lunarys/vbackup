@@ -53,8 +53,6 @@ impl Controller for MqttController {
         let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
             try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
 
-        trace!("Publish topic is '{}'", topic_pub);
-
         let result = start(&client, &receiver, config.start, topic_pub, qos)?;
 
         try_result!(client.disconnect(None), "Disconnect from broker failed");
@@ -73,8 +71,6 @@ impl Controller for MqttController {
         let topic_pub = get_topic_pub(&config, &mqtt_config);
         let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
             try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
-
-        trace!("Publish topic is '{}'", topic_pub);
 
         let result = try_result!(end(&client, topic_pub, qos), "Could not end in mqtt controller");
 
@@ -129,12 +125,17 @@ fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result
 
     //options.connect_timeout()
     //options.automatic_reconnect()
-    //options.will_message()
 
-    let topic_sub = get_topic_sub(&config, &mqtt_config);
+    // Set last will in case of whatever failure that includes a interrupted connection
+    let testament_topic = get_topic_pub(config, mqtt_config);
+    let testament = mqtt::Message::new(testament_topic, "ABORT", mqtt_config.qos);
+    options.will_message(testament);
+
+    let topic_sub = get_topic_sub(config, mqtt_config);
     let qos = mqtt_config.qos;
 
     trace!("Subscription topic is '{}'", topic_sub);
+    trace!("Publish topic is '{}'", testament_topic);
 
     try_result!(client.connect(options.finalize()), "Could not connect to the mqtt broker");
 

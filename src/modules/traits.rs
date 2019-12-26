@@ -3,21 +3,29 @@ use crate::modules::object::Paths;
 use serde_json::Value;
 
 pub trait Backup {
-    fn backup(&self, name: &String, config: &Value, timeframes: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String>;
-    fn restore(&self, name: &String, config: &Value, timeframes: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String>;
+    fn init(&mut self, name: &str, config_json: &Value, timeframes: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<&mut Self, String>;
+    fn backup(&self) -> Result<(), String>;
+    fn restore(&self) -> Result<(), String>;
+    fn clear(&mut self) -> Result<(), String>;
 }
 
 pub trait Check {
-    fn check(&self, name: &String, config: &Value, lastsave: i64, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String>;
-    fn update(&self, name: &String, config: &Value, lastsave: i64, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String>;
+    fn init(&mut self, name: &str, config_json: &Value, lastsave: i64, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<&mut Self, String>;
+    fn check(&self) -> Result<(), String>;
+    fn update(&self) -> Result<(), String>;
+    fn clear(&mut self) -> Result<(), String>;
 }
 
 pub trait Controller {
-    fn begin(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String>;
-    fn end(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String>;
+    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths) -> Result<&mut Self, String>;
+    fn begin(&self) -> Result<bool, String>;
+    fn end(&self) -> Result<bool, String>;
+    fn clear(&mut self) -> Result<(), String>;
 }
 
 pub trait Sync {
-    fn sync(&self, name: &String, config: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String>;
-    fn restore(&self, name: &String, config: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String>;
+    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<&mut Self, String>;
+    fn sync(&self) -> Result<(), String>;
+    fn restore(&self) -> Result<(), String>;
+    fn clear(&mut self) -> Result<(), String>;
 }

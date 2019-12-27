@@ -2,6 +2,7 @@ use crate::modules::traits::Sync;
 use crate::modules::object::{Paths};
 use crate::util::command::CommandWrapper;
 use crate::util::auth_data;
+use crate::util::file;
 
 use crate::{try_result,try_option,auth_resolve,conf_resolve};
 
@@ -20,6 +21,8 @@ struct Bind {
     paths: Paths,
     sync_from: String,
     sync_to: String,
+    known_hosts_file: String,
+    identity_file: String,
     dry_run: bool,
     no_docker: bool
 }
@@ -82,6 +85,8 @@ impl Sync for Rsync {
             }
         };
 
+
+
         self.bind = Some(Bind {
             name: String::from(name),
             config,
@@ -89,6 +94,8 @@ impl Sync for Rsync {
             paths: paths.copy(),
             sync_from,
             sync_to,
+            known_hosts_file: format!("{}/known_host", &paths.module_data_dir),
+            identity_file: format!("{}/identity", &paths.module_data_dir),
             dry_run,
             no_docker
         });
@@ -109,7 +116,7 @@ impl Sync for Rsync {
     }
 
     fn restore(&self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Rsync sync is not bound, it can not be used for restoring");
+        let bound = try_option!(self.bind.as_ref(), "Rsync is not bound, it can not be used for restoring");
         let mut command = self.get_base_cmd()?;
 
         command.arg_string(format!("'{}'", &bound.sync_to))
@@ -121,7 +128,7 @@ impl Sync for Rsync {
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Rsync sync is not bound, thus it can not be cleared");
+        let bound = try_option!(self.bind.as_ref(), "Rsync is not bound, thus it can not be cleared");
 
         self.bind = None;
         return Ok(());
@@ -132,7 +139,16 @@ impl Rsync {
     fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
         let bound = try_option!(self.bind.as_ref(), "Rsync is not bound");
 
-        // TODO: Write authentication files (if not exists)
+        file::write_if_change(&bound.known_hosts_file,
+                              Some("600"),
+                              &bound.ssh_config.host_key,
+                              true)?;
+
+        let (known_host_file, identity_file) = if bound.no_docker {
+            (bound.known_hosts_file.as_str(), bound.identity_file.as_str())
+        } else {
+            ("/module/known_host", "/module/identity")
+        };
 
         let mut command = if bound.no_docker {
             CommandWrapper::new("rsync")
@@ -144,6 +160,9 @@ impl Rsync {
                 .arg_str("--env=SSHPASS")
                 .arg_string(format!("--volume='{}:{}'", &bound.paths.save_path, &bound.name));
 
+            // Volume for authentication files
+            command.arg_string(format!("--volume='{}:{}'", &bound.paths.module_data_dir, "/module"));
+
             // End docker command
             command.arg_str("my-rsync"); // Docker image name
 
@@ -153,9 +172,13 @@ impl Rsync {
         };
 
         // Authentication: password or private key
-        let ssh_option_end = format!("-oUserKnownHostsFile={} {}'", self.known_hosts_file(), bound.ssh_config.port);
+        let ssh_option_end = format!("-oUserKnownHostsFile={} {}'", known_host_file, bound.ssh_config.port);
         if bound.ssh_config.login_key.is_some() {
-            command.arg_string(format!("-e 'ssh -oIdentityFile={} {}", self.identity_file(), ssh_option_end));
+            file::write_if_change(&bound.identity_file,
+                                  Some("600"),
+                                  bound.ssh_config.login_key.as_ref().unwrap(),
+                                  true)?;
+            command.arg_string(format!("-e 'ssh -oIdentityFile={} {}", identity_file, ssh_option_end));
         } else if bound.ssh_config.password.is_some() {
             command.arg_string(format!("-e 'sshpass -e {}", ssh_option_end));
             command.env("SSHPASS", bound.ssh_config.password.as_ref().unwrap());
@@ -173,15 +196,5 @@ impl Rsync {
         }
 
         return Ok(command);
-    }
-
-    fn known_hosts_file(&self) -> String {
-        // TODO: Other path, docker / no_docker distinction
-        return String::from("/tmp/known_host");
-    }
-
-    fn identity_file(&self) -> String {
-        // TODO: Other path, docker / no_docker distinction
-        return String::from("/tmp/identity");
     }
 }

@@ -2,6 +2,7 @@ use crate::modules::traits::Sync;
 use crate::modules::object::{Paths};
 use crate::util::command::CommandWrapper;
 use crate::util::auth_data;
+use crate::util::file;
 
 use crate::{try_result,try_option,auth_resolve,conf_resolve};
 
@@ -95,7 +96,7 @@ impl Sync for Duplicati {
         }
 
         // Add options that are always required
-        add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker);
+        add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
 
         // Add retention options
         if bound.config.smart_retention {
@@ -126,7 +127,7 @@ impl Sync for Duplicati {
             command.arg_str("repair");
             command.arg_string(format!("'{}'", get_connection_uri(&bound.config, &bound.auth)));
 
-            add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker);
+            add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
 
             command.run_or_dry_run(bound.dry_run, "duplicati repair")?;
         }
@@ -139,7 +140,7 @@ impl Sync for Duplicati {
             command.arg_string(format!("'{}'", get_connection_uri(&bound.config, &bound.auth)));
             command.arg_str("'*'");
 
-            add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker);
+            add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
 
             command.arg_str("--restore-permission=true");
             if bound.no_docker {
@@ -175,7 +176,7 @@ fn get_base_cmd(no_docker: bool, paths: &Paths) -> CommandWrapper {
             .arg_str("--rm")
             .arg_str("--name='vbackup-duplicati-tmp'")
             .arg_string(format!("--volume='{}:/volume'", original_path))
-            .arg_string(format!("--volume='{}:/dbpath'", module_data))
+            .arg_string(format!("--volume='{}:/module'", module_data))
             .arg_str("-e AUTH_USERNAME")
             .arg_str("-e AUTH_PASSWORD")
             .arg_str("-e PASSPHRASE")
@@ -185,22 +186,26 @@ fn get_base_cmd(no_docker: bool, paths: &Paths) -> CommandWrapper {
     }
 }
 
-fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Configuration, auth: &Authentication, paths: &Paths, no_docker: bool) {
+fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Configuration, auth: &Authentication, paths: &Paths, no_docker: bool) -> Result<(), String> {
     let dbpath = if no_docker {
-        format!("{}/{}.sqlite", &paths.module_data_dir, name)
+        format!("{}/db/{}.sqlite", &paths.module_data_dir, name)
     } else {
-        format!("/dbpath/{}.sqlite", name)
+        format!("/module/db/{}.sqlite", name)
     };
 
     command.env("AUTH_USERNAME", auth.user.as_str());
     if auth.ssh_key.is_some() {
-        if no_docker {
-
+        let identity_file_actual = format!("{}/identity", &paths.module_data_dir);
+        file::write_if_change(&identity_file_actual,
+                              Some("600"),
+                              auth.ssh_key.as_ref().unwrap(),
+                              true)?;
+        let keypath = if no_docker {
+            identity_file_actual
         } else {
-
-        }
-        // TODO: Hide! Maybe use --ssh-keyfile
-        command.arg_string(format!("--ssh-key='sshkey://{}'", auth.ssh_key.as_ref().unwrap()));
+            String::from("/module/identity")
+        };
+        command.arg_string(format!("--ssh-keyfile='{}'", keypath));
     } else if auth.password.is_some() {
         command.env("AUTH_PASSWORD", auth.password.as_ref().unwrap());
     }
@@ -217,6 +222,8 @@ fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Config
     command.arg_string(format!("--ssh-fingerprint='{}'", &auth.fingerprint_rsa));
     command.arg_str("--disable-module=console-password-input");
     // command.arg_with_var("--log-level=???");
+
+    Ok(())
 }
 
 fn get_connection_uri(config: &Configuration, auth: &Authentication) -> String {

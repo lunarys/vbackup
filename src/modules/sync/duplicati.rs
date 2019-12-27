@@ -1,5 +1,6 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::{Paths, CommandWrapper};
+use crate::modules::object::{Paths};
+use crate::util::command::CommandWrapper;
 use crate::util::auth_data;
 
 use crate::{try_result,try_option,auth_resolve,conf_resolve};
@@ -107,16 +108,7 @@ impl Sync for Duplicati {
         command.arg_str("--compression-module=zip");
         command.arg_str("--encryption-module=aes");
 
-        if bound.dry_run {
-            info!("DRY-RUN: {}", command.to_string());
-        } else {
-            let mut process: Child = try_result!(command.spawn(), "Starting duplicati sync failed");
-            let exit_status = try_result!(process.wait(), "Duplicati sync failed");
-
-            if !exit_status.success() {
-                return Err(String::from("Duplicati backup exit code indicated error"));
-            }
-        }
+        command.run_or_dry_run(bound.dry_run, "duplicati backup")?;
 
         debug!("Duplicati sync for {} is done", bound.name);
         Ok(())
@@ -136,16 +128,7 @@ impl Sync for Duplicati {
 
             add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker);
 
-            if bound.dry_run {
-                info!("DRY-RUN: {}", command.to_string());
-            } else {
-                let mut process: Child = try_result!(command.spawn(), "Starting duplicati repair failed");
-                let exit_status: ExitStatus = try_result!(process.wait(), "Duplicati repair failed");
-
-                if !exit_status.success() {
-                    return Err(String::from("Duplicati repair exit code indicates error"));
-                }
-            }
+            command.run_or_dry_run(bound.dry_run, "duplicati repair")?;
         }
 
         // Restore the data
@@ -165,16 +148,7 @@ impl Sync for Duplicati {
                 command.arg_str("--restore-path='/volume'");
             }
 
-            if bound.dry_run {
-                info!("DRY-RUN: {}", command.to_string());
-            } else {
-                let mut process: Child = try_result!(command.spawn(), "Starting duplicati repair failed");
-                let exit_status: ExitStatus = try_result!(process.wait(), "Duplicati repair failed");
-
-                if !exit_status.success() {
-                    return Err(String::from("Duplicati restore exit code indicates error"));
-                }
-            }
+            command.run_or_dry_run(bound.dry_run, "duplicati restore")?;
         }
 
         debug!("Duplicati restore for {} is done", bound.name);

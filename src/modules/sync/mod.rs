@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use crate::modules::traits::Sync;
-use serde_json::Value;
 use crate::modules::object::Paths;
 
 use crate::{change_result};
 
-pub mod duplicati;
-pub mod rsync;
+use serde_json::Value;
+
+mod duplicati;
+mod rsync;
 
 pub enum SyncModule {
     Duplicati(duplicati::Duplicati),

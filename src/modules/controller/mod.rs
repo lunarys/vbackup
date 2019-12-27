@@ -1,15 +1,15 @@
-use std::collections::HashMap;
 use crate::modules::traits::Controller;
+use crate::modules::object::Paths;
 
-pub mod mqtt;
+use serde_json::Value;
+
+mod mqtt;
 
 pub enum ControllerType {
     MQTT(mqtt::MqttController)
 }
 
 use ControllerType::*;
-use serde_json::Value;
-use crate::modules::object::Paths;
 
 pub fn get_module(name: &str) -> Result<ControllerType, String> {
     return Ok(match name.to_lowercase().as_str() {

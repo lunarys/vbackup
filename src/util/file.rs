@@ -1,4 +1,4 @@
-use crate::modules::object::CommandWrapper;
+use crate::util::command::CommandWrapper;
 use crate::{try_result, bool_result};
 
 use std::process::{Command, Child, ExitStatus};

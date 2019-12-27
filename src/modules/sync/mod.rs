@@ -6,7 +6,7 @@ pub mod duplicati;
 pub fn get_module_list() -> HashMap<&'static str, impl Sync> {
     let mut modules = HashMap::new();
 
-    modules.insert("duplicati", duplicati::Duplicati{});
+    modules.insert("duplicati", duplicati::Duplicati::new_empty());
 
     return modules;
 }

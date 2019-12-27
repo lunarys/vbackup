@@ -61,19 +61,22 @@ fn main() {
         module_data_dir: "/module_data".to_string()
     };
 
-    let mqtt_result = modules::controller::get_module_list().get("mqtt").unwrap().begin(&"test".to_string(), &serde_json::from_str(controller_config).unwrap(), &paths);
+    let mut controllers = modules::controller::get_module_list();
+    let mut controller = controllers.get_mut("mqtt").unwrap();
+    let mqtt_result = controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), &paths).unwrap().begin();
     if mqtt_result.is_ok() {
         info!("Controller succeeded, result: {}", mqtt_result.unwrap());
     } else {
         info!("Controller failed to do his thing")
     }
 
-    let duplicati_result = modules::sync::get_module_list().get("duplicati").unwrap().sync(&"test".to_string(), &serde_json::from_str(duplicati_config).unwrap(), &paths, true, false);
+    /*let sync = modules::sync::get_module_list().get("duplicati").unwrap().new(&"test", &serde_json::from_str(duplicati_config).unwrap(), &paths, true, false);
+    let duplicati_result = sync.unwrap().sync();
     if duplicati_result.is_ok() {
         info!("Duplicati sync succeeded");
     } else {
         info!("Duplicati sync failed");
-    }
+    }*/
 
-    util::file::write_if_change("/tmp/foo.txt", Some("600"), "This is the content", true);
+    // util::file::write_if_change("/tmp/foo.txt", Some("600"), "This is the content", true);
 }

@@ -6,7 +6,7 @@ pub mod mqtt;
 pub fn get_module_list() -> HashMap<&'static str, impl Controller> {
     let mut modules = HashMap::new();
 
-    modules.insert("mqtt", mqtt::MqttController{});
+    modules.insert("mqtt", mqtt::MqttController::new_empty());
 
     return modules;
 }

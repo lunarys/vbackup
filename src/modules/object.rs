@@ -10,6 +10,18 @@ pub struct Paths {
     pub module_data_dir: String
 }
 
+impl Paths {
+    pub fn copy(&self) -> Self {
+        return Paths {
+            save_path: String::from(&self.save_path),
+            timeframes_file: String::from(&self.timeframes_file),
+            tmp_dir: String::from(&self.tmp_dir),
+            auth_data_file: String::from(&self.auth_data_file),
+            module_data_dir: String::from(&self.module_data_dir)
+        }
+    }
+}
+
 pub struct CommandWrapper {
     command: Command,
     base: String,

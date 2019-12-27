@@ -27,5 +27,5 @@ pub trait Sync {
     fn init(&mut self, name: &str, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<&mut Self, String>;
     fn sync(&self) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
-    fn clear(&mut self) -> Result<(), String>;
+    fn clear(&mut self) -> Result<&mut Self, String>;
 }

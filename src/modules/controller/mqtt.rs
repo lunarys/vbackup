@@ -11,7 +11,17 @@ use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 use std::ops::Add;
 
-pub struct MqttController {}
+pub struct MqttController {
+    bind: Option<Bind>
+}
+
+struct Bind {
+    name: String,
+    config: Configuration,
+    mqtt_config: MqttConfiguration,
+    client: mqtt::Client,
+    receiver: Receiver<Option<mqtt::Message>>
+}
 
 #[derive(Deserialize)]
 struct Configuration {
@@ -40,43 +50,68 @@ struct MqttConfiguration {
 fn default_qos() -> i32 { 1 }
 fn default_port() -> i32 { 1883 }
 
-impl Controller for MqttController {
-    fn begin(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String> {
-        debug!("MQTT controller start run is beginning");
+impl MqttController {
+    pub fn new_empty() -> Self {
+        return MqttController { bind: None };
+    }
+}
 
-        let config : Configuration = conf_resolve!(config_json);
-        info!("MQTT controller start run for device '{}' (start={})", config.device, config.start);
+impl Controller for MqttController {
+    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths) -> Result<&mut Self, String> {
+        let config: Configuration = conf_resolve!(config_json);
         let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths);
 
-        let qos = mqtt_config.qos;
-        let topic_pub = get_topic_pub(&config, &mqtt_config);
         let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
             try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
 
-        let result = start(&client, &receiver, config.start, topic_pub, qos)?;
+        self.bind = Some( Bind {
+            name: String::from(name),
+            config,
+            mqtt_config,
+            client,
+            receiver
+        });
 
-        try_result!(client.disconnect(None), "Disconnect from broker failed");
+        Ok(self)
+    }
+
+    fn begin(&self) -> Result<bool, String> {
+        let bound = try_option!(self.bind.as_ref(), "MQTT controller could not begin, as it is not bound");
+
+        debug!("MQTT controller start run is beginning");
+        info!("MQTT controller start run for device '{}' (start={})", bound.config.device, bound.config.start);
+
+        let qos = bound.mqtt_config.qos;
+        let topic_pub = get_topic_pub(&bound.config, &bound.mqtt_config);
+
+        let result = start(&bound.client, &bound.receiver, bound.config.start, topic_pub, qos)?;
+
         debug!("MQTT controller start run is done");
         return Ok(result);
     }
 
-    fn end(&self, name: &String, config_json: &Value, paths: &Paths) -> Result<bool, String> {
+    fn end(&self) -> Result<bool, String> {
+        let bound = try_option!(self.bind.as_ref(), "MQTT controller could not end, as it is not bound");
+
         debug!("MQTT controller end run is beginning");
+        info!("MQTT controller start run for device '{}' (start={})", bound.config.device, bound.config.start);
 
-        let config : Configuration = conf_resolve!(config_json);
-        info!("MQTT controller start run for device '{}' (start={})", config.device, config.start);
-        let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths);
+        let qos = bound.mqtt_config.qos;
+        let topic_pub = get_topic_pub(&bound.config, &bound.mqtt_config);
 
-        let qos = mqtt_config.qos;
-        let topic_pub = get_topic_pub(&config, &mqtt_config);
-        let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
-            try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
+        let result = try_result!(end(&bound.client, topic_pub, qos), "Could not end in mqtt controller");
 
-        let result = try_result!(end(&client, topic_pub, qos), "Could not end in mqtt controller");
-
-        try_result!(client.disconnect(None), "Disconnect from broker failed");
         debug!("MQTT controller end run is done");
         return Ok(result);
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        let bound = try_option!(self.bind.as_ref(), "MQTT controller is not bound and thus can not be cleared");
+
+        try_result!(bound.client.disconnect(None), "Disconnect from broker failed");
+
+        self.bind = None;
+        return Ok(());
     }
 }
 
@@ -128,7 +163,7 @@ fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result
 
     // Set last will in case of whatever failure that includes a interrupted connection
     let testament_topic = get_topic_pub(config, mqtt_config);
-    let testament = mqtt::Message::new(testament_topic, "ABORT", mqtt_config.qos);
+    let testament = mqtt::Message::new(&testament_topic, "ABORT", mqtt_config.qos);
     options.will_message(testament);
 
     let topic_sub = get_topic_sub(config, mqtt_config);

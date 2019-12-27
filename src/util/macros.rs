@@ -68,7 +68,7 @@ macro_rules! bool_result {
 }
 
 /**
-  * Rewrap a result object, injecting a custom error message and retuning the new Result immediately
+  * Rewrap a result object, injecting a custom error message and returning the new Result
   *
   * Params:
   *   $res: Result<T,E>
@@ -77,11 +77,33 @@ macro_rules! bool_result {
   * Returns: Result<T,String>
   */
 #[macro_export]
-macro_rules! rewrap {
+macro_rules! change_error {
     ($res:expr, $err:expr) => {
         match $res {
             Ok(val) => Ok(val),
-            Err(_) => return Err($err.to_string())
+            Err(_) => {
+                error!("{}", $err);
+                return Err($err.to_string());
+            }
+        }
+    }
+}
+
+/**
+  * Rewrap a result object, injecting a custom result object and returning the new Result
+  *
+  * Params:
+  *   $res: Result<T,E>
+  *   $val: S
+  *
+  * Returns: Result<S,E>
+  */
+#[macro_export]
+macro_rules! change_result {
+    ($res:expr, $val:expr) => {
+        match $res {
+            Ok(_) => Ok($val),
+            Err(err) => Err(err)
         }
     }
 }

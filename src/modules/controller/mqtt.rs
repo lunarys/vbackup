@@ -57,7 +57,7 @@ impl MqttController {
 }
 
 impl Controller for MqttController {
-    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths) -> Result<&mut Self, String> {
+    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths) -> Result<(), String> {
         let config: Configuration = conf_resolve!(config_json);
         let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths);
 
@@ -72,7 +72,7 @@ impl Controller for MqttController {
             receiver
         });
 
-        Ok(self)
+        Ok(())
     }
 
     fn begin(&self) -> Result<bool, String> {

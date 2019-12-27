@@ -7,7 +7,6 @@ use crate::{try_result,try_option,auth_resolve,conf_resolve};
 use serde_json::Value;
 use serde::{Deserialize};
 use std::process::{Child, ExitStatus};
-use std::borrow::Borrow;
 
 pub struct Duplicati {
     bind: Option<Bind>
@@ -61,7 +60,7 @@ impl Duplicati {
 }
 
 impl Sync for Duplicati {
-    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<&mut Self, String> {
+    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         let config : Configuration = conf_resolve!(config_json);
         let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths);
 
@@ -74,7 +73,7 @@ impl Sync for Duplicati {
             no_docker
         });
 
-        Ok(self)
+        Ok(())
     }
 
     fn sync(&self) -> Result<(), String> {
@@ -182,11 +181,11 @@ impl Sync for Duplicati {
         Ok(())
     }
 
-    fn clear(&mut self) -> Result<&mut Self, String> {
+    fn clear(&mut self) -> Result<(), String> {
         let _bound = try_option!(self.bind.as_ref(), " Duplicati sync is not bound and thus can not be cleared");
 
         self.bind = None;
-        return Ok(self);
+        return Ok(());
     }
 }
 

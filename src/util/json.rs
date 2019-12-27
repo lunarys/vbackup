@@ -1,4 +1,4 @@
-use crate::{rewrap,try_result};
+use crate::{change_error,try_result};
 
 use std::fs::File;
 use std::io::BufReader;
@@ -9,7 +9,7 @@ pub fn from_file(file_name: &str) -> Result<Value, String> {
     let file = try_result!(File::open(file_name), "Could not open file");
     let buf_reader = BufReader::new(file);
 
-    rewrap!(serde_json::from_reader(buf_reader), "Failed reading the file")
+    change_error!(serde_json::from_reader(buf_reader), "Failed reading the file")
 }
 
 pub fn to_file(file_name: &str, value: &Value) -> Result<(), String> {

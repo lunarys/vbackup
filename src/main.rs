@@ -61,14 +61,15 @@ fn main() {
         module_data_dir: "/module_data".to_string()
     };
 
-    let mut controllers = modules::controller::get_module_list();
-    let mut controller = controllers.get_mut("mqtt").unwrap();
-    let mqtt_result = controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), &paths).unwrap().begin();
-    if mqtt_result.is_ok() {
+    let mut controller = modules::controller::get_module("mqtt").unwrap();
+    controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), &paths).expect("Failed getting controller");
+    let mqtt_result = controller.begin();
+        if mqtt_result.is_ok() {
         info!("Controller succeeded, result: {}", mqtt_result.unwrap());
     } else {
         info!("Controller failed to do his thing")
     }
+    controller.end().expect("Controller end failed");
 
     /*let sync = modules::sync::get_module_list().get("duplicati").unwrap().new(&"test", &serde_json::from_str(duplicati_config).unwrap(), &paths, true, false);
     let duplicati_result = sync.unwrap().sync();

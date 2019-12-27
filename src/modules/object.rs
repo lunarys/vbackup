@@ -1,4 +1,4 @@
-use crate::{rewrap};
+use crate::{change_error};
 
 use std::process::{Command, Child};
 
@@ -56,7 +56,7 @@ impl CommandWrapper {
     }
 
     pub fn spawn(&mut self) -> Result<Child,String> {
-        rewrap!(self.command.spawn(), "Failed spawning command")
+        change_error!(self.command.spawn(), "Failed spawning command")
     }
 }
 

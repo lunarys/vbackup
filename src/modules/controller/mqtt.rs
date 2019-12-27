@@ -2,7 +2,7 @@ use crate::modules::traits::Controller;
 use crate::modules::object::Paths;
 use crate::util::auth_data;
 
-use crate::{try_result,try_option,conf_resolve,auth_resolve};
+use crate::{try_result,try_option,bool_result,conf_resolve,auth_resolve};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -136,11 +136,7 @@ fn start(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, boot
 
 fn end(client: &mqtt::Client, topic: String, qos: i32) -> Result<bool, String> {
     let msg = mqtt::Message::new(topic, "DONE", qos);
-    if client.publish(msg).is_ok() {
-        Ok(true)
-    } else {
-        Err("Could not send end message".to_string())
-    }
+    return bool_result!(client.publish(msg).is_ok(), true, "Could not send end message");
 }
 
 fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result<(mqtt::Client,Receiver<Option<mqtt::Message>>), String> {

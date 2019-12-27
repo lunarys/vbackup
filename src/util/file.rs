@@ -1,5 +1,5 @@
 use crate::modules::object::CommandWrapper;
-use crate::{try_result};
+use crate::{try_result, bool_result};
 
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, BufReader, Read};
@@ -82,12 +82,7 @@ pub fn set_permission(file_name: &str, mode: &str) -> Result<(),String> {
     let mut process: Child = try_result!(cmd, "Could not start process for setting file permissions");
     let result: ExitStatus = try_result!(process.wait(), "Process for setting file permissions failed");
 
-    return if result.success() {
-        Ok(())
-    } else {
-        // TODO: Maybe something like a macro debug_return!() to also print this error
-        Err(String::from("Process for setting file permissions exited with error"))
-    }
+    return bool_result!(result.success(), (), "Process for setting file permissions exited with error");
 }
 
 pub fn exists(file_name: &str) -> bool {

@@ -15,7 +15,7 @@ macro_rules! try_result {
             Ok(val) => val,
             Err(orig) => {
                 error!("{} ({})", $err, orig.to_string());
-                return Err($err.to_string());
+                return Err(String::from($err));
             }
         }
     }
@@ -38,8 +38,31 @@ macro_rules! try_option {
             Some(val) => val,
             None => {
                 error!("{}", $err);
-                return Err($err.to_string());
+                return Err(String::from($err));
             }
+        }
+    }
+}
+
+/**
+  * Create a result of a boolean value. If the bool is true, return the Ok value,
+  * if it is false return an error created from the error message.
+  *
+  * Params:
+  *   $cond: bool
+  *   $ok: T
+  *   $err: String or similar
+  *
+  * Returns Result<T,String>
+  */
+#[macro_export]
+macro_rules! bool_result {
+    ($cond:expr, $ok:expr, $err:expr) => {
+        if $cond {
+            Ok($ok)
+        } else {
+            error!("{}", $err);
+            return Err(String::from($err));
         }
     }
 }
@@ -57,7 +80,7 @@ macro_rules! try_option {
 macro_rules! rewrap {
     ($res:expr, $err:expr) => {
         match $res {
-            Ok(val) => return Ok(val),
+            Ok(val) => Ok(val),
             Err(_) => return Err($err.to_string())
         }
     }

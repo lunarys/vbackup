@@ -1,5 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::{Paths};
+use crate::modules::object::{Paths,ModulePaths};
 use crate::util::command::CommandWrapper;
 use crate::util::auth_data;
 use crate::util::file;
@@ -10,15 +10,15 @@ use serde_json::Value;
 use serde::{Deserialize};
 use std::process::{Child, ExitStatus};
 
-pub struct Duplicati {
-    bind: Option<Bind>
+pub struct Duplicati<'a> {
+    bind: Option<Bind<'a>>
 }
 
-struct Bind {
+struct Bind<'a> {
     name: String,
     config: Configuration,
     auth: Authentication,
-    paths: Paths,
+    paths: &'a ModulePaths<'a>,
     dry_run: bool,
     no_docker: bool
 }
@@ -38,7 +38,10 @@ struct Configuration {
     smart_retention: bool,
 
     #[serde(default="default_retention_policy")]
-    retention_policy: String
+    retention_policy: String,
+
+    block_size: Option<String>, // default by duplicati: 100kb
+    file_size: Option<String> // default by duplicati: 50mb
 }
 
 fn default_versions() -> i32 { 1 }
@@ -55,22 +58,22 @@ struct Authentication {
     fingerprint_rsa: String
 }
 
-impl Duplicati {
+impl<'a> Duplicati<'a> {
     pub fn new_empty() -> Self {
         return Duplicati { bind: None };
     }
 }
 
-impl Sync for Duplicati {
-    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+impl<'a> Sync<'a> for Duplicati<'a> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         let config : Configuration = conf_resolve!(config_json);
-        let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths);
+        let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths.base_paths);
 
         self.bind = Some(Bind {
             name: String::from(name),
             config,
             auth,
-            paths: paths.copy(),
+            paths,
             dry_run,
             no_docker
         });
@@ -90,7 +93,7 @@ impl Sync for Duplicati {
         command.arg_str("backup");
         command.arg_string(format!("'{}'", get_connection_uri(&bound.config, &bound.auth)));
         if bound.no_docker {
-            command.arg_string(format!("'{}'", &bound.paths.save_path));
+            command.arg_string(format!("'{}'", &bound.paths.store_path));
         } else {
             command.arg_str("/volume");
         }
@@ -144,7 +147,7 @@ impl Sync for Duplicati {
 
             command.arg_str("--restore-permission=true");
             if bound.no_docker {
-                command.arg_string(format!("--restore-path='{}'", &bound.paths.save_path));
+                command.arg_string(format!("--restore-path='{}'", &bound.paths.store_path));
             } else {
                 command.arg_str("--restore-path='/volume'");
             }
@@ -164,8 +167,8 @@ impl Sync for Duplicati {
     }
 }
 
-fn get_base_cmd(no_docker: bool, paths: &Paths) -> CommandWrapper {
-    let original_path= &paths.save_path;
+fn get_base_cmd(no_docker: bool, paths: &ModulePaths) -> CommandWrapper {
+    let original_path= &paths.store_path;
     let module_data = &paths.module_data_dir;
 
     if no_docker {
@@ -186,42 +189,64 @@ fn get_base_cmd(no_docker: bool, paths: &Paths) -> CommandWrapper {
     }
 }
 
-fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Configuration, auth: &Authentication, paths: &Paths, no_docker: bool) -> Result<(), String> {
-    let dbpath = if no_docker {
-        format!("{}/db/{}.sqlite", &paths.module_data_dir, name)
-    } else {
-        format!("/module/db/{}.sqlite", name)
-    };
-
+fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Configuration, auth: &Authentication, paths: &ModulePaths, no_docker: bool) -> Result<(),String>{
+    // Set username (defined as always required)
     command.env("AUTH_USERNAME", auth.user.as_str());
-    if auth.ssh_key.is_some() {
-        let identity_file_actual = format!("{}/identity", &paths.module_data_dir);
-        file::write_if_change(&identity_file_actual,
-                              Some("600"),
-                              auth.ssh_key.as_ref().unwrap(),
-                              true)?;
-        let keypath = if no_docker {
-            identity_file_actual
-        } else {
-            String::from("/module/identity")
-        };
-        command.arg_string(format!("--ssh-keyfile='{}'", keypath));
-    } else if auth.password.is_some() {
-        command.env("AUTH_PASSWORD", auth.password.as_ref().unwrap());
-    }
 
-    command.arg_string(format!("--dbpath='{}'", &dbpath));
+    // Set the name of the backup
     command.arg_string(format!("--backup-name='{}'", name));
 
+    // Set block size option if a value is given
+    // TODO: Maybe define custom default?
+    if config.block_size.is_some() {
+        command.arg_string(format!("--blocksize={}", config.block_size.as_ref().unwrap()));
+    }
+
+    // Set file size option if a value is given
+    // TODO: Maybe define custom default?
+    if config.file_size.is_some() {
+        command.arg_string(format!("--dblock-size={}", config.file_size.as_ref().unwrap()));
+    }
+
+    // SSH fingerprint of host is required to securely connect
+    command.arg_string(format!("--ssh-fingerprint='{}'", &auth.fingerprint_rsa));
+
+    // Do not read input from console in order to prevent blocking by waiting
+    command.arg_str("--disable-module=console-password-input");
+
+    // TODO: Maybe adjust log output?
+    // command.arg_with_var("--log-level=???");
+
+    // Set encryption key is given, otherwise use no encryption
     if config.encryption_key.is_some() {
         command.env("PASSPHRASE", config.encryption_key.as_ref().unwrap())
     } else {
         command.arg_str("--no-encryption=true");
     }
 
-    command.arg_string(format!("--ssh-fingerprint='{}'", &auth.fingerprint_rsa));
-    command.arg_str("--disable-module=console-password-input");
-    // command.arg_with_var("--log-level=???");
+    // Set dbpath (distinguish docker and no-docker run)
+    command.arg_string(if no_docker {
+        format!("--dbpath='{}/db/{}.sqlite'", &paths.module_data_dir, name)
+    } else {
+        format!("--dbpath='/module/db/{}.sqlite'", name)
+    });
+
+    // SSH key or password options
+    if auth.ssh_key.is_some() {
+        let identity_file_actual = format!("{}/identity", &paths.module_data_dir);
+        file::write_if_change(&identity_file_actual,
+                              Some("600"),
+                              auth.ssh_key.as_ref().unwrap(),
+                              true)?;
+
+        command.arg_string(if no_docker {
+            format!("--ssh-keyfile='{}'", identity_file_actual)
+        } else {
+            String::from("--ssh-keyfile='/module/identity'")
+        });
+    } else if auth.password.is_some() {
+        command.env("AUTH_PASSWORD", auth.password.as_ref().unwrap());
+    }
 
     Ok(())
 }

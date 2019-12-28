@@ -6,6 +6,7 @@ extern crate serde;
 
 extern crate serde_derive;
 
+mod vbackup;
 mod modules;
 mod util;
 
@@ -14,7 +15,7 @@ use env_logger::Builder;
 
 use crate::modules::traits::Sync;
 use crate::modules::traits::Controller;
-use crate::modules::object::Paths;
+use crate::modules::object::{Paths, PathBase};
 
 fn main() {
     Builder::new()
@@ -53,16 +54,19 @@ fn main() {
         }
     "#;
 
-    let paths : Paths = Paths {
-        save_path: "/save".to_string(),
-        timeframes_file: "/timeframes".to_string(),
-        tmp_dir: "/tmp_dir".to_string(),
-        auth_data_file: "/auth_data".to_string(),
-        module_data_dir: "/module_data".to_string()
+    let base_paths = PathBase {
+        config_dir: "/config".to_string(),
+        save_dir: "/var/save".to_string(),
+        timeframes_file: None,
+        tmp_dir: "/tmp/vbackup".to_string(),
+        auth_data_file: None
     };
 
+    let paths = Paths::from(base_paths);
+    let modules_paths = paths.for_module("test", "controller", &None, &None);
+
     let mut controller = modules::controller::get_module("mqtt").unwrap();
-    controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), &paths).expect("Failed getting controller");
+    controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), &modules_paths).expect("Failed getting controller");
     let mqtt_result = controller.begin();
         if mqtt_result.is_ok() {
         info!("Controller succeeded, result: {}", mqtt_result.unwrap());

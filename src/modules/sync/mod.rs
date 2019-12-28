@@ -1,5 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::Paths;
+use crate::modules::object::{Paths, ModulePaths};
 
 use crate::{change_result};
 
@@ -8,9 +8,9 @@ use serde_json::Value;
 mod duplicati;
 mod rsync;
 
-pub enum SyncModule {
-    Duplicati(duplicati::Duplicati),
-    Rsync(rsync::Rsync)
+pub enum SyncModule<'a> {
+    Duplicati(duplicati::Duplicati<'a>),
+    Rsync(rsync::Rsync<'a>)
 }
 
 use SyncModule::*;
@@ -27,8 +27,8 @@ pub fn get_module(name: &str) -> Result<SyncModule,String> {
     })
 }
 
-impl Sync for SyncModule {
-    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+impl<'a> Sync<'a> for SyncModule<'a> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         return match self {
             Duplicati(sync) => sync.init(name, config_json, paths, dry_run, no_docker),
             Rsync(sync) => sync.init(name, config_json, paths, dry_run, no_docker)

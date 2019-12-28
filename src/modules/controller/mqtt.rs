@@ -1,5 +1,5 @@
 use crate::modules::traits::Controller;
-use crate::modules::object::Paths;
+use crate::modules::object::{Paths, ModulePaths};
 use crate::util::auth_data;
 
 use crate::{try_result,try_option,bool_result,conf_resolve,auth_resolve};
@@ -56,10 +56,10 @@ impl MqttController {
     }
 }
 
-impl Controller for MqttController {
-    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths) -> Result<(), String> {
+impl<'a> Controller<'a> for MqttController {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths) -> Result<(), String> {
         let config: Configuration = conf_resolve!(config_json);
-        let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths);
+        let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths.base_paths);
 
         let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
             try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");

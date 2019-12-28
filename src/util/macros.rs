@@ -149,3 +149,11 @@ macro_rules! conf_resolve {
         try_result!(serde_json::from_value($obj.clone()), "Could not parse configuration");
     }
 }
+
+#[macro_export]
+macro_rules! throw {
+    ($err:expr) => {
+        error!("{}", err);
+        return Err(err);
+    }
+}

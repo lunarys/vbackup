@@ -1,5 +1,5 @@
 use crate::modules::traits::Controller;
-use crate::modules::object::Paths;
+use crate::modules::object::{Paths, ModulePaths};
 
 use serde_json::Value;
 
@@ -22,8 +22,8 @@ pub fn get_module(name: &str) -> Result<ControllerType, String> {
     })
 }
 
-impl Controller for ControllerType {
-    fn init(&mut self, name: &str, config_json: &Value, paths: &Paths) -> Result<(), String> {
+impl<'a> Controller<'a> for ControllerType {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths) -> Result<(), String> {
         return match self {
             MQTT(controller) => controller.init(name, config_json, paths)
         }

@@ -18,7 +18,7 @@ struct Bind<'a> {
     name: String,
     config: Configuration,
     auth: Authentication,
-    paths: &'a ModulePaths<'a>,
+    paths: ModulePaths<'a>,
     dry_run: bool,
     no_docker: bool
 }
@@ -65,7 +65,7 @@ impl<'a> Duplicati<'a> {
 }
 
 impl<'a> Sync<'a> for Duplicati<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
         let config : Configuration = conf_resolve!(config_json);
         let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths.base_paths);
 

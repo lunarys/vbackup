@@ -21,16 +21,17 @@ pub struct Configuration {
     pub original_path: Option<String>,
     pub store_path: Option<String>,
     pub backup: Option<BackupConfiguration>,
-    pub sync: Option<Vec<SyncConfiguration>>
+    pub sync: Option<SyncConfiguration>
 }
 
 #[derive(Deserialize)]
 pub struct BackupConfiguration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
+    #[serde(rename(deserialize = "type"))]
     pub backup_type: String,
     pub config: Value,
-    pub check: Option<CheckConfiguration>,
+    pub check: Option<Value>,
     pub timeframes: Vec<Timeframe>
 }
 
@@ -38,21 +39,12 @@ pub struct BackupConfiguration {
 pub struct SyncConfiguration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
+    #[serde(rename(deserialize = "type"))]
     pub sync_type: String,
     pub interval: String,
     pub config: Value,
-    pub check: Option<CheckConfiguration>,
-    pub controller: Option<ControllerConfiguration>
-}
-
-#[derive(Deserialize)]
-pub struct ControllerConfiguration {
-    pub controller_type: String
-}
-
-#[derive(Deserialize)]
-pub struct CheckConfiguration {
-    pub check_type: String
+    pub check: Option<Value>,
+    pub controller: Option<Value>
 }
 
 #[derive(Deserialize)]

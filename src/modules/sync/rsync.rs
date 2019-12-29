@@ -18,7 +18,7 @@ struct Bind<'a> {
     name: String,
     config: Configuration,
     ssh_config: SshConfig,
-    paths: &'a ModulePaths<'a>,
+    paths: ModulePaths<'a>,
     sync_from: String,
     sync_to: String,
     dry_run: bool,
@@ -58,7 +58,7 @@ impl<'a> Rsync<'a> {
 }
 
 impl<'a> Sync<'a> for Rsync<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
         let mut config: Configuration = conf_resolve!(config_json);
         let ssh_config: SshConfig = auth_resolve!(&config.host_reference, &config.host, paths.base_paths);
 

@@ -57,7 +57,7 @@ impl MqttController {
 }
 
 impl<'a> Controller<'a> for MqttController {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
         let config: Configuration = conf_resolve!(config_json);
         let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths.base_paths);
 

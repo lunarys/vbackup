@@ -66,7 +66,7 @@ fn main() {
     let modules_paths = paths.for_module("test", "controller", &None, &None);
 
     let mut controller = modules::controller::get_module("mqtt").unwrap();
-    controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), &modules_paths).expect("Failed getting controller");
+    controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), modules_paths, false, false).expect("Failed getting controller");
     let mqtt_result = controller.begin();
         if mqtt_result.is_ok() {
         info!("Controller succeeded, result: {}", mqtt_result.unwrap());

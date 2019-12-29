@@ -5,13 +5,13 @@ use serde_json::Value;
 
 mod mqtt;
 
-pub enum ControllerType {
+pub enum ControllerModule {
     MQTT(mqtt::MqttController)
 }
 
-use ControllerType::*;
+use ControllerModule::*;
 
-pub fn get_module(name: &str) -> Result<ControllerType, String> {
+pub fn get_module(name: &str) -> Result<ControllerModule, String> {
     return Ok(match name.to_lowercase().as_str() {
         "mqtt" => MQTT(mqtt::MqttController::new_empty()),
         unknown => {
@@ -22,10 +22,10 @@ pub fn get_module(name: &str) -> Result<ControllerType, String> {
     })
 }
 
-impl<'a> Controller<'a> for ControllerType {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: &'b ModulePaths) -> Result<(), String> {
+impl<'a> Controller<'a> for ControllerModule {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
         return match self {
-            MQTT(controller) => controller.init(name, config_json, paths)
+            MQTT(controller) => controller.init(name, config_json, paths, dry_run, no_docker)
         }
     }
 

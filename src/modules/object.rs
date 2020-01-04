@@ -1,5 +1,5 @@
-use serde_json::{Value};
-use serde::{Deserialize};
+use serde_json::{Value, Map};
+use serde::{Deserialize,Serialize};
 
 #[derive(Deserialize)]
 pub struct Arguments {
@@ -18,6 +18,7 @@ pub struct Configuration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
     pub name: String,
+    pub savedata_in_store: Option<bool>,
     pub original_path: Option<String>,
     pub store_path: Option<String>,
     pub backup: Option<BackupConfiguration>,
@@ -32,7 +33,7 @@ pub struct BackupConfiguration {
     pub backup_type: String,
     pub config: Value,
     pub check: Option<Value>,
-    pub timeframes: Vec<Timeframe>
+    pub timeframes: Vec<TimeframeReference>
 }
 
 #[derive(Deserialize)]
@@ -41,21 +42,41 @@ pub struct SyncConfiguration {
     pub disabled: bool,
     #[serde(rename(deserialize = "type"))]
     pub sync_type: String,
-    pub interval: String,
+    pub interval: TimeframeReference,
     pub config: Value,
     pub check: Option<Value>,
     pub controller: Option<Value>
 }
 
 #[derive(Deserialize)]
-pub struct Timeframe {
+pub struct TimeframeReference {
     pub frame: String,
     #[serde(default="default_u32_1")]
     pub amount: u32
 }
 
+#[derive(Deserialize)]
+pub struct Timeframe {
+    pub identifier: String,
+    pub interval: u64,
+}
+
 fn default_u32_1() -> u32 { 1 }
 fn default_bool_false() -> bool { false }
+fn default_bool_true() -> bool { true }
+
+#[derive(Deserialize,Serialize)]
+pub struct SaveData {
+    pub lastsave: Map<String,TimeEntry>,
+    pub nextsave: Map<String,TimeEntry>,
+    pub lastsync: Map<String,TimeEntry>
+}
+
+#[derive(Deserialize,Serialize)]
+pub struct TimeEntry {
+    pub timestamp: u64,
+    pub date: Option<String> // TODO: Is there a better data type?
+}
 
 #[derive(Deserialize)]
 pub struct PathBase {
@@ -67,6 +88,8 @@ pub struct PathBase {
     #[serde(default="default_tmp_dir")]
     pub tmp_dir: String, // Directory for temporary files
     pub auth_data_file: Option<String>, // File containing shared authentication information
+    #[serde(default="default_bool_true")]
+    pub savedata_in_store: bool,
 }
 
 fn default_config_dir() -> String { String::from("/etc/vbackup") }
@@ -78,11 +101,13 @@ pub struct Paths {
     pub save_dir: String, // Default base directory for saves
     pub timeframes_file: String, // File containing timeframe definitions
     pub tmp_dir: String, // Directory for temporary files
-    pub auth_data_file: String // File containing shared authentication information
+    pub auth_data_file: String, // File containing shared authentication information
+    pub savedata_in_store: bool
 }
 
 pub struct ModulePaths<'a> {
     pub base_paths: &'a Paths,
+    pub save_data: String, // Savedata file
     pub original_path: Option<String>, // Path of the original directory to back up
     pub store_path: String, // Path for a local backup (or just path that will be synced)
     pub module_data_dir: String // Path for the modules to store additional data
@@ -96,6 +121,7 @@ impl Paths {
             config_dir: base.config_dir,
             save_dir: base.save_dir,
             tmp_dir: base.tmp_dir,
+            savedata_in_store: base.savedata_in_store
         }
     }
 
@@ -109,13 +135,18 @@ impl Paths {
             format!("{}/{}", self.save_dir.as_str(), name)
         };
 
-        let module_data_dir = format!("{}/.module_data/{}/{}",
-                                      self.save_dir.as_str(),
-                                      module_type,
-                                      name);
+        let module_data_base = format!("{}/.module_data/{}", self.save_dir.as_str(), name);
+        let module_data_dir = format!("{}/{}", module_data_base.as_str(), module_type);
+
+        let save_data = if self.savedata_in_store {
+            format!("{}/.savedata.json", backup_path.as_str())
+        } else {
+            format!("{}/savedata.json", module_data_base.as_str())
+        };
 
         return ModulePaths {
             base_paths: self,
+            save_data,
             original_path: original_path.clone(),
             store_path: backup_path,
             module_data_dir

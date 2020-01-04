@@ -153,7 +153,7 @@ macro_rules! conf_resolve {
 #[macro_export]
 macro_rules! throw {
     ($err:expr) => {
-        error!("{}", err);
-        return Err(err);
+        error!("{}", $err);
+        return Err($err);
     }
 }

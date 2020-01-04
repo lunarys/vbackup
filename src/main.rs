@@ -59,7 +59,8 @@ fn main() {
         save_dir: "/var/save".to_string(),
         timeframes_file: None,
         tmp_dir: "/tmp/vbackup".to_string(),
-        auth_data_file: None
+        auth_data_file: None,
+        savedata_in_store: false
     };
 
     let paths = Paths::from(base_paths);

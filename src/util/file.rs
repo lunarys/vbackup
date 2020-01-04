@@ -3,9 +3,9 @@ use crate::{try_result, bool_result};
 
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, BufReader, Read};
-use std::fs::{OpenOptions, Permissions, File};
+use std::fs::{OpenOptions, Permissions, File, read_dir};
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub fn write_with_perm(file_name: &str, mode: &str, to_write: &str, overwrite: bool) -> Result<(), String>{
     let file_result = OpenOptions::new()
@@ -87,4 +87,26 @@ pub fn set_permission(file_name: &str, mode: &str) -> Result<(),String> {
 
 pub fn exists(file_name: &str) -> bool {
     Path::new(file_name).exists()
+}
+
+pub fn list_in_dir(dir_name: &str) -> Result<Vec<PathBuf>, String> {
+    let path = Path::new(dir_name);
+
+    if !path.is_dir() {
+        return Err(String::from("Path is not a directory")); // TODO: throw
+    }
+
+    // TODO: properly use paths instead of strings
+
+    let result = try_result!(read_dir(path), "Could not read directory");
+    let files = result.filter_map(|r| {
+        if r.is_ok() {
+            // TODO: Could also filter for filetype
+            Some(r.unwrap().path())
+        } else {
+            None
+        }
+    }).collect();
+
+    return Ok(files);
 }

@@ -1,5 +1,5 @@
 use crate::modules::object::*;
-use crate::util::json;
+use crate::util::io::json;
 use crate::modules;
 
 use crate::{try_option, change_result};
@@ -11,7 +11,8 @@ use crate::modules::sync::SyncModule;
 use crate::modules::controller::ControllerModule;
 use crate::modules::backup::BackupModule;
 use crate::modules::check::CheckModule;
-use crate::util::file;
+use crate::util::io::file;
+use crate::util::helper::{controller as controller_helper,check as check_helper};
 use std::time::SystemTime;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -187,16 +188,16 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     module.init(&config.name, &sync_config.config, paths, args.dry_run, args.no_docker)?;
 
     // Set up additional check and controller (if configured)
-    let mut controller_module = controller_init(&args, base_paths, &config, &sync_config.controller)?;
+    let mut controller_module = controller_helper::init(&args, base_paths, &config, &sync_config.controller)?;
     let mut check_module = if !args.force {
-        check_init(&args, base_paths, &config, &sync_config.check, &last_sync)?
+        check_helper::init(&args, base_paths, &config, &sync_config.check, &last_sync)?
     } else {
         // No additional check is required if forced run
         None
     };
 
     // Run additional check
-    if !check_run(&check_module)? {
+    if !check_helper::run(&check_module)? {
         debug!("");
         return Ok(false);
     }
@@ -206,7 +207,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     debug!("");
     if sync_result.is_ok() {
         // Update internal state of check
-        if check_update(&check_module).is_err() {
+        if check_helper::update(&check_module).is_err() {
             error!("")
         }
     } else {
@@ -214,17 +215,17 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     }
 
     // Check can be freed as it is not required anymore
-    if check_clear(&mut check_module).is_err() {
+    if check_helper::clear(&mut check_module).is_err() {
         error!("")
     }
 
     // Run controller end (result is irrelevant here)
-    if controller_end(&controller_module).is_err() {
+    if controller_helper::end(&controller_module).is_err() {
         error!("")
     }
 
     // Controller can be freed as it is not required anymore
-    if controller_clear(&mut controller_module).is_err() {
+    if controller_helper::clear(&mut controller_module).is_err() {
         error!("")
     }
 
@@ -232,101 +233,6 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
     // Return Ok(true) for sync was executed or Err(error) for failed sync
     change_result!(sync_result, true)
-}
-
-fn controller_init(args: &Arguments, paths: &Paths, config: &Configuration, controller_config: &Option<Value>) -> Result<Option<ControllerModule>,String> {
-    if controller_config.is_some() {
-        let controller_type = try_option!(controller_config.as_ref().unwrap().get("type"), "Controller config contains no field 'type'");
-        let module_paths = paths.for_module(config.name.as_str(), "controller", &config.original_path, &config.store_path);
-
-        let mut module = modules::controller::get_module(try_option!(controller_type.as_str(), "Expected controller type as string"))?;
-        module.init(config.name.as_str(), controller_config.as_ref().unwrap(), module_paths, args.dry_run, args.no_docker)?;
-
-        return Ok(Some(module));
-    } else {
-        return Ok(None);
-    }
-}
-
-fn controller_start(module: &Option<ControllerModule>) -> Result<bool,String> {
-    if module.is_some() {
-        let result = module.as_ref().unwrap().begin()?;
-        if result {
-            debug!("");
-        } else {
-            debug!("");
-        }
-        return Ok(result);
-    }
-
-    // No controller means sync can be started
-    return Ok(true);
-}
-
-fn controller_end(module: &Option<ControllerModule>) -> Result<bool,String> {
-    if module.is_some() {
-        let result = module.as_ref().unwrap().end()?;
-        if result {
-            debug!("");
-        } else {
-            debug!("");
-        }
-        return Ok(result);
-    }
-
-    return Ok(true);
-}
-
-fn controller_clear(module: &mut Option<ControllerModule>) -> Result<(),String> {
-    if module.is_some() {
-        module.as_mut().unwrap().clear()?;
-    }
-
-    return Ok(());
-}
-
-fn check_init(args: &Arguments, paths: &Paths, config: &Configuration, check_config: &Option<Value>, last: &Option<&TimeEntry>) -> Result<Option<CheckModule>,String> {
-    if check_config.is_some() {
-        let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
-        let module_paths = paths.for_module(config.name.as_str(), "check", &config.original_path, &config.store_path);
-
-        let mut module = modules::check::get_module(try_option!(check_type.as_str(), "Expected controller type as string"))?;
-        module.init(config.name.as_str(), check_config.as_ref().unwrap(), last, module_paths, args.dry_run, args.no_docker)?;
-
-        return Ok(Some(module));
-    } else {
-        return Ok(None);
-    }
-}
-
-fn check_run(module: &Option<CheckModule>) -> Result<bool,String> {
-    if module.is_some() {
-        let result = module.as_ref().unwrap().check()?;
-        if result {
-            debug!("");
-        } else {
-            debug!("");
-        }
-        return Ok(result);
-    }
-
-    return Ok(true);
-}
-
-fn check_update(module: &Option<CheckModule>) -> Result<(),String> {
-    if module.is_some() {
-        module.as_ref().unwrap().update()?;
-    }
-
-    return Ok(());
-}
-
-fn check_clear(module: &mut Option<CheckModule>) -> Result<(),String> {
-    if module.is_some() {
-        module.as_mut().unwrap().clear()?;
-    }
-
-    return Ok(());
 }
 
 pub fn list(args: &Arguments, paths: &Paths) -> Result<(),String> {

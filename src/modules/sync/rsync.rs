@@ -2,7 +2,7 @@ use crate::modules::traits::Sync;
 use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
 use crate::util::auth_data;
-use crate::util::file;
+use crate::util::io::file;
 
 use crate::{try_result,try_option,auth_resolve,conf_resolve};
 

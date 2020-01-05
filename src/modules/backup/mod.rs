@@ -1,5 +1,9 @@
+use crate::modules::traits::Backup;
+use crate::modules::object::ModulePaths;
+use serde_json::Value;
+
 pub enum BackupModule {
-    Unknown
+    NotImplemented
 }
 
 use BackupModule::*;
@@ -13,4 +17,22 @@ pub fn get_module(name: &str) -> Result<BackupModule, String> {
             return Err(msg)
         }
     })
+}
+
+impl<'a> Backup<'a> for BackupModule {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, timeframes: &Value, paths: ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn backup(&self) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn restore(&self) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        unimplemented!()
+    }
 }

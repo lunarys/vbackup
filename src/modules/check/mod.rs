@@ -1,5 +1,9 @@
+use crate::modules::traits::Check;
+use crate::modules::object::{ModulePaths,TimeEntry};
+use serde_json::Value;
+
 pub enum CheckModule {
-    Unknown
+    NotImplemented
 }
 
 use CheckModule::*;
@@ -13,4 +17,22 @@ pub fn get_module(name: &str) -> Result<CheckModule, String> {
             return Err(msg)
         }
     })
+}
+
+impl<'a> Check<'a> for CheckModule {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, last: &Option<&TimeEntry>, paths: ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn check(&self) -> Result<bool, String> {
+        unimplemented!()
+    }
+
+    fn update(&self) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        unimplemented!()
+    }
 }

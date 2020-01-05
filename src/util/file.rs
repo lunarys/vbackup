@@ -1,9 +1,8 @@
-use crate::util::command::CommandWrapper;
 use crate::{try_result, bool_result};
 
 use std::process::{Command, Child, ExitStatus};
-use std::io::{Write, BufReader, Read};
-use std::fs::{OpenOptions, Permissions, File, read_dir};
+use std::io::{Write, Read};
+use std::fs::{OpenOptions, File, read_dir};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -74,7 +73,7 @@ pub fn write_if_change(file_name: &str, mode: Option<&str>, to_write: &str, over
 
 pub fn set_permission(file_name: &str, mode: &str) -> Result<(),String> {
     // Workaround for setting file access permissions
-    let mut cmd = Command::new("chmod")
+    let cmd = Command::new("chmod")
         .arg(mode)
         .arg(file_name)
         .spawn();

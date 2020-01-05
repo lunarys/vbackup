@@ -4,10 +4,11 @@ use crate::modules::object::Paths;
 
 // Other modules
 use serde_json::Value;
+use std::path::Path;
 
 // TODO: Generic type for directly deserializing
 pub fn load_from_file(name: &String, paths: &Paths) -> Result<Value,String> {
-    let auth_file_content = json::from_file::<Value>(&paths.auth_data_file)?;
+    let auth_file_content = json::from_file::<Value>(Path::new(&paths.auth_data_file))?;
     match auth_file_content.get(name) {
         Some(value) => Ok(value.clone()),
         None => Err("Key does not exist in file".to_string())

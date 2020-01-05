@@ -1,6 +1,5 @@
 use crate::modules::traits::Controller;
-use crate::modules::object::{Paths, ModulePaths};
-
+use crate::modules::object::ModulePaths;
 use serde_json::Value;
 
 mod mqtt;

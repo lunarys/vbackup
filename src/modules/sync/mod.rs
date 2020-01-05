@@ -1,7 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::{Paths, ModulePaths};
-
-use crate::{change_result};
+use crate::modules::object::ModulePaths;
 
 use serde_json::Value;
 

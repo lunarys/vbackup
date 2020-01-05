@@ -1,5 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::{Paths,ModulePaths};
+use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
 use crate::util::auth_data;
 use crate::util::file;
@@ -8,7 +8,6 @@ use crate::{try_result,try_option,auth_resolve,conf_resolve};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use std::process::{Child, ExitStatus};
 
 pub struct Duplicati<'a> {
     bind: Option<Bind<'a>>

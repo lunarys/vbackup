@@ -1,5 +1,5 @@
 use crate::modules::traits::Controller;
-use crate::modules::object::{Paths, ModulePaths};
+use crate::modules::object::ModulePaths;
 use crate::util::auth_data;
 
 use crate::{try_result,try_option,bool_result,conf_resolve,auth_resolve};
@@ -9,14 +9,12 @@ use serde::{Deserialize};
 use paho_mqtt as mqtt;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
-use std::ops::Add;
 
 pub struct MqttController {
     bind: Option<Bind>
 }
 
 struct Bind {
-    name: String,
     config: Configuration,
     mqtt_config: MqttConfiguration,
     client: mqtt::Client,
@@ -65,7 +63,6 @@ impl<'a> Controller<'a> for MqttController {
             try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
 
         self.bind = Some( Bind {
-            name: String::from(name),
             config,
             mqtt_config,
             client,

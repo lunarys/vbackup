@@ -1,21 +1,22 @@
 use crate::modules::object::*;
 use crate::util::json;
 use crate::modules;
-use crate::conf_resolve;
 
-use crate::{throw, try_option, change_result, try_result};
+use crate::{try_option, change_result};
 
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
-use std::path::{Path, PathBuf};
-use crate::modules::traits::{Controller, Sync};
+use std::path::Path;
+use crate::modules::traits::{Controller, Sync, Check, Backup};
 use crate::modules::sync::SyncModule;
 use crate::modules::controller::ControllerModule;
 use crate::modules::backup::BackupModule;
 use crate::modules::check::CheckModule;
-use serde_json::{Value, Map};
-use crate::util::json::from_file;
 use crate::util::file;
 use std::time::SystemTime;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::ops::Add;
+use core::borrow::Borrow;
 
 pub fn main() -> Result<(),String> {
     let mut operation = String::new();
@@ -30,34 +31,35 @@ pub fn main() -> Result<(),String> {
         no_docker: false
     };
 
-    let mut parser = ArgumentParser::new();
-    parser.set_description("Client to interact with a MQTT device controller");
-    parser.refer(&mut operation)
-        .add_argument("operation", Store, "Operation to perform (run,backup,sync,list)")
-        .required();
-    parser.refer(&mut args.name)
-        .add_option(&["-n", "--name"], StoreOption, "Name of the specific backup to run");
-    parser.refer(&mut args.base_config)
-        .add_option(&["-c", "--config"], Store, "Change base configuration file path");
-    parser.refer(&mut args.dry_run)
-        .add_option(&["--dry-run"], StoreTrue, "Print actions instead of performing them");
-    parser.refer(&mut args.verbose)
-        .add_option(&["-v", "--verbose", "--trace"], StoreTrue, "Print additional trace information");
-    parser.refer(&mut args.debug)
-        .add_option(&["-d", "--debug"], StoreTrue, "Print additional debug information");
-    parser.refer(&mut args.quiet)
-        .add_option(&["-q", "--quiet"], StoreTrue, "Only print warnings and errors");
-    parser.refer(&mut args.force)
-        .add_option(&["-f", "--force"], StoreTrue, "Force the run to disregard time constraints");
-    parser.refer(&mut args.no_docker)
-        .add_option(&["-b", "--bare", "--no-docker"], StoreTrue, "'Bare' run without using docker");
-    parser.parse_args_or_exit();
+    {
+        let mut parser = ArgumentParser::new();
+        parser.set_description("Client to interact with a MQTT device controller");
+        parser.refer(&mut operation)
+            .add_argument("operation", Store, "Operation to perform (run,backup,sync,list)")
+            .required();
+        parser.refer(&mut args.name)
+            .add_option(&["-n", "--name"], StoreOption, "Name of the specific backup to run");
+        parser.refer(&mut args.base_config)
+            .add_option(&["-c", "--config"], Store, "Change base configuration file path");
+        parser.refer(&mut args.dry_run)
+            .add_option(&["--dry-run"], StoreTrue, "Print actions instead of performing them");
+        parser.refer(&mut args.verbose)
+            .add_option(&["-v", "--verbose", "--trace"], StoreTrue, "Print additional trace information");
+        parser.refer(&mut args.debug)
+            .add_option(&["-d", "--debug"], StoreTrue, "Print additional debug information");
+        parser.refer(&mut args.quiet)
+            .add_option(&["-q", "--quiet"], StoreTrue, "Only print warnings and errors");
+        parser.refer(&mut args.force)
+            .add_option(&["-f", "--force"], StoreTrue, "Force the run to disregard time constraints");
+        parser.refer(&mut args.no_docker)
+            .add_option(&["-b", "--bare", "--no-docker"], StoreTrue, "'Bare' run without using docker");
+        parser.parse_args_or_exit();
+    }
 
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
     let paths = Paths::from(base_paths);
 
-    let timeframes_value = json::from_file::<Value>(Path::new(&paths.timeframes_file))?;
-    let timeframes = json::from_value::<Map<String,Timeframe>>(timeframes_value)?;
+    let timeframes = json::from_file::<Timeframes>(Path::new(&paths.timeframes_file))?;
 
     let result = match operation.as_str() {
         "run" => backup_wrapper(&args, &paths, &timeframes).and(sync_wrapper(&args, &paths, &timeframes)),
@@ -74,14 +76,14 @@ pub fn main() -> Result<(),String> {
     return result;
 }
 
-fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &Map<String,Timeframe>) -> Result<(),String> {
+fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &Timeframes) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
         let savedata = get_savedata(&module_paths)?;
 
         if config.backup.is_some() {
             let backup_config = config.backup.take().unwrap();
-            let result = backup(args, &module_paths, &config, &backup_config, &savedata, timeframes);
+            let result = backup(args, module_paths, &config, backup_config, &savedata, timeframes);
             match result {
                 Ok(true) => info!(""),
                 Ok(false) => info!(""),
@@ -96,9 +98,9 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &Map<String,Timef
     Ok(())
 }
 
-fn backup(args: &Arguments, paths: &ModulePaths, config: &Configuration, backup_config: &BackupConfiguration, savedata: &SaveData, timeframes: &Map<String,Timeframe>) -> Result<bool,String> {
+fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &SaveData, timeframes: &Timeframes) -> Result<bool,String> {
     // TODO: Timings check
-    let module = modules::backup::get_module(backup_config.backup_type.as_str())?;
+    let module: BackupModule = modules::backup::get_module(backup_config.backup_type.as_str())?;
 
     // Timing check
     let current_time = SystemTime::now();
@@ -127,14 +129,14 @@ fn backup(args: &Arguments, paths: &ModulePaths, config: &Configuration, backup_
     Ok(true)
 }
 
-fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &Map<String,Timeframe>) -> Result<(),String> {
+fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &Timeframes) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
         let savedata = get_savedata(&module_paths)?;
 
         if config.sync.is_some() {
             let sync_config = config.sync.take().unwrap();
-            let result = sync(args, &module_paths, &config, &sync_config, &savedata, timeframes);
+            let result = sync(args, module_paths, &config, sync_config, &savedata, timeframes);
             match result {
                 Ok(true) => info!(""),
                 Ok(false) => info!(""),
@@ -149,17 +151,21 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &Map<String,Timefra
     Ok(())
 }
 
-fn sync(args: &Arguments, paths: &ModulePaths, config: &Configuration, sync_config: &SyncConfiguration, savedata: &SaveData, timeframes: &Map<String,Timeframe>) -> Result<bool,String> {
-    let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
-    let mut module = modules::sync::get_module(sync_config.sync_type.as_str())?;
+fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &SaveData, timeframes: &Timeframes) -> Result<bool,String> {
+    let mut module: SyncModule = modules::sync::get_module(sync_config.sync_type.as_str())?;
 
     // Timing check
     let current_time = SystemTime::now();
+    let last_sync = if savedata.lastsync.contains_key(&sync_config.interval.frame) {
+        Some(savedata.lastsync.get(&sync_config.interval.frame).unwrap())
+    } else {
+        None
+    };
+
     if !args.force {
-        let timeframe = try_option!(timeframes.get(&sync_config.interval), "Referenced timeframe for sync does not exist");
-        if savedata.lastsync.contains_key(&sync_config.interval) {
-            let last_sync_time = savedata.lastsync.get(&sync_config.interval).unwrap();
-            if last_sync_time + timeframe.interval < current_time {
+        let timeframe: &Timeframe = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
+        if last_sync.is_some() {
+            if last_sync.unwrap().timestamp.add(timeframe.interval).lt(&current_time) {
                 // do sync
                 debug!("");
             } else {
@@ -177,11 +183,17 @@ fn sync(args: &Arguments, paths: &ModulePaths, config: &Configuration, sync_conf
     }
 
     // Initialize sync module
-    module.init(&config.name, &sync_config.config, module_paths)?;
+    let base_paths = paths.base_paths.borrow();
+    module.init(&config.name, &sync_config.config, paths, args.dry_run, args.no_docker)?;
 
     // Set up additional check and controller (if configured)
-    let mut check_module = check_init(&args, &paths.base_paths, &config, &sync_config.check)?;
-    let mut controller_module = controller_init(&args, &paths.base_paths, &config, &sync_config.controller)?;
+    let mut controller_module = controller_init(&args, base_paths, &config, &sync_config.controller)?;
+    let mut check_module = if !args.force {
+        check_init(&args, base_paths, &config, &sync_config.check, &last_sync)?
+    } else {
+        // No additional check is required if forced run
+        None
+    };
 
     // Run additional check
     if !check_run(&check_module)? {
@@ -224,11 +236,11 @@ fn sync(args: &Arguments, paths: &ModulePaths, config: &Configuration, sync_conf
 
 fn controller_init(args: &Arguments, paths: &Paths, config: &Configuration, controller_config: &Option<Value>) -> Result<Option<ControllerModule>,String> {
     if controller_config.is_some() {
-        let controller_type = try_option!(controller_config.unwrap().get("type"), "Controller config contains no field 'type'");
+        let controller_type = try_option!(controller_config.as_ref().unwrap().get("type"), "Controller config contains no field 'type'");
         let module_paths = paths.for_module(config.name.as_str(), "controller", &config.original_path, &config.store_path);
 
-        let mut module = modules::controller::get_module(controller_type.as_str())?;
-        module.init(config.name.as_str(), &controller_config.unwrap(), module_paths, args.dry_run, args.no_docker)?;
+        let mut module = modules::controller::get_module(try_option!(controller_type.as_str(), "Expected controller type as string"))?;
+        module.init(config.name.as_str(), controller_config.as_ref().unwrap(), module_paths, args.dry_run, args.no_docker)?;
 
         return Ok(Some(module));
     } else {
@@ -238,7 +250,7 @@ fn controller_init(args: &Arguments, paths: &Paths, config: &Configuration, cont
 
 fn controller_start(module: &Option<ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
-        let result = module.unwrap().begin()?;
+        let result = module.as_ref().unwrap().begin()?;
         if result {
             debug!("");
         } else {
@@ -253,7 +265,7 @@ fn controller_start(module: &Option<ControllerModule>) -> Result<bool,String> {
 
 fn controller_end(module: &Option<ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
-        let result = module.unwrap().end()?;
+        let result = module.as_ref().unwrap().end()?;
         if result {
             debug!("");
         } else {
@@ -267,20 +279,19 @@ fn controller_end(module: &Option<ControllerModule>) -> Result<bool,String> {
 
 fn controller_clear(module: &mut Option<ControllerModule>) -> Result<(),String> {
     if module.is_some() {
-        module.unwrap().clear()?;
+        module.as_mut().unwrap().clear()?;
     }
 
     return Ok(());
 }
 
-fn check_init(args: &Arguments, paths: &Paths, config: &Configuration, check_config: &Option<Value>) -> Result<Option<CheckModule>,String> {
+fn check_init(args: &Arguments, paths: &Paths, config: &Configuration, check_config: &Option<Value>, last: &Option<&TimeEntry>) -> Result<Option<CheckModule>,String> {
     if check_config.is_some() {
-        let check_type = try_option!(check_config.unwrap().get("type"), "Check config contains no field 'type'");
+        let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
         let module_paths = paths.for_module(config.name.as_str(), "check", &config.original_path, &config.store_path);
 
-        let mut module = modules::check::get_module(check_config.check.unwrap().check_type.as_str())?;
-
-        module.init(config.name.as_str(), &check_config.unwrap(), module_paths, args.dry_run, args.no_docker);
+        let mut module = modules::check::get_module(try_option!(check_type.as_str(), "Expected controller type as string"))?;
+        module.init(config.name.as_str(), check_config.as_ref().unwrap(), last, module_paths, args.dry_run, args.no_docker)?;
 
         return Ok(Some(module));
     } else {
@@ -290,7 +301,7 @@ fn check_init(args: &Arguments, paths: &Paths, config: &Configuration, check_con
 
 fn check_run(module: &Option<CheckModule>) -> Result<bool,String> {
     if module.is_some() {
-        let result = module().unwrap().check()?;
+        let result = module.as_ref().unwrap().check()?;
         if result {
             debug!("");
         } else {
@@ -304,7 +315,7 @@ fn check_run(module: &Option<CheckModule>) -> Result<bool,String> {
 
 fn check_update(module: &Option<CheckModule>) -> Result<(),String> {
     if module.is_some() {
-        module.unwrap().update()?;
+        module.as_ref().unwrap().update()?;
     }
 
     return Ok(());
@@ -312,14 +323,14 @@ fn check_update(module: &Option<CheckModule>) -> Result<(),String> {
 
 fn check_clear(module: &mut Option<CheckModule>) -> Result<(),String> {
     if module.is_some() {
-        module.unwrap().clear()?;
+        module.as_mut().unwrap().clear()?;
     }
 
     return Ok(());
 }
 
 pub fn list(args: &Arguments, paths: &Paths) -> Result<(),String> {
-
+    unimplemented!()
 }
 
 fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
@@ -327,8 +338,8 @@ fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>
 
     let files = if args.name.is_some() {
         // Only run this one
-        let path = format!("{}/{}.json", volume_config_path, args.name.unwrap());
-        vec![Path::new(path).to_path_buf()]
+        let path = format!("{}/{}.json", volume_config_path, args.name.as_ref().unwrap());
+        vec![Path::new(&path).to_path_buf()]
     } else {
         // Run all
         file::list_in_dir(volume_config_path.as_str())?
@@ -339,8 +350,7 @@ fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>
         if result.is_ok() {
             Some(result.unwrap())
         } else {
-            let file = try_option!(file_path.file_name(), "Could not get filename for failed configuration loading");
-            error!("Could not parse configuration from '{}' ({})", file, result.err().unwrap().to_string());
+            error!("Could not parse configuration from '{}' ({})", "<filename?>", result.err().unwrap().to_string());
             None
         }
     }).collect();
@@ -352,13 +362,16 @@ fn get_savedata(module_paths: &ModulePaths) -> Result<SaveData, String> {
     let savedata = if file::exists(module_paths.save_data.as_str()) {
         json::from_file::<SaveData>(Path::new(module_paths.save_data.as_str()))?
     } else {
-        SaveData { // TODO: Properly init
-            lastsave: Map::new(),
-            nextsave: Map::new(),
-            lastsync: Map::new()
+        SaveData {
+            lastsave: HashMap::new(),
+            nextsave: HashMap::new(),
+            lastsync: HashMap::new()
         }
     };
+
+    return Ok(savedata);
 }
 
 // TODO: Proper Error in Results instead of String
 // TODO: Proper path representation instead of string
+// TODO: Proper dry-run implementation

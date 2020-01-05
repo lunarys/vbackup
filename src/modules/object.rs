@@ -1,5 +1,7 @@
-use serde_json::{Value, Map};
+use serde_json::Value;
 use serde::{Deserialize,Serialize};
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
 
 #[derive(Deserialize)]
 pub struct Arguments {
@@ -55,10 +57,12 @@ pub struct TimeframeReference {
     pub amount: u32
 }
 
+pub type Timeframes = HashMap<String,Timeframe>;
+
 #[derive(Deserialize)]
 pub struct Timeframe {
     pub identifier: String,
-    pub interval: u64,
+    pub interval: Duration,
 }
 
 fn default_u32_1() -> u32 { 1 }
@@ -67,14 +71,14 @@ fn default_bool_true() -> bool { true }
 
 #[derive(Deserialize,Serialize)]
 pub struct SaveData {
-    pub lastsave: Map<String,TimeEntry>,
-    pub nextsave: Map<String,TimeEntry>,
-    pub lastsync: Map<String,TimeEntry>
+    pub lastsave: HashMap<String,TimeEntry>,
+    pub nextsave: HashMap<String,TimeEntry>,
+    pub lastsync: HashMap<String,TimeEntry>
 }
 
 #[derive(Deserialize,Serialize)]
 pub struct TimeEntry {
-    pub timestamp: u64,
+    pub timestamp: SystemTime,
     pub date: Option<String> // TODO: Is there a better data type?
 }
 

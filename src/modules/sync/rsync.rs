@@ -1,5 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::{Paths, ModulePaths};
+use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
 use crate::util::auth_data;
 use crate::util::file;
@@ -8,7 +8,6 @@ use crate::{try_result,try_option,auth_resolve,conf_resolve};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use std::process::{Child, ExitStatus};
 
 pub struct Rsync<'a> {
     bind: Option<Bind<'a>>
@@ -59,7 +58,7 @@ impl<'a> Rsync<'a> {
 
 impl<'a> Sync<'a> for Rsync<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        let mut config: Configuration = conf_resolve!(config_json);
+        let config: Configuration = conf_resolve!(config_json);
         let ssh_config: SshConfig = auth_resolve!(&config.host_reference, &config.host, paths.base_paths);
 
         let default_path_prefix = format!("/home/{}", ssh_config.user);

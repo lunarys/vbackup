@@ -19,7 +19,7 @@ pub fn to_file<T: Serialize>(file_name: &str, value: &T) -> Result<(), String> {
     Ok(())
 }
 
-pub fn from_value<T>(value: Value) -> Result<T,String> {
-    let result : T = serde_json::from_value(value);
-    return try_result!(result, "Could not parse object from json value");
+pub fn from_value<T>(value: Value) -> Result<T,String> where for<'de> T: Deserialize<'de> {
+    let result: Result<T,String> = change_error!(serde_json::from_value(value), "Could not parse object from json value");
+    return result;
 }

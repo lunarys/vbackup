@@ -1,4 +1,4 @@
-use crate::modules::object::{Paths, ModulePaths};
+use crate::modules::object::{ModulePaths, TimeEntry};
 
 use serde_json::Value;
 
@@ -10,7 +10,7 @@ pub trait Backup<'a> {
 }
 
 pub trait Check<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, lastsave: i64, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String>;
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, last: &Option<&TimeEntry>, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String>;
     fn check(&self) -> Result<bool, String>;
     fn update(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;

@@ -6,7 +6,7 @@ use crate::conf_resolve;
 use crate::{throw, try_option, change_result, try_result};
 
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use crate::modules::traits::{Controller, Sync};
 use crate::modules::sync::SyncModule;
 use crate::modules::controller::ControllerModule;
@@ -53,11 +53,11 @@ pub fn main() -> Result<(),String> {
         .add_option(&["-b", "--bare", "--no-docker"], StoreTrue, "'Bare' run without using docker");
     parser.parse_args_or_exit();
 
-    let base_paths = json::from_file::<PathBase>(args.base_config.as_str())?;
+    let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
     let paths = Paths::from(base_paths);
 
-    let timeframes_value = json::from_file::<Value>(&paths.timeframes_file)?;
-    let timeframes: Map<String,Timeframe> = try_result!(serde_json::from_value(timeframes_value), "dwa")?;
+    let timeframes_value = json::from_file::<Value>(Path::new(&paths.timeframes_file))?;
+    let timeframes = json::from_value::<Map<String,Timeframe>>(timeframes_value)?;
 
     let result = match operation.as_str() {
         "run" => backup_wrapper(&args, &paths, &timeframes).and(sync_wrapper(&args, &paths, &timeframes)),
@@ -75,72 +75,28 @@ pub fn main() -> Result<(),String> {
 }
 
 fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &Map<String,Timeframe>) -> Result<(),String> {
-    let volume_config_path = format!("{}/volumes", &paths.config_dir);
-    let saves = if args.name.is_some() {
-        // Only run this one
-        vec![Path::new(args.name.unwrap().as_str()).to_path_buf()]
-    } else {
-        // Run all
-        file::list_in_dir(volume_config_path.as_str())? // TODO: Is this the volume config dir?
-    };
-
-    for save_config in saves {
-        let config = json::from_file::<Configuration>(&save_config);
-
+    for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
-        let savedata = if file::exists(module_paths.save_data.as_str()) {
-            json::from_file::<SaveData>(module_paths.save_data.as_str())?
-        } else {
-            SaveData { // TODO: Properly init
-                lastsave: Map::new(),
-                nextsave: Map::new(),
-                lastsync: Map::new()
+        let savedata = get_savedata(&module_paths)?;
+
+        if config.backup.is_some() {
+            let backup_config = config.backup.take().unwrap();
+            let result = backup(args, &module_paths, &config, &backup_config, &savedata, timeframes);
+            match result {
+                Ok(true) => info!(""),
+                Ok(false) => info!(""),
+                Err(err) => error!("")
             }
-        };
+        } else {
+            info!("");
+        }
     }
 
+    // Only fails if some general configuration is not available, failure in single backups is only logged
     Ok(())
 }
 
-fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &Map<String,Timeframe>) -> Result<(),String> {
-    if config.syncs.is_some() {
-        for sync in config.syncs.unwrap() {
-
-        }
-    } else {
-        debug!("No sync configured for '{}'", &config.name)
-    }
-
-    let config_dir = Path::new(&paths.config_dir);
-    let mut volume_config = config_dir.to_path_buf();
-    volume_config.push("volumes");
-    if args.name.is_some() {
-        // Only run this one
-        volume_config.set_file_name(args.name.as_ref().unwrap()); // TODO: First push required?
-        volume_config.set_extension("json");
-        if volume_config.exists() {
-            let config = json::from_file::<Configuration>(volume_config.as_os_str())?;
-            if config.disabled {
-                info!("Configuration for '{}' is disabled", config.name)
-            } else {
-                let only_sync = config.backup.is_none();
-                let paths_for_module = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
-                //sync(args, paths_for_module, )
-            }
-        } else {
-            let err = format!("Named volume config does not exist ({})", volume_config);
-            error!("{}", err);
-            return Err(err);
-            //throw!()
-        }
-    } else {
-        // Run all
-    }
-
-    Ok(())
-}
-
-fn backup(args: &Arguments, paths: &ModulePaths, config: &Configuration, backup_config: &BackupConfiguration, savedata: &SaveData, timeframes: &Map<String,Timeframe>) -> Result<(),String> {
+fn backup(args: &Arguments, paths: &ModulePaths, config: &Configuration, backup_config: &BackupConfiguration, savedata: &SaveData, timeframes: &Map<String,Timeframe>) -> Result<bool,String> {
     // TODO: Timings check
     let module = modules::backup::get_module(backup_config.backup_type.as_str())?;
 
@@ -168,6 +124,28 @@ fn backup(args: &Arguments, paths: &ModulePaths, config: &Configuration, backup_
 
     // TODO
 
+    Ok(true)
+}
+
+fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &Map<String,Timeframe>) -> Result<(),String> {
+    for mut config in get_config_list(args, paths)? {
+        let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
+        let savedata = get_savedata(&module_paths)?;
+
+        if config.sync.is_some() {
+            let sync_config = config.sync.take().unwrap();
+            let result = sync(args, &module_paths, &config, &sync_config, &savedata, timeframes);
+            match result {
+                Ok(true) => info!(""),
+                Ok(false) => info!(""),
+                Err(err) => error!("")
+            }
+        } else {
+            info!("")
+        }
+    }
+
+    // Only fails if some general configuration is not available, failure in single syncs is only logged
     Ok(())
 }
 
@@ -202,8 +180,8 @@ fn sync(args: &Arguments, paths: &ModulePaths, config: &Configuration, sync_conf
     module.init(&config.name, &sync_config.config, module_paths)?;
 
     // Set up additional check and controller (if configured)
-    let mut check_module = check_init(&args, &paths, &config, &sync_config.check)?;
-    let mut controller_module = controller_init(&args, &paths, &config, &sync_config.controller)?;
+    let mut check_module = check_init(&args, &paths.base_paths, &config, &sync_config.check)?;
+    let mut controller_module = controller_init(&args, &paths.base_paths, &config, &sync_config.controller)?;
 
     // Run additional check
     if !check_run(&check_module)? {
@@ -343,3 +321,44 @@ fn check_clear(module: &mut Option<CheckModule>) -> Result<(),String> {
 pub fn list(args: &Arguments, paths: &Paths) -> Result<(),String> {
 
 }
+
+fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
+    let volume_config_path = format!("{}/volumes", &paths.config_dir);
+
+    let files = if args.name.is_some() {
+        // Only run this one
+        let path = format!("{}/{}.json", volume_config_path, args.name.unwrap());
+        vec![Path::new(path).to_path_buf()]
+    } else {
+        // Run all
+        file::list_in_dir(volume_config_path.as_str())?
+    };
+
+    let configs = files.iter().filter_map(|file_path| {
+        let result = json::from_file::<Configuration>(file_path);
+        if result.is_ok() {
+            Some(result.unwrap())
+        } else {
+            let file = try_option!(file_path.file_name(), "Could not get filename for failed configuration loading");
+            error!("Could not parse configuration from '{}' ({})", file, result.err().unwrap().to_string());
+            None
+        }
+    }).collect();
+
+    return Ok(configs);
+}
+
+fn get_savedata(module_paths: &ModulePaths) -> Result<SaveData, String> {
+    let savedata = if file::exists(module_paths.save_data.as_str()) {
+        json::from_file::<SaveData>(Path::new(module_paths.save_data.as_str()))?
+    } else {
+        SaveData { // TODO: Properly init
+            lastsave: Map::new(),
+            nextsave: Map::new(),
+            lastsync: Map::new()
+        }
+    };
+}
+
+// TODO: Proper Error in Results instead of String
+// TODO: Proper path representation instead of string

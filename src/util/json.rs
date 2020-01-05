@@ -5,8 +5,9 @@ use std::io::BufReader;
 
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
-pub fn from_file<T>(file_name: &str) -> Result<T, String> where for<'de> T: Deserialize<'de> {
+pub fn from_file<T>(file_name: &Path) -> Result<T, String> where for<'de> T: Deserialize<'de> {
     let file = try_result!(File::open(file_name), "Could not open file");
     let buf_reader = BufReader::new(file);
 
@@ -16,4 +17,9 @@ pub fn from_file<T>(file_name: &str) -> Result<T, String> where for<'de> T: Dese
 
 pub fn to_file<T: Serialize>(file_name: &str, value: &T) -> Result<(), String> {
     Ok(())
+}
+
+pub fn from_value<T>(value: Value) -> Result<T,String> {
+    let result : T = serde_json::from_value(value);
+    return try_result!(result, "Could not parse object from json value");
 }

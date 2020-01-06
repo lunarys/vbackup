@@ -2,7 +2,7 @@ use crate::modules::object::*;
 use crate::util::io::json;
 use crate::modules;
 
-use crate::{try_option, change_result};
+use crate::{try_option};
 
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 use std::path::Path;
@@ -60,7 +60,7 @@ pub fn main() -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
     let paths = Paths::from(base_paths);
 
-    let timeframes = json::from_file::<Timeframes>(Path::new(&paths.timeframes_file))?;
+    let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
 
     let result = match operation.as_str() {
         "run" => backup_wrapper(&args, &paths, &timeframes).and(sync_wrapper(&args, &paths, &timeframes)),
@@ -77,10 +77,10 @@ pub fn main() -> Result<(),String> {
     return result;
 }
 
-fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &Timeframes) -> Result<(),String> {
+fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
-        let savedata = get_savedata(&module_paths)?;
+        let savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
         if config.backup.is_some() {
             let backup_config = config.backup.take().unwrap();
@@ -99,41 +99,104 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &Timeframes) -> R
     Ok(())
 }
 
-fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &SaveData, timeframes: &Timeframes) -> Result<bool,String> {
-    // TODO: Timings check
-    let module: BackupModule = modules::backup::get_module(backup_config.backup_type.as_str())?;
+fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
+    let mut module: BackupModule = modules::backup::get_module(backup_config.backup_type.as_str())?;
 
     // Timing check
     let current_time = SystemTime::now();
-    // TODO: list of timeframes to save in
-    if !args.force {
-        for timeframe_ref in &backup_config.timeframes {
-            let timeframe_opt = timeframes.get(&timeframe_ref.frame);
-            let timeframe = if timeframe_opt.is_some() {
-                timeframe_opt.unwrap()
-            } else {
-                error!("Referenced timeframe for backup does not exist");
-                continue;
-            };
+    let mut queue_refs: Vec<&TimeFrameReference> = vec![];
+    let mut queue_frame_entry: Vec<(&TimeFrame, Option<&TimeEntry>)> = vec![];
 
-            // TODO
-            //let last_backup_time = savedata.;
-            //if last_backup_time +
-        }
+    // Init additional check
+    let mut check_module = if !args.force {
+        check_helper::init(&args, &paths.base_paths, &config, &backup_config.check)?
     } else {
+        // No additional check is required if forced run
+        None
+    };
+
+    if args.force {
         // Run is forced
-        info!("")
+        info!("");
     }
 
-    // TODO
+    // Fill queue with timeframes to run backup for
+    for timeframe_ref in &backup_config.timeframes {
+        let timeframe_opt = timeframes.get(&timeframe_ref.frame);
+        let timeframe = if timeframe_opt.is_some() {
+            timeframe_opt.unwrap()
+        } else {
+            error!("Referenced timeframe '{}' for backup does not exist", &timeframe_ref.frame);
+            continue;
+        };
 
-    Ok(true)
+        let last_backup = savedata.lastsync.get(&timeframe.identifier);
+
+        // Only actually check if the run is not forced (continue loop for not saving)
+        if !args.force {
+            if last_backup.is_some() {
+                if last_backup.unwrap().timestamp.add(timeframe.interval).lt(&current_time) {
+                    // do sync
+                    debug!("");
+                } else {
+                    // don't sync
+                    info!("");
+                    continue;
+                }
+            } else {
+                // Probably the first backup in this timeframe, just do it
+                info!("");
+            }
+
+            // If this point of the loop is reached, only additional check is left to run
+            if check_helper::run(&check_module, timeframe, &last_backup)? {
+                debug!("");
+            } else {
+                info!("");
+                continue;
+            }
+        }
+
+        // Do the backup for this one!
+        queue_refs.push(timeframe_ref);
+        queue_frame_entry.push((timeframe, last_backup));
+    }
+
+    // Is any backup required?
+    if queue_refs.is_empty() {
+        return Ok(false);
+    }
+
+    // Do backup (all at once to enable optimizations)
+    module.init(&config.name, &backup_config.config, paths, args.dry_run, args.no_docker)?;
+    let backup_result = module.backup(&queue_refs);
+
+    // Update check state
+    for (frame, entry_opt) in queue_frame_entry {
+        if check_helper::update(&check_module, frame, &entry_opt).is_err() {
+            error!("");
+        }
+    }
+
+    // Check can be freed as it is not required anymore
+    if check_helper::clear(&mut check_module).is_err() {
+        error!("");
+    }
+
+    // Free backup module
+    if module.clear().is_err() {
+        error!("");
+    }
+
+    // TODO: Write savedata update
+
+    return backup_result.map(|_| true);
 }
 
-fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &Timeframes) -> Result<(),String> {
+fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
-        let savedata = get_savedata(&module_paths)?;
+        let savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
         if config.sync.is_some() {
             let sync_config = config.sync.take().unwrap();
@@ -152,19 +215,15 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &Timeframes) -> Res
     Ok(())
 }
 
-fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &SaveData, timeframes: &Timeframes) -> Result<bool,String> {
+fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
     let mut module: SyncModule = modules::sync::get_module(sync_config.sync_type.as_str())?;
 
     // Timing check
     let current_time = SystemTime::now();
-    let last_sync = if savedata.lastsync.contains_key(&sync_config.interval.frame) {
-        Some(savedata.lastsync.get(&sync_config.interval.frame).unwrap())
-    } else {
-        None
-    };
+    let last_sync = savedata.lastsync.get(&sync_config.interval.frame);
+    let timeframe: &TimeFrame = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
 
     if !args.force {
-        let timeframe: &Timeframe = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
         if last_sync.is_some() {
             if last_sync.unwrap().timestamp.add(timeframe.interval).lt(&current_time) {
                 // do sync
@@ -190,14 +249,14 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     // Set up additional check and controller (if configured)
     let mut controller_module = controller_helper::init(&args, base_paths, &config, &sync_config.controller)?;
     let mut check_module = if !args.force {
-        check_helper::init(&args, base_paths, &config, &sync_config.check, &last_sync)?
+        check_helper::init(&args, base_paths, &config, &sync_config.check)?
     } else {
         // No additional check is required if forced run
         None
     };
 
     // Run additional check
-    if !check_helper::run(&check_module)? {
+    if !check_helper::run(&check_module, timeframe, &last_sync)? {
         debug!("");
         return Ok(false);
     }
@@ -207,8 +266,8 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     debug!("");
     if sync_result.is_ok() {
         // Update internal state of check
-        if check_helper::update(&check_module).is_err() {
-            error!("")
+        if check_helper::update(&check_module, timeframe, &last_sync).is_err() {
+            error!("");
         }
     } else {
         error!("");
@@ -216,23 +275,28 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
     // Check can be freed as it is not required anymore
     if check_helper::clear(&mut check_module).is_err() {
-        error!("")
+        error!("");
     }
 
     // Run controller end (result is irrelevant here)
     if controller_helper::end(&controller_module).is_err() {
-        error!("")
+        error!("");
     }
 
     // Controller can be freed as it is not required anymore
     if controller_helper::clear(&mut controller_module).is_err() {
-        error!("")
+        error!("");
+    }
+
+    // Free sync module
+    if module.clear().is_err() {
+        error!("");
     }
 
     // TODO: Write savedata update
 
     // Return Ok(true) for sync was executed or Err(error) for failed sync
-    change_result!(sync_result, true)
+    return sync_result.map(|_| true);
 }
 
 pub fn list(args: &Arguments, paths: &Paths) -> Result<(),String> {
@@ -264,9 +328,9 @@ fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>
     return Ok(configs);
 }
 
-fn get_savedata(module_paths: &ModulePaths) -> Result<SaveData, String> {
-    let savedata = if file::exists(module_paths.save_data.as_str()) {
-        json::from_file::<SaveData>(Path::new(module_paths.save_data.as_str()))?
+fn get_savedata(path: &str) -> Result<SaveData, String> {
+    let savedata = if file::exists(path) {
+        json::from_file::<SaveData>(Path::new(path))?
     } else {
         SaveData {
             lastsave: HashMap::new(),
@@ -276,6 +340,10 @@ fn get_savedata(module_paths: &ModulePaths) -> Result<SaveData, String> {
     };
 
     return Ok(savedata);
+}
+
+fn write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
+
 }
 
 // TODO: Proper Error in Results instead of String

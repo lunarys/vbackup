@@ -1,5 +1,5 @@
 use crate::modules::traits::Check;
-use crate::modules::object::{ModulePaths,TimeEntry};
+use crate::modules::object::{ModulePaths,TimeEntry, TimeFrame};
 use serde_json::Value;
 
 pub enum CheckModule {
@@ -20,15 +20,15 @@ pub fn get_module(name: &str) -> Result<CheckModule, String> {
 }
 
 impl<'a> Check<'a> for CheckModule {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, last: &Option<&TimeEntry>, paths: ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         unimplemented!()
     }
 
-    fn check(&self) -> Result<bool, String> {
+    fn check(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
         unimplemented!()
     }
 
-    fn update(&self) -> Result<(), String> {
+    fn update(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
         unimplemented!()
     }
 

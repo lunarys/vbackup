@@ -35,7 +35,7 @@ pub struct BackupConfiguration {
     pub backup_type: String,
     pub config: Value,
     pub check: Option<Value>,
-    pub timeframes: Vec<TimeframeReference>
+    pub timeframes: Vec<TimeFrameReference>
 }
 
 #[derive(Deserialize)]
@@ -44,23 +44,23 @@ pub struct SyncConfiguration {
     pub disabled: bool,
     #[serde(rename(deserialize = "type"))]
     pub sync_type: String,
-    pub interval: TimeframeReference,
+    pub interval: TimeFrameReference,
     pub config: Value,
     pub check: Option<Value>,
     pub controller: Option<Value>
 }
 
 #[derive(Deserialize)]
-pub struct TimeframeReference {
+pub struct TimeFrameReference {
     pub frame: String,
     #[serde(default="default_u32_1")]
     pub amount: u32
 }
 
-pub type Timeframes = HashMap<String,Timeframe>;
+pub type TimeFrames = HashMap<String, TimeFrame>;
 
 #[derive(Deserialize)]
-pub struct Timeframe {
+pub struct TimeFrame {
     pub identifier: String,
     pub interval: Duration,
 }
@@ -78,6 +78,7 @@ pub struct SaveData {
 
 #[derive(Deserialize,Serialize)]
 pub struct TimeEntry {
+    // TODO: Maybe also add key here with flatten thingy or so
     pub timestamp: SystemTime,
     pub date: Option<String> // TODO: Is there a better data type?
 }

@@ -90,25 +90,6 @@ macro_rules! change_error {
 }
 
 /**
-  * Rewrap a result object, injecting a custom result object and returning the new Result
-  *
-  * Params:
-  *   $res: Result<T,E>
-  *   $val: S
-  *
-  * Returns: Result<S,E>
-  */
-#[macro_export]
-macro_rules! change_result {
-    ($res:expr, $val:expr) => {
-        match $res {
-            Ok(_) => Ok($val),
-            Err(err) => Err(err)
-        }
-    }
-}
-
-/**
   * Resolve the authentication configuration,
   * which is either a reference to the shared authentication store,
   * or directly provided.

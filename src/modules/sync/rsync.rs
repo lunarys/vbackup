@@ -1,10 +1,9 @@
 use crate::modules::traits::Sync;
 use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
-use crate::util::auth_data;
-use crate::util::io::file;
+use crate::util::io::{file,json,auth_data};
 
-use crate::{try_result,try_option,auth_resolve,conf_resolve};
+use crate::{try_result,try_option};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -58,8 +57,8 @@ impl<'a> Rsync<'a> {
 
 impl<'a> Sync<'a> for Rsync<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        let config: Configuration = conf_resolve!(config_json);
-        let ssh_config: SshConfig = auth_resolve!(&config.host_reference, &config.host, paths.base_paths);
+        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
+        let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths)?;
 
         let default_path_prefix = format!("/home/{}", ssh_config.user);
         let path_prefix = config.path_prefix.as_ref().unwrap_or(&default_path_prefix);

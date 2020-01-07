@@ -1,10 +1,9 @@
 use crate::modules::traits::Sync;
 use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
-use crate::util::auth_data;
-use crate::util::io::file;
+use crate::util::io::{file,json,auth_data};
 
-use crate::{try_result,try_option,auth_resolve,conf_resolve};
+use crate::{try_result,try_option};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -65,8 +64,8 @@ impl<'a> Duplicati<'a> {
 
 impl<'a> Sync<'a> for Duplicati<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        let config : Configuration = conf_resolve!(config_json);
-        let auth : Authentication = auth_resolve!(&config.auth_reference, &config.auth, paths.base_paths);
+        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: Remove clone
+        let auth = auth_data::resolve::<Authentication>(&config.auth_reference, &config.auth, paths.base_paths)?;
 
         self.bind = Some(Bind {
             name: String::from(name),

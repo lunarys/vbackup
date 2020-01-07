@@ -1,8 +1,8 @@
 use crate::modules::traits::Controller;
 use crate::modules::object::ModulePaths;
-use crate::util::auth_data;
+use crate::util::io::{auth_data,json};
 
-use crate::{try_result,try_option,bool_result,conf_resolve,auth_resolve};
+use crate::{try_result,try_option,bool_result};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -56,8 +56,8 @@ impl MqttController {
 
 impl<'a> Controller<'a> for MqttController {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        let config: Configuration = conf_resolve!(config_json);
-        let mqtt_config: MqttConfiguration = auth_resolve!(&config.auth_reference, &config.auth, paths.base_paths);
+        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
+        let mqtt_config = auth_data::resolve::<MqttConfiguration>(&config.auth_reference, &config.auth, paths.base_paths)?;
 
         let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
             try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");

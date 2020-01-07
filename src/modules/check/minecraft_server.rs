@@ -1,6 +1,7 @@
 use crate::modules::traits::Check;
 use crate::modules::object::*;
-use crate::{try_result,try_option,auth_resolve,conf_resolve};
+use crate::util::io::json;
+use crate::{try_result,try_option};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -29,7 +30,7 @@ impl<'a> MinecraftServer<'a> {
 
 impl<'a> Check<'a> for MinecraftServer<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        let config: Configuration = conf_resolve!(config_json);
+        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
 
         self.bind = Some(Bind {
             config,

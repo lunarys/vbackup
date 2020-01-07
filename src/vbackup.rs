@@ -394,4 +394,3 @@ fn time_format(date: &DateTime<Local>) -> String {
 // TODO: Proper Error in Results instead of String
 // TODO: Proper path representation instead of string
 // TODO: Proper dry-run implementation
-// TODO: Convert some macros to functions: conf_resolve / auth_resolve (maybe more)

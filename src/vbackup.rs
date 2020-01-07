@@ -18,6 +18,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Add;
 use core::borrow::Borrow;
+use chrono::{DateTime, Local};
 
 pub fn main() -> Result<(),String> {
     let mut operation = String::new();
@@ -80,11 +81,11 @@ pub fn main() -> Result<(),String> {
 fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
-        let savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
+        let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
         if config.backup.is_some() {
             let backup_config = config.backup.take().unwrap();
-            let result = backup(args, module_paths, &config, backup_config, &savedata, timeframes);
+            let result = backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => info!(""),
                 Ok(false) => info!(""),
@@ -99,7 +100,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> R
     Ok(())
 }
 
-fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
+fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
     let mut module: BackupModule = modules::backup::get_module(backup_config.backup_type.as_str())?;
 
     // Timing check
@@ -174,11 +175,36 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     module.init(&config.name, &backup_config.config, paths, args.dry_run, args.no_docker)?;
     let backup_result = module.backup(&queue_refs);
 
-    // Update check state
-    for (frame, entry_opt) in queue_frame_entry {
-        if check_helper::update(&check_module, frame, &entry_opt).is_err() {
-            error!("");
+    // Update check and savedata
+    {
+        let time_this_save = current_time.clone();
+        let date_this_save = DateTime::<Local>::from(time_this_save.clone());
+
+        for (frame, entry_opt) in queue_frame_entry {
+            // Update check state
+            if check_helper::update(&check_module, frame, &entry_opt).is_err() {
+                error!("");
+            }
+
+            let time_next_save = current_time.clone().add(frame.interval);
+            let date_next_save = DateTime::<Local>::from(time_next_save.clone());
+
+            // Update savedata
+            savedata.lastsave.insert(frame.identifier.clone(), TimeEntry {
+                timestamp: time_this_save.clone(),
+                date: Some(time_format(&date_this_save))
+            });
+
+            savedata.nextsave.insert(frame.identifier.clone(), TimeEntry {
+                timestamp: time_next_save.clone(),
+                date: Some(time_format(&date_next_save))
+            });
         }
+    }
+
+    // Write savedata update
+    if write_savedata(save_data_path.as_str(), savedata).is_err() {
+        error!("");
     }
 
     // Check can be freed as it is not required anymore
@@ -191,22 +217,17 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
         error!("");
     }
 
-    // Write savedata update
-    if write_savedata(save_data_path.as_str(), savedata).is_err() {
-        error!("");
-    }
-
     return backup_result.map(|_| true);
 }
 
 fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
-        let savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
+        let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
         if config.sync.is_some() {
             let sync_config = config.sync.take().unwrap();
-            let result = sync(args, module_paths, &config, sync_config, &savedata, timeframes);
+            let result = sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => info!(""),
                 Ok(false) => info!(""),
@@ -221,7 +242,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> Res
     Ok(())
 }
 
-fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
+fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
     let mut module: SyncModule = modules::sync::get_module(sync_config.sync_type.as_str())?;
 
     // Timing check
@@ -301,6 +322,14 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     }
 
     // Write savedata update
+    {
+        let date = DateTime::<Local>::from(current_time.clone());
+        savedata.lastsync.insert(timeframe.identifier.clone(), TimeEntry {
+            timestamp: current_time,
+            date: Some(time_format(&date))
+        });
+    }
+
     if write_savedata(save_data_path.as_str(), savedata).is_err() {
         error!("");
     }
@@ -354,6 +383,10 @@ fn get_savedata(path: &str) -> Result<SaveData, String> {
 
 fn write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
     json::to_file(Path::new(path), savedata)
+}
+
+fn time_format(date: &DateTime<Local>) -> String {
+    return date.format("%Y-%m-%d %H:%M:%S").to_string();
 }
 
 // TODO: Reporting

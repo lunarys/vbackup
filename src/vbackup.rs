@@ -167,6 +167,9 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
         return Ok(false);
     }
 
+    // Save value from paths
+    let save_data_path = paths.save_data.clone();
+
     // Do backup (all at once to enable optimizations)
     module.init(&config.name, &backup_config.config, paths, args.dry_run, args.no_docker)?;
     let backup_result = module.backup(&queue_refs);
@@ -188,7 +191,10 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
         error!("");
     }
 
-    // TODO: Write savedata update
+    // Write savedata update
+    if write_savedata(save_data_path.as_str(), savedata).is_err() {
+        error!("");
+    }
 
     return backup_result.map(|_| true);
 }
@@ -243,6 +249,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     }
 
     // Initialize sync module
+    let save_data_path = paths.save_data.clone();
     let base_paths = paths.base_paths.borrow();
     module.init(&config.name, &sync_config.config, paths, args.dry_run, args.no_docker)?;
 
@@ -293,7 +300,10 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
         error!("");
     }
 
-    // TODO: Write savedata update
+    // Write savedata update
+    if write_savedata(save_data_path.as_str(), savedata).is_err() {
+        error!("");
+    }
 
     // Return Ok(true) for sync was executed or Err(error) for failed sync
     return sync_result.map(|_| true);
@@ -343,9 +353,11 @@ fn get_savedata(path: &str) -> Result<SaveData, String> {
 }
 
 fn write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
-
+    json::to_file(Path::new(path), savedata)
 }
 
+// TODO: Reporting
+// TODO: Error logging when thrown (with reporting?)
 // TODO: Proper Error in Results instead of String
 // TODO: Proper path representation instead of string
 // TODO: Proper dry-run implementation

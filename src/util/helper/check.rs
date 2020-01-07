@@ -6,7 +6,7 @@ use crate::try_option;
 
 use serde_json::Value;
 
-pub fn init(args: &Arguments, paths: &Paths, config: &Configuration, check_config: &Option<Value>) -> Result<Option<CheckModule>,String> {
+pub fn init<'a>(args: &Arguments, paths: &'a Paths, config: &Configuration, check_config: &'a Option<Value>) -> Result<Option<CheckModule<'a>>,String> {
     if check_config.is_some() {
         let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
         let module_paths = paths.for_module(config.name.as_str(), "check", &config.original_path, &config.store_path);

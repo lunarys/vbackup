@@ -29,3 +29,9 @@ pub trait Sync<'a> {
     fn restore(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
 }
+
+pub trait Reporting {
+    fn init(&mut self) -> Result<(),String>;
+    fn report(&self, context: &Option<&str>, kind: &str, value: String) -> Result<(),String>;
+    fn clear(&mut self) -> Result<(), String>;
+}

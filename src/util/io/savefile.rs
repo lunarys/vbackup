@@ -1,17 +1,48 @@
+use crate::modules::object::TimeFrameReference;
 
-pub fn format_filename() -> Result<String, String> {
-    // Should take into consideration:
-    // - Timeframe
-    // - name
-    // - time
-    // - extension
-    // - prefix / suffix?
+use crate::try_result;
 
+use glob::{Paths};
+use std::path::PathBuf;
+use std::fs::remove_file;
+use std::time::SystemTime;
+use chrono::{DateTime, Local};
+
+pub fn format_filename(time: &SystemTime, timeframe: &TimeFrameReference, name: &str, suffix_opt: Option<&str>, extension_opt: Option<&str>) -> String {
     // Output: Name for savefile
-    unimplemented!()
+
+    let date = DateTime::<Local>::from(time.clone());
+    let iso_date = date.format("%Y-%m-%d_%H:%M").to_string(); // :%S for seconds?
+
+    let suffix = suffix_opt.unwrap_or("backup");
+
+    if extension_opt.is_some() {
+        return format!("{}_{}_{}_{}.{}", iso_date, timeframe.frame.as_str(), name, suffix, extension_opt.unwrap());
+    } else {
+        return format!("{}_{}_{}_{}", iso_date, timeframe.frame.as_str(), name, suffix);
+    }
 }
 
-pub fn prune() -> Result<(), String> {
+pub fn prune(directory: &str, identifier: &str, amount: &usize) -> Result<bool, String> {
     // Delete oldest savefiles if more than amount
-    unimplemented!()
+    let pattern = format!("{}/*_{}_*", directory, identifier);
+    let paths: Paths = try_result!(glob::glob(pattern.as_str()), "Could not read file list");
+
+    let mut list: Vec<PathBuf> = paths.filter_map(Result::ok).collect();
+    if list.len().gt(amount) {
+        // Unstable sort works as file paths are unique and file names are prefixed with the ISO date
+        list.sort_unstable();
+        let oldest_file = list.last();
+        if oldest_file.is_some() {
+            if remove_file(oldest_file.unwrap()).is_err() {
+                return Err(format!("Could not remove oldest file in '{}'", directory));
+            }
+        } else {
+            // This should never happen... Backup is not executed if amount equals zero
+            warn!("There is no oldest file to remove, the amount of saves seems to be zero, but still the backup was executed");
+        }
+        return Ok(true);
+    } else {
+        return Ok(false);
+    };
 }

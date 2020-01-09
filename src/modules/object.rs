@@ -53,8 +53,8 @@ pub struct SyncConfiguration {
 #[derive(Deserialize)]
 pub struct TimeFrameReference {
     pub frame: String,
-    #[serde(default="default_u32_1")]
-    pub amount: u32
+    #[serde(default="default_usize_1")]
+    pub amount: usize
 }
 
 pub type TimeFrames = HashMap<String, TimeFrame>;
@@ -65,7 +65,7 @@ pub struct TimeFrame {
     pub interval: Duration,
 }
 
-fn default_u32_1() -> u32 { 1 }
+fn default_usize_1() -> usize { 1 }
 fn default_bool_false() -> bool { false }
 fn default_bool_true() -> bool { true }
 

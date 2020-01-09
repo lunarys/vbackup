@@ -5,6 +5,7 @@ extern crate serde_json;
 extern crate serde;
 extern crate serde_derive;
 extern crate chrono;
+extern crate glob;
 
 mod vbackup;
 mod modules;

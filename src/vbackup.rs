@@ -123,11 +123,17 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
     // Fill queue with timeframes to run backup for
     for timeframe_ref in &backup_config.timeframes {
+        if timeframe_ref.amount.eq(&usize::min_value()) {
+            // min_value is 0
+            warn!("Amount of saves in timeframe '{}' for '{}' backup is zero, no backup will be created", &timeframe_ref.frame, config.name.as_str());
+            continue;
+        }
+
         let timeframe_opt = timeframes.get(&timeframe_ref.frame);
         let timeframe = if timeframe_opt.is_some() {
             timeframe_opt.unwrap()
         } else {
-            error!("Referenced timeframe '{}' for backup does not exist", &timeframe_ref.frame);
+            error!("Referenced timeframe '{}' for '{}' backup does not exist", &timeframe_ref.frame, config.name.as_str());
             continue;
         };
 
@@ -173,7 +179,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
     // Do backup (all at once to enable optimizations)
     module.init(&config.name, &backup_config.config, paths, args.dry_run, args.no_docker)?;
-    let backup_result = module.backup(&queue_refs);
+    let backup_result = module.backup(&current_time, &queue_refs);
 
     // Update check and savedata
     {
@@ -394,3 +400,5 @@ fn time_format(date: &DateTime<Local>) -> String {
 // TODO: Proper Error in Results instead of String
 // TODO: Proper path representation instead of string
 // TODO: Proper dry-run implementation
+// TODO: Prepare docker image
+// TODO: Maybe macro for error!() that also reports an unidentified error to reporting

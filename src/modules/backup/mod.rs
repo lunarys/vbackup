@@ -9,6 +9,7 @@ pub enum BackupModule<'a> {
 }
 
 use BackupModule::*;
+use std::time::SystemTime;
 
 pub fn get_module(name: &str) -> Result<BackupModule, String> {
     return Ok(match name.to_lowercase().as_str() {
@@ -26,7 +27,7 @@ impl<'a> Backup<'a> for BackupModule<'a> {
         unimplemented!()
     }
 
-    fn backup(&self, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
+    fn backup(&self, time: &SystemTime, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
         unimplemented!()
     }
 

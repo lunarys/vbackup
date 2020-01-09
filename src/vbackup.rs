@@ -1,18 +1,17 @@
 use crate::modules::object::*;
-use crate::util::io::json;
+use crate::util::io::{file,json};
+use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::modules;
-
-use crate::{try_option};
-
-use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
-use std::path::Path;
 use crate::modules::traits::{Controller, Sync, Check, Backup};
 use crate::modules::sync::SyncModule;
 use crate::modules::controller::ControllerModule;
 use crate::modules::backup::BackupModule;
 use crate::modules::check::CheckModule;
-use crate::util::io::file;
-use crate::util::helper::{controller as controller_helper,check as check_helper};
+
+use crate::{try_option};
+
+use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
+use std::path::Path;
 use std::time::SystemTime;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -229,14 +228,16 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
         error!("Backup failed, cleaning up");
     }
 
-    // TODO: Write savedata update only if backup was successful
-    if !args.dry_run {
-        trace!("Writing new savedata to '{}'", save_data_path.as_str());
-        if let Err(err) = write_savedata(save_data_path.as_str(), savedata) {
-            error!("Could not update savedata for '{}' backup ({})", config.name.as_str(), err);
+    // Write savedata update only if backup was successful
+    if backup_result.is_ok() {
+        if !args.dry_run {
+            trace!("Writing new savedata to '{}'", save_data_path.as_str());
+            if let Err(err) = write_savedata(save_data_path.as_str(), savedata) {
+                error!("Could not update savedata for '{}' backup ({})", config.name.as_str(), err);
+            }
+        } else {
+            // TODO: dry-run
         }
-    } else {
-        // TODO: dry-run
     }
 
     // Check can be freed as it is not required anymore

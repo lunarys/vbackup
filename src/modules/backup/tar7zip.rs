@@ -100,7 +100,6 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             let mut from: Option<String> = None;
             for frame in time_frames {
                 let file_name = savefile::format_filename(time, *frame, bound.name.as_str(), None, Some("tar.7z"));
-
                 let backup_file = format!("{}/{}", bound.paths.store_path.as_str(), file_name);
 
                 if from.is_none() {
@@ -132,6 +131,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
 
     fn restore(&self) -> Result<(), String> {
         unimplemented!()
+        //let command_actual = format!("7z x -so {}'{}' | tar xf - -C '{}', password_option, backup_file, save_path);
     }
 
     fn clear(&mut self) -> Result<(), String> {

@@ -32,7 +32,7 @@ pub trait Sync<'a> {
 }
 
 pub trait Reporting {
-    fn init(&mut self) -> Result<(),String>;
-    fn report(&self, context: &Option<&str>, kind: &str, value: String) -> Result<(),String>;
+    fn init(&mut self, config_json: &Value, dry_run: bool, no_docker: bool) -> Result<(),String>;
+    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: String) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }

@@ -1,4 +1,5 @@
 use crate::modules::object::{Paths, ModulePaths, TimeEntry, TimeFrameReference, TimeFrame};
+use crate::modules::check::Reference;
 
 use serde_json::Value;
 use std::time::SystemTime;
@@ -11,7 +12,7 @@ pub trait Backup<'a> {
 }
 
 pub trait Check<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String>;
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String>;
     fn check(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String>;
     fn update(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;

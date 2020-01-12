@@ -1,6 +1,6 @@
 use crate::{change_error, try_result};
 
-use std::process::{Command, Child, ExitStatus};
+use std::process::{Command, Child, ExitStatus, Output};
 
 pub struct CommandWrapper {
     command: Command,
@@ -43,9 +43,7 @@ impl CommandWrapper {
         if dry_run {
             info!("DRY-RUN: {}", self.to_string());
         } else {
-            let mut process: Child = try_result!(self.spawn(), format!("Failed to start {}", name));
-            let exit_status: ExitStatus = try_result!(process.wait(), format!("Failed to run {}", name));
-
+            let exit_status = self.run_get_status()?;
             if !exit_status.success() {
                 let msg = format!("Exit code indicates failure of {}", name);
                 error!("{}", msg);
@@ -54,6 +52,26 @@ impl CommandWrapper {
         }
 
         return Ok(());
+    }
+
+    pub fn run_get_status(&mut self) -> Result<ExitStatus, String> {
+        let mut process: Child = try_result!(self.spawn(), "Failed to start command execution");
+        let exit_status: ExitStatus = try_result!(process.wait(), "Failed to run command");
+        return Ok(exit_status);
+    }
+
+    pub fn run_get_output(&mut self) -> Result<Output,String> {
+        let result = self.command.output();
+
+        if let Ok(output) = result {
+            if output.status.success() {
+                return Ok(output);
+            } else {
+                return Err(String::from("Exit code indicates failure of command"));
+            }
+        } else {
+            return Err(format!("Failed executing command: {}", result.unwrap_err().to_string()))
+        }
     }
 }
 

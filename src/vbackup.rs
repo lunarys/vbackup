@@ -6,7 +6,7 @@ use crate::modules::traits::{Controller, Sync, Check, Backup};
 use crate::modules::sync::SyncModule;
 use crate::modules::controller::ControllerModule;
 use crate::modules::backup::BackupModule;
-use crate::modules::check::CheckModule;
+use crate::modules::check::{Reference,CheckModule};
 
 use crate::{try_option};
 
@@ -109,7 +109,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
     // Init additional check
     let mut check_module = if !args.force {
-        check_helper::init(&args, &paths.base_paths, &config, &backup_config.check)?
+        check_helper::init(&args, &paths.base_paths, &config, &backup_config.check, Reference::Backup)?
     } else {
         // No additional check is required if forced run
         None
@@ -285,7 +285,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
     let base_paths = paths.base_paths.borrow();
     let mut check_module = if !args.force {
-        check_helper::init(&args, base_paths, &config, &sync_config.check)?
+        check_helper::init(&args, base_paths, &config, &sync_config.check, Reference::Sync)?
     } else {
         // No additional check is required if forced run
         None
@@ -469,3 +469,5 @@ fn time_format(date: &DateTime<Local>) -> String {
 // TODO: Proper dry-run implementation
 // TODO: Prepare docker image
 // TODO: Maybe macro for error!() that also reports an unidentified error to reporting
+// TODO: Lock for single instance
+// TODO: List

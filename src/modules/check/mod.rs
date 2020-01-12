@@ -5,6 +5,11 @@ use serde_json::Value;
 mod file_age;
 mod minecraft_server;
 
+pub enum Reference {
+    Backup,
+    Sync
+}
+
 pub enum CheckModule<'a> {
     FileAge(file_age::FileAge<'a>),
     MinecraftServer(minecraft_server::MinecraftServer<'a>)
@@ -25,7 +30,7 @@ pub fn get_module(name: &str) -> Result<CheckModule, String> {
 }
 
 impl<'a> Check<'a> for CheckModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String> {
         unimplemented!()
     }
 

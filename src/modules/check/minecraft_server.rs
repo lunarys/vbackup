@@ -2,6 +2,7 @@ use crate::modules::traits::Check;
 use crate::modules::object::*;
 use crate::util::io::json;
 use crate::{try_result,try_option};
+use crate::modules::check::Reference;
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -29,7 +30,7 @@ impl<'a> MinecraftServer<'a> {
 }
 
 impl<'a> Check<'a> for MinecraftServer<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);

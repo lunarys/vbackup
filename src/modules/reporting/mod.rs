@@ -1,82 +1,152 @@
 use crate::modules::traits::Reporting;
-use crate::modules::object::ModulePaths;
+use crate::modules::object::Paths;
+
+use crate::try_option;
 
 use serde_json::Value;
 
 mod mqtt;
 
 pub enum ReportingModule {
-    Mqtt(mqtt::Mqtt),
-    Combined(Vec<ReportingModule>),
-    None // ?
+    Mqtt(mqtt::Reporter),
+    Empty // ?
 }
 
 use ReportingModule::*;
 use std::ops::Add;
 use serde_json::value::Index;
 
-fn init_all(config_json: &Value, dry_run: bool, no_docker: bool) -> Result<ReportingModule, String> {
-    let mut module = if let Some(array) = config_json.as_array() {
-        let (oks, errs) : (Vec<Result<ReportingModule,String>>,Vec<Result<ReportingModule,String>>) = array.iter()
-            .map(get_module_init)
-            .partition(Result::is_ok);
-
-        if errs.is_empty() {
-            let mut modules: Vec<ReportingModule> = oks.iter().map(Result::unwrap).collect();
-            Combined(modules)
-        } else {
-            let err_acc = errs.iter().fold(String::new(), |s,t| s.add(t.unwrap_err().as_str()));
-            return Err(err_acc);
+fn get_module(name: &str) -> Result<ReportingModule, String> {
+    return Ok(match name.to_lowercase().as_str() {
+        "mqtt" => Mqtt(mqtt::Reporter::new_empty()),
+        unknown => {
+            let msg = format!("Unknown controller module: '{}'", unknown);
+            error!("{}", msg);
+            return Err(msg)
         }
-    } else {
-        return Err(String::from("Init all for reporting called with no array"))
-    };
-
-    return Ok(module);
-}
-
-fn get_module_init(config_json: &Value, dry_run: bool, no_docker: bool) -> Result<ReportingModule, String> {
-    if config_json.is_array() {
-        return init_all(config_json, dry_run, no_docker)
-    } else if let Some(reporter) = config_json.get("type") {
-        if reporter.is_string() {
-            let result = match reporter.as_str().unwrap() {
-                "mqtt" => mqtt::new_empty(),
-                unknown => {
-                    let msg = format!("Unknown sync module: '{}'", unknown);
-                    error!("{}", msg);
-                    return Err(msg)
-                }
-            };
-            result.init(config_json, dry_run, no_docker);
-            return Ok(result);
-        } else {
-            return Err(String::from(""));
-        }
-    } else {
-        return Err(String::from(""));
-    }
+    })
 }
 
 impl Reporting for ReportingModule {
-    fn init(&mut self, config_json: &Value, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         return match self {
-            Mqtt(reporter) => reporter.init(config_json, dry_run, no_docker),
-            Combined(list) => list.iter().map(ReportingModule::init).fold(Ok(()), Result::and)
+            Mqtt(reporter) => reporter.init(config_json, paths, dry_run, no_docker),
+            Empty => Ok(())
         }
     }
 
-    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: String) -> Result<(), String> {
+    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(), String> {
         return match self {
             Mqtt(reporter) => reporter.report(context, kind, value),
-            Combined(list) => list.iter().map(ReportingModule::report).fold(Ok(()), Result::and) // TODO: Accumulate errors?
+            Empty => Ok(())
         }
     }
 
     fn clear(&mut self) -> Result<(), String> {
         return match self {
             Mqtt(reporter) => reporter.clear(),
-            Combined(list) => list.iter().map(ReportingModule::clear).fold(Ok(()), Result::and) // TODO: Accumulate errors?
+            Empty => Ok(())
         }
+    }
+}
+
+pub struct Reporter {
+    bind: Option<Bind>
+}
+
+struct Bind {
+    modules: Vec<ReportingModule>
+}
+
+pub fn new_empty() -> Reporter {
+    return Reporter{ bind: None };
+}
+
+impl Reporting for Reporter {
+    fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+        if self.bind.is_some() {
+            let msg = String::from("Reporting module is already bound");
+            error!("{}", msg);
+            return Err(msg);
+        }
+
+        let array = if let Some(array) = config_json.as_array() {
+            let mut vec = vec![];
+            for value in array {
+                vec.push(value)
+            }
+            vec
+        } else {
+            vec![config_json]
+        };
+
+        let mut result = array.iter().map(|value| {
+            if let Some(reporter) = value.get("type") {
+                if reporter.is_string() {
+                    let mut result = get_module(reporter.as_str().unwrap())?;
+                    result.init(*value, paths, dry_run, no_docker)?;
+                    return Ok(result);
+                } else {
+                    return Err(String::from(""));
+                }
+            } else {
+                return Err(String::from(""));
+            }
+        }).collect();
+
+        let modules = accumulate(result)?;
+
+        self.bind = Some(Bind {
+            modules
+        });
+
+        return Ok(());
+    }
+
+    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(), String> {
+        let bound: &Bind = try_option!(self.bind.as_ref(), "Reporting module is not bound");
+
+        let result = bound.modules.iter().map(|module| {
+            module.report(context, kind, value)
+        }).collect();
+
+        return accumulate(result).map(|_| ());
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        let mut bound: Bind = try_option!(self.bind.take(), "Reporting module is not bound");
+
+        let result = bound.modules.iter_mut().map(|mut module| {
+            module.clear()
+        }).collect();
+
+        self.bind = None;
+
+        return accumulate(result).map(|_| ());
+    }
+}
+
+fn accumulate<T>(input: Vec<Result<T,String>>) -> Result<Vec<T>,String> {
+    if input.iter().any(|r| r.is_err()) {
+        let acc = input.iter()
+            .filter_map(|r| r.as_ref().err())
+            .fold(String::new(), |s,t| {
+                let tmp = if String::new().ne(&s) {
+                    s.add(", ")
+                } else {
+                    s
+                };
+
+                tmp.add(t.as_str())
+            });
+        return Err(acc);
+    } else {
+        let mut result_vec = vec![];
+        for result in input {
+            if result.is_ok() {
+                result_vec.push(result.unwrap())
+            }
+        }
+        return Ok(result_vec);
     }
 }

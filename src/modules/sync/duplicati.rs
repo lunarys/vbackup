@@ -64,6 +64,12 @@ impl<'a> Duplicati<'a> {
 
 impl<'a> Sync<'a> for Duplicati<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+        if self.bind.is_some() {
+            let msg = String::from("Sync module is already bound");
+            error!("{}", msg);
+            return Err(msg);
+        }
+
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: Remove clone
         let auth = auth_data::resolve::<Authentication>(&config.auth_reference, &config.auth, paths.base_paths)?;
 

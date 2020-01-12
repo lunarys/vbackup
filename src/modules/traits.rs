@@ -1,4 +1,4 @@
-use crate::modules::object::{ModulePaths, TimeEntry, TimeFrameReference, TimeFrame};
+use crate::modules::object::{Paths, ModulePaths, TimeEntry, TimeFrameReference, TimeFrame};
 
 use serde_json::Value;
 use std::time::SystemTime;
@@ -32,7 +32,7 @@ pub trait Sync<'a> {
 }
 
 pub trait Reporting {
-    fn init(&mut self, config_json: &Value, dry_run: bool, no_docker: bool) -> Result<(),String>;
-    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: String) -> Result<(),String>;
+    fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(),String>;
+    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }

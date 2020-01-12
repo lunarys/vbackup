@@ -57,6 +57,12 @@ impl<'a> Rsync<'a> {
 
 impl<'a> Sync<'a> for Rsync<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+        if self.bind.is_some() {
+            let msg = String::from("Sync module is already bound");
+            error!("{}", msg);
+            return Err(msg);
+        }
+
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths)?;
 

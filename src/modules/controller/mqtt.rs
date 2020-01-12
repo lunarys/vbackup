@@ -56,6 +56,12 @@ impl MqttController {
 
 impl<'a> Controller<'a> for MqttController {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+        if self.bind.is_some() {
+            let msg = String::from("Controller module is already bound");
+            error!("{}", msg);
+            return Err(msg);
+        }
+
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let mqtt_config = auth_data::resolve::<MqttConfiguration>(&config.auth_reference, &config.auth, paths.base_paths)?;
 

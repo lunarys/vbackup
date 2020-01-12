@@ -34,6 +34,12 @@ impl<'a> Tar7Zip<'a> {
 
 impl<'a> Backup<'a> for Tar7Zip<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+        if self.bind.is_some() {
+            let msg = String::from("Backup module is already bound");
+            error!("{}", msg);
+            return Err(msg);
+        }
+
         let config = json::from_value(config_json.clone())?; // TODO: - clone
 
         if paths.original_path.is_none() {

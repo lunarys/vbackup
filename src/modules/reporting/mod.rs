@@ -8,6 +8,7 @@ use serde_json::Value;
 mod mqtt;
 
 pub enum ReportingModule {
+    Combined(Reporter),
     Mqtt(mqtt::Reporter),
     Empty // ?
 }
@@ -27,9 +28,20 @@ fn get_module(name: &str) -> Result<ReportingModule, String> {
     })
 }
 
+impl ReportingModule {
+    pub fn new_combined() -> ReportingModule {
+        return ReportingModule::Combined(Reporter::new_empty());
+    }
+
+    pub fn new_empty() -> ReportingModule {
+        return ReportingModule::Empty;
+    }
+}
+
 impl Reporting for ReportingModule {
     fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
         return match self {
+            Combined(reporter) => reporter.init(config_json, paths, dry_run, no_docker),
             Mqtt(reporter) => reporter.init(config_json, paths, dry_run, no_docker),
             Empty => Ok(())
         }
@@ -37,6 +49,7 @@ impl Reporting for ReportingModule {
 
     fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(), String> {
         return match self {
+            Combined(reporter) => reporter.report(context, kind, value),
             Mqtt(reporter) => reporter.report(context, kind, value),
             Empty => Ok(())
         }
@@ -44,6 +57,7 @@ impl Reporting for ReportingModule {
 
     fn clear(&mut self) -> Result<(), String> {
         return match self {
+            Combined(reporter) => reporter.clear(),
             Mqtt(reporter) => reporter.clear(),
             Empty => Ok(())
         }
@@ -58,8 +72,10 @@ struct Bind {
     modules: Vec<ReportingModule>
 }
 
-pub fn new_empty() -> Reporter {
-    return Reporter{ bind: None };
+impl Reporter {
+    pub fn new_empty() -> Reporter {
+        return Reporter{ bind: None };
+    }
 }
 
 impl Reporting for Reporter {

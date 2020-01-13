@@ -2,7 +2,7 @@ use crate::{try_result, bool_result};
 
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, Read};
-use std::fs::{OpenOptions, File, read_dir};
+use std::fs::{OpenOptions, File, read_dir, metadata};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -108,4 +108,15 @@ pub fn list_in_dir(dir_name: &str) -> Result<Vec<PathBuf>, String> {
     }).collect();
 
     return Ok(files);
+}
+
+pub fn size(path: &Path) -> Result<u64,String> {
+    let meta = try_result!(metadata(path), "Could not read metadata");
+
+    if meta.is_dir() {
+        // TODO: Does this return the right size?
+        return Ok(meta.len());
+    } else {
+        return Ok(meta.len());
+    }
 }

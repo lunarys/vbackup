@@ -2,11 +2,12 @@ use crate::modules::object::*;
 use crate::util::io::{file,json};
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::modules;
-use crate::modules::traits::{Controller, Sync, Check, Backup};
+use crate::modules::traits::{Controller, Sync, Check, Backup, Reporting};
 use crate::modules::sync::SyncModule;
 use crate::modules::controller::ControllerModule;
 use crate::modules::backup::BackupModule;
 use crate::modules::check::{Reference,CheckModule};
+use crate::modules::reporting::ReportingModule;
 
 use crate::{try_option};
 
@@ -61,11 +62,24 @@ pub fn main() -> Result<(),String> {
     let paths = Paths::from(base_paths);
 
     let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
+    let mut reporter = match operation.as_str() {
+        "run" | "backup" => {
+            let reporter_config_opt = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))?;
+            if let Some(reporter_config) = reporter_config_opt {
+                let mut r = ReportingModule::new_combined();
+                r.init(&reporter_config, &paths, args.dry_run, args.no_docker)?;
+                r
+            } else {
+                ReportingModule::new_empty()
+            }
+        },
+        _ => ReportingModule::new_empty()
+    };
 
     let result = match operation.as_str() {
-        "run" => backup_wrapper(&args, &paths, &timeframes).and(sync_wrapper(&args, &paths, &timeframes)),
-        "backup" => backup_wrapper(&args, &paths, &timeframes),
-        "save" => sync_wrapper(&args, &paths, &timeframes),
+        "run" => backup_wrapper(&args, &paths, &timeframes, &reporter).and(sync_wrapper(&args, &paths, &timeframes, &reporter)),
+        "backup" => backup_wrapper(&args, &paths, &timeframes, &reporter),
+        "save" => sync_wrapper(&args, &paths, &timeframes, &reporter),
         "list" => list(&args, &paths),
         unknown => {
             let err = format!("Unknown operation: '{}'", unknown);
@@ -74,10 +88,11 @@ pub fn main() -> Result<(),String> {
         }
     };
 
+    reporter.clear();
     return result;
 }
 
-fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> Result<(),String> {
+fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
         let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
@@ -253,7 +268,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     return backup_result.map(|_| true);
 }
 
-fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames) -> Result<(),String> {
+fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(),String> {
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
         let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?

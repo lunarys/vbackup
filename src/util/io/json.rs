@@ -12,7 +12,15 @@ pub fn from_file<T>(file_name: &Path) -> Result<T, String> where for<'de> T: Des
     let buf_reader = BufReader::new(file);
 
     let result: Result<T,_> = serde_json::from_reader(buf_reader);
-    return result.map_err(|_| format!("Failed reading the file '{}'", "<filename here>"));
+    return result.map_err(|_| format!("Failed reading the file '{}'", "<filename here>")); // TODO
+}
+
+pub fn from_file_checked<T>(file_name: &Path) -> Result<Option<T>, String> where for<'de> T: Deserialize<'de> {
+    if file_name.exists() {
+        return from_file::<T>(file_name).map(|r| Some(r));
+    } else {
+        return Ok(None);
+    }
 }
 
 pub fn to_file<T: Serialize>(file_name: &Path, value: &T) -> Result<(), String> {

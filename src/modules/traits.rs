@@ -34,6 +34,6 @@ pub trait Sync<'a> {
 
 pub trait Reporting {
     fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(),String>;
-    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(),String>;
+    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }

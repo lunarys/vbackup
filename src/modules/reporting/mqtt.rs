@@ -70,17 +70,22 @@ impl Reporting for Reporter {
         return Ok(());
     }
 
-    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(), String> {
+    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(), String> {
         let bound = try_option!(self.bind.as_ref(), "MQTT reporter is not bound");
 
         let qos = bound.mqtt_config.qos;
         let mut topic = get_base_topic(&bound.config, &bound.mqtt_config);
-        if context.is_some() {
-            context.unwrap().iter().for_each(|s| {
+
+        match context {
+            Some([operation, name]) => {
                 topic.push('/');
-                topic.add_assign(*s);
-            });
+                topic.add_assign(name);
+                topic.push('/');
+                topic.add_assign(operation);
+            },
+            _ => {},
         }
+
         let message = String::from(value);
 
         let msg = mqtt::Message::new(topic, message, qos);
@@ -124,7 +129,7 @@ fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result
 
     // Set last will in case of whatever failure that includes a interrupted connection
     let testament_topic = get_base_topic(config, mqtt_config);
-    let testament = mqtt::Message::new(&testament_topic, "ABORTED", mqtt_config.qos);
+    let testament = mqtt::Message::new(&testament_topic, "cancelled", mqtt_config.qos);
     options.will_message(testament);
 
     trace!("Base topic is '{}'", testament_topic);

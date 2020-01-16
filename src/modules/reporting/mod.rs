@@ -47,10 +47,10 @@ impl Reporting for ReportingModule {
         }
     }
 
-    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(), String> {
+    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(), String> {
         return match self {
-            Combined(reporter) => reporter.report(context, kind, value),
-            Mqtt(reporter) => reporter.report(context, kind, value),
+            Combined(reporter) => reporter.report(context, value),
+            Mqtt(reporter) => reporter.report(context, value),
             Empty => Ok(())
         }
     }
@@ -119,11 +119,11 @@ impl Reporting for Reporter {
         return Ok(());
     }
 
-    fn report(&self, context: &Option<&Vec<&str>>, kind: &str, value: &str) -> Result<(), String> {
+    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(), String> {
         let bound: &Bind = try_option!(self.bind.as_ref(), "Reporting module is not bound");
 
         let result = bound.modules.iter().map(|module| {
-            module.report(context, kind, value)
+            module.report(context, value)
         }).collect();
 
         return accumulate(result).map(|_| ());

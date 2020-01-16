@@ -63,7 +63,7 @@ pub fn main() -> Result<(),String> {
 
     let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
     let mut reporter = match operation.as_str() {
-        "run" | "backup" => {
+        "run" | "backup" | "sync" => {
             let reporter_config_opt = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))?;
             if let Some(reporter_config) = reporter_config_opt {
                 let mut r = ReportingModule::new_combined();
@@ -75,6 +75,9 @@ pub fn main() -> Result<(),String> {
         },
         _ => ReportingModule::new_empty()
     };
+
+    // Only actually does something if run, backup or sync
+    reporter.report(None, operation.as_str());
 
     let result = match operation.as_str() {
         "run" => backup_wrapper(&args, &paths, &timeframes, &reporter).and(sync_wrapper(&args, &paths, &timeframes, &reporter)),
@@ -88,6 +91,8 @@ pub fn main() -> Result<(),String> {
         }
     };
 
+    reporter.report(None, "done");
+    // TODO: Report size of backup directory?
     reporter.clear();
     return result;
 }
@@ -98,12 +103,23 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
         let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
         if config.backup.is_some() {
+            reporter.report(Some(&["backup", config.name.as_str()]), "starting");
+
             let backup_config = config.backup.take().unwrap();
             let result = backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
             match result {
-                Ok(true) => info!("Backup for '{}' was successfully executed", config.name.as_str()),
-                Ok(false) => info!("Backup for '{}' was not executed due to constraints", config.name.as_str()),
-                Err(err) => error!("Backup for '{}' failed: {}", config.name.as_str(), err)
+                Ok(true) => {
+                    info!("Backup for '{}' was successfully executed", config.name.as_str());
+                    reporter.report(Some(&["backup", config.name.as_str()]), "success");
+                },
+                Ok(false) => {
+                    info!("Backup for '{}' was not executed due to constraints", config.name.as_str());
+                    reporter.report(Some(&["backup", config.name.as_str()]), "skipped");
+                },
+                Err(err) => {
+                    error!("Backup for '{}' failed: {}", config.name.as_str(), err);
+                    reporter.report(Some(&["backup", config.name.as_str()]), "failed");
+                }
             }
         } else {
             info!("No backup is configured for '{}'", config.name.as_str());
@@ -274,12 +290,23 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
         let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
         if config.sync.is_some() {
+            reporter.report(Some(&["sync", config.name.as_str()]), "starting");
+
             let sync_config = config.sync.take().unwrap();
             let result = sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
             match result {
-                Ok(true) => info!("Sync for '{}' was successfully executed", config.name.as_str()),
-                Ok(false) => info!("Sync for '{}' was not executed due to constraints", config.name.as_str()),
-                Err(err) => error!("Sync for '{}' failed: {}", config.name.as_str(), err)
+                Ok(true) => {
+                    info!("Sync for '{}' was successfully executed", config.name.as_str());
+                    reporter.report(Some(&["sync", config.name.as_str()]), "success");
+                },
+                Ok(false) => {
+                    info!("Sync for '{}' was not executed due to constraints", config.name.as_str());
+                    reporter.report(Some(&["sync", config.name.as_str()]), "skipped");
+                },
+                Err(err) => {
+                    error!("Sync for '{}' failed: {}", config.name.as_str(), err);
+                    reporter.report(Some(&["sync", config.name.as_str()]), "failed");
+                }
             }
         } else {
             info!("No sync is configured for '{}'", config.name.as_str());

@@ -454,7 +454,90 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 }
 
 pub fn list(args: &Arguments, paths: &Paths) -> Result<(),String> {
-    unimplemented!()
+    fn print_check(config: &Option<Value>) {
+        if let Some(check_config) = config.as_ref() {
+            if let Some(check_type) = check_config.get("type") {
+                 if let Some(type_str) = check_type.as_str() {
+                     println!("     * Additional check of type '{}'", type_str);
+                 } else {
+                     println!("     * Could not parse type of additional check: Expected string");
+                 }
+            } else {
+                println!("     * Could not parse type of additional check: Expected type field");
+            }
+        } else {
+            println!("     * No additional check configured");
+        }
+    }
+
+    fn print_controller(config: &Option<Value>) {
+        if let Some(controller_config) = config.as_ref() {
+            if let Some(controller_type) = controller_config.get("type") {
+                if let Some(type_str) = controller_type.as_str() {
+                    println!("     * Controller of type '{}'", type_str);
+                } else {
+                    println!("     * Could not parse type of controller: Expected string");
+                }
+            } else {
+                println!("     * Could not parse type of controller: Expected type field");
+            }
+        } else {
+            println!("     * No controller configured");
+        }
+    }
+
+    fn print_timeframe_ref(frame: &TimeFrameReference, with_amount: bool) {
+        print!("       - {}", frame.frame);
+        if with_amount {
+            print!(", maximal amount: {}", frame.amount);
+        }
+        println!();
+    }
+
+    println!("vBackup configurations:");
+
+    for mut config in get_config_list(args, paths)? {
+        let backup_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
+        let sync_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
+
+        let backup_path = backup_paths.original_path.unwrap_or(String::from("Not configured"));
+
+        println!("- Configuration for: {} is {}", config.name.as_str(), if config.disabled {"disabled"} else {"enabled"});
+
+        if let Some(backup_config) = config.backup.as_ref() {
+            println!("   + Backup of type '{}' is {}", backup_config.backup_type, if backup_config.disabled {"disabled"} else {"enabled"});
+
+            if !backup_config.disabled {
+                println!("     * Original data path: {}", backup_path);
+                println!("     * Backup data path:   {}", sync_paths.store_path);
+
+                println!("     * Timeframes for backup:");
+                backup_config.timeframes.iter().for_each(|f| print_timeframe_ref(f, true));
+
+                print_check(&backup_config.check)
+            }
+        } else {
+            println!("   x No backup configured");
+        }
+
+        if let Some(sync_config) = config.sync.as_ref() {
+            println!("   + Sync of type '{}' is {}", sync_config.sync_type, if sync_config.disabled {"disabled"} else {"enabled"});
+
+            if !sync_config.disabled {
+                println!("     * Path of synced data: {}", sync_paths.store_path);
+
+                println!("     * Interval for sync:");
+                print_timeframe_ref(&sync_config.interval, false);
+
+                print_check(&sync_config.check);
+                print_controller(&sync_config.controller);
+            }
+        } else {
+            println!("   x No sync configured");
+        }
+    }
+
+    Ok(())
 }
 
 fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
@@ -504,12 +587,10 @@ fn time_format(date: &DateTime<Local>) -> String {
     return date.format("%Y-%m-%d %H:%M:%S").to_string();
 }
 
-// TODO: Reporting
-// TODO: Error logging when thrown (with reporting?)
-// TODO: Proper Error in Results instead of String
-// TODO: Proper path representation instead of string
 // TODO: Proper dry-run implementation
 // TODO: Prepare docker image
-// TODO: Maybe macro for error!() that also reports an unidentified error to reporting
 // TODO: Lock for single instance
-// TODO: List
+
+// Do maybe:
+// TODO: Proper Error in Results instead of String
+// TODO: Proper path representation instead of string

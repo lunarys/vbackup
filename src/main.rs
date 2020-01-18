@@ -6,6 +6,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate chrono;
 extern crate glob;
+extern crate fs2;
 
 mod vbackup;
 mod modules;
@@ -13,10 +14,15 @@ mod util;
 
 use log::LevelFilter;
 use env_logger::Builder;
+use std::io::Result;
+use std::fs::{File, OpenOptions};
+use fs2::FileExt;
+use std::os::unix::fs::OpenOptionsExt;
 
 use crate::modules::traits::Sync;
 use crate::modules::traits::Controller;
 use crate::modules::object::{Paths, PathBase};
+use std::process::exit;
 
 fn main() {
     Builder::new()
@@ -87,4 +93,37 @@ fn main() {
     }*/
 
     // util::file::write_if_change("/tmp/foo.txt", Some("600"), "This is the content", true);
+}
+
+fn run() {
+    // Ensure only one instance of this executable is running
+    let lock_file_result = OpenOptions::new()
+        .create(true) // Create file if it does not exist
+        .mode(u32::from_str_radix("600", 8).unwrap()) // Only sets mode when creating the file...
+        .open("/run/vbackup.lock");
+    if lock_file_result.is_err() {
+        error!("Could not access lock file for vbackup");
+        exit(1);
+    }
+
+    let lock_file = lock_file_result.unwrap();
+
+    if lock_file.try_lock_exclusive().is_err() {
+        error!("Could not acquire file lock for vbackup, is it already running?");
+        exit(2);
+    }
+
+    let result = vbackup::main();
+    if let Err(error) = result.as_ref() {
+        error!("vbackup run failed: {}", error);
+    }
+
+    if lock_file.unlock().is_err() {
+        error!("Releasing file lock failed");
+        exit(4);
+    }
+
+    if result.is_err() {
+        exit(3);
+    }
 }

@@ -589,7 +589,6 @@ fn time_format(date: &DateTime<Local>) -> String {
 
 // TODO: Proper dry-run implementation
 // TODO: Prepare docker image
-// TODO: Lock for single instance
 
 // Do maybe:
 // TODO: Proper Error in Results instead of String

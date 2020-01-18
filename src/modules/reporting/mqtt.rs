@@ -77,6 +77,20 @@ impl Reporting for Reporter {
         let mut topic = get_base_topic(&bound.config, &bound.mqtt_config);
 
         match context {
+            Some([operation, name, "size", what]) => {
+                topic.push('/');
+                topic.add_assign(name);
+                topic.push('/');
+                topic.add_assign(what);
+                topic.push('/');
+                topic.add_assign("size");
+            },
+            Some(["size", what]) => {
+                topic.push('/');
+                topic.add_assign(what);
+                topic.push('/');
+                topic.add_assign("size");
+            },
             Some([operation, name]) => {
                 topic.push('/');
                 topic.add_assign(name);
@@ -85,6 +99,9 @@ impl Reporting for Reporter {
             },
             _ => {},
         }
+
+        // TODO: Trace or debug?
+        trace!("Reporting on '{}': '{}'", topic.as_str(), value);
 
         let message = String::from(value);
 

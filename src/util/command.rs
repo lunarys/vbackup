@@ -60,12 +60,17 @@ impl CommandWrapper {
         return Ok(exit_status);
     }
 
-    pub fn run_get_output(&mut self) -> Result<Output,String> {
+    pub fn run_get_output(&mut self) -> Result<String,String> {
         let result = self.command.output();
 
         if let Ok(output) = result {
             if output.status.success() {
-                return Ok(output);
+                if let Some((_, output_without_newline)) = output.stdout.split_last() {
+                    let output_str: String = try_result!(String::from_utf8(output_without_newline.to_vec()), "Command output can't be converted from UTF-8");
+                    return Ok(output_str);
+                } else {
+                    return Ok(String::new());
+                }
             } else {
                 return Err(String::from("Exit code indicates failure of command"));
             }

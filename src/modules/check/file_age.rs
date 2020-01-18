@@ -86,10 +86,8 @@ impl<'a> Check<'a> for FileAge<'a> {
         command_base.arg_string(command_actual);
 
         let output = command_base.run_get_output()?;
-        let output_str: String = try_result!(String::from_utf8(output.stdout), "Command output can't be converted from UTF-8");
-
-        let split_pos: usize = try_option!(output_str.find(";"), "Expected semicolon for split of check output");
-        let (timestamp_str,filename) = output_str.split_at(split_pos);
+        let split_pos: usize = try_option!(output.find(";"), "Expected semicolon for split of check output");
+        let (timestamp_str,filename) = output.split_at(split_pos);
 
         debug!("Newest file is '{}' and was changed at '{}'", filename, timestamp_str);
 

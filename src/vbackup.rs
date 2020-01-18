@@ -80,9 +80,36 @@ pub fn main() -> Result<(),String> {
     reporter.report(None, operation.as_str());
 
     let result = match operation.as_str() {
-        "run" => backup_wrapper(&args, &paths, &timeframes, &reporter).and(sync_wrapper(&args, &paths, &timeframes, &reporter)),
-        "backup" => backup_wrapper(&args, &paths, &timeframes, &reporter),
-        "save" => sync_wrapper(&args, &paths, &timeframes, &reporter),
+        "run" => {
+            let backup_result = backup_wrapper(&args, &paths, &timeframes, &reporter);
+            if let Ok((original_size, backup_size)) = backup_result.as_ref() {
+                reporter.report(Some(&["size", "original"]), original_size.to_string().as_str());
+                reporter.report(Some(&["size", "backup"]), backup_size.to_string().as_str());
+            }
+
+            // If backup failed do not try to sync, there is probably nothing to sync
+            let sync_result = backup_result.and(sync_wrapper(&args, &paths, &timeframes, &reporter));
+            if let Ok(sync_size) = sync_result.as_ref() {
+                reporter.report(Some(&["size", "sync"]), sync_size.to_string().as_str());
+            }
+
+            sync_result.map(|_| ())
+        },
+        "backup" => {
+            let result = backup_wrapper(&args, &paths, &timeframes, &reporter);
+            if let Ok((original_size, backup_size)) = result.as_ref() {
+                reporter.report(Some(&["size", "original"]), original_size.to_string().as_str());
+                reporter.report(Some(&["size", "backup"]), backup_size.to_string().as_str());
+            }
+            result.map(|_| ())
+        },
+        "save" => {
+            let result = sync_wrapper(&args, &paths, &timeframes, &reporter);
+            if let Ok(sync_size) = result.as_ref() {
+                reporter.report(Some(&["size", "sync"]), sync_size.to_string().as_str());
+            }
+            result.map(|_| ())
+        },
         "list" => list(&args, &paths),
         unknown => {
             let err = format!("Unknown operation: '{}'", unknown);
@@ -92,12 +119,14 @@ pub fn main() -> Result<(),String> {
     };
 
     reporter.report(None, "done");
-    // TODO: Report size of backup directory?
     reporter.clear();
     return result;
 }
 
-fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(),String> {
+fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(u64,u64),String> {
+    let mut original_size_acc = 0;
+    let mut backup_size_acc = 0;
+
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
         let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
@@ -106,6 +135,10 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
             reporter.report(Some(&["backup", config.name.as_str()]), "starting");
 
             let backup_config = config.backup.take().unwrap();
+
+            let original_path_opt = module_paths.original_path.clone();
+            let store_path = module_paths.store_path.clone();
+
             let result = backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => {
@@ -121,13 +154,33 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                     reporter.report(Some(&["backup", config.name.as_str()]), "failed");
                 }
             }
+
+            if let Some(original_path) = original_path_opt {
+                // Else should never happen, but this ensures reporting does not break anything
+
+                match file::size(original_path.as_str(), args.no_docker) {
+                    Ok(curr_size) => {
+                        reporter.report(Some(&["backup", config.name.as_str(), "size", "original"]), curr_size.to_string().as_str());
+                        original_size_acc += curr_size;
+                    },
+                    Err(err) => error!("Could not read size of sync: {}", err)
+                }
+
+                match file::size(store_path.as_str(), args.no_docker) {
+                    Ok(curr_size) => {
+                        reporter.report(Some(&["backup", config.name.as_str(), "size", "backup"]), curr_size.to_string().as_str());
+                        backup_size_acc += curr_size;
+                    },
+                    Err(err) => error!("Could not read size of sync: {}", err)
+                }
+            }
         } else {
             info!("No backup is configured for '{}'", config.name.as_str());
         }
     }
 
     // Only fails if some general configuration is not available, failure in single backups is only logged
-    Ok(())
+    Ok((original_size_acc, backup_size_acc))
 }
 
 fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
@@ -284,7 +337,9 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     return backup_result.map(|_| true);
 }
 
-fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(),String> {
+fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<u64,String> {
+    let mut acc_size = 0;
+
     for mut config in get_config_list(args, paths)? {
         let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
         let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
@@ -293,6 +348,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
             reporter.report(Some(&["sync", config.name.as_str()]), "starting");
 
             let sync_config = config.sync.take().unwrap();
+            let store_path = module_paths.store_path.clone();
             let result = sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => {
@@ -308,13 +364,21 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
                     reporter.report(Some(&["sync", config.name.as_str()]), "failed");
                 }
             }
+
+            match file::size(store_path.as_str(), args.no_docker) {
+                Ok(curr_size) => {
+                    reporter.report(Some(&["sync", config.name.as_str(), "size", "sync"]), curr_size.to_string().as_str());
+                    acc_size += curr_size;
+                },
+                Err(err) => error!("Could not read size of sync: {}", err)
+            }
         } else {
             info!("No sync is configured for '{}'", config.name.as_str());
         }
     }
 
     // Only fails if some general configuration is not available, failure in single syncs is only logged
-    Ok(())
+    Ok(acc_size)
 }
 
 fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
@@ -453,7 +517,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     return sync_result.map(|_| true);
 }
 
-pub fn list(args: &Arguments, paths: &Paths) -> Result<(),String> {
+pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
     fn print_check(config: &Option<Value>) {
         if let Some(check_config) = config.as_ref() {
             if let Some(check_type) = check_config.get("type") {

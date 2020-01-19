@@ -1,6 +1,6 @@
 use crate::modules::traits::Backup;
 use crate::modules::object::*;
-use crate::{try_result,try_option};
+use crate::{try_result,try_option,dry_run};
 use crate::util::io::{json,savefile,file};
 use crate::util::command::CommandWrapper;
 
@@ -100,6 +100,8 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         //  > /dev/null?
         let command_actual = format!("tar -cf - -C '{}' . | 7z a -si -mhe=on {}'{}'", save_path, password_option, tmp_backup_file);
         cmd.arg_string(command_actual);
+
+        // Create a backup as temporary file
         cmd.run_or_dry_run(bound.dry_run, bound.name.as_str())?;
 
         {
@@ -109,21 +111,33 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 let backup_file = format!("{}/{}", bound.paths.store_path.as_str(), file_name);
 
                 if from.is_none() {
-                    // TODO: Fails if from and to are on different filesystems...
-                    if rename(&tmp_backup_file, &backup_file).is_err() {
-                        let err = "Could not move temporary backup to persistent file";
-                        error!("{}", err);
-                        return Err(String::from("Could not move temporary backup to persistent file"));
+                    if !bound.dry_run {
+                        // TODO: Fails if from and to are on different filesystems...
+                        if rename(&tmp_backup_file, &backup_file).is_err() {
+                            let err = "Could not move temporary backup to persistent file";
+                            error!("{}", err);
+                            return Err(String::from("Could not move temporary backup to persistent file"));
+                        }
+                    } else {
+                        dry_run!(format!("Moving file '{}' to '{}'", &tmp_backup_file, &backup_file));
                     }
                     from = Some(backup_file);
                 } else {
-                    if copy(from.as_ref().unwrap(), backup_file).is_err() {
-                        error!("Could not copy temporary backup to persistent file");
-                        continue;
+                    if !bound.dry_run {
+                        if copy(from.as_ref().unwrap(), backup_file).is_err() {
+                            error!("Could not copy temporary backup to persistent file");
+                            continue;
+                        }
+                    } else {
+                        dry_run!(format!("Copying file '{}' to '{}'", from.as_ref().unwrap(), &backup_file));
                     }
                 }
 
-                savefile::prune(bound.paths.store_path.as_str(), &frame.frame, &frame.amount);
+                if !bound.dry_run {
+                    savefile::prune(bound.paths.store_path.as_str(), &frame.frame, &frame.amount);
+                } else {
+                    dry_run!("Removing oldest file from backup in timeframe")
+                }
             }
         }
 

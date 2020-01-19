@@ -2,7 +2,7 @@ use crate::modules::traits::Controller;
 use crate::modules::object::ModulePaths;
 use crate::util::io::{auth_data,json};
 
-use crate::{try_result,try_option,bool_result};
+use crate::{try_result,try_option,bool_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -18,7 +18,8 @@ struct Bind {
     config: Configuration,
     mqtt_config: MqttConfiguration,
     client: mqtt::Client,
-    receiver: Receiver<Option<mqtt::Message>>
+    receiver: Receiver<Option<mqtt::Message>>,
+    dry_run: bool
 }
 
 #[derive(Deserialize)]
@@ -72,7 +73,8 @@ impl<'a> Controller<'a> for MqttController {
             config,
             mqtt_config,
             client,
-            receiver
+            receiver,
+            dry_run
         });
 
         Ok(())
@@ -87,7 +89,12 @@ impl<'a> Controller<'a> for MqttController {
         let qos = bound.mqtt_config.qos;
         let topic_pub = get_topic_pub(&bound.config, &bound.mqtt_config);
 
-        let result = start(&bound.client, &bound.receiver, bound.config.start, topic_pub, qos)?;
+        let result = if !bound.dry_run {
+            start(&bound.client, &bound.receiver, bound.config.start, topic_pub, qos)?
+        } else {
+            dry_run!(format!("Sending start command on MQTT topic '{}'", &topic_pub));
+            true
+        };
 
         debug!("MQTT controller start run is done");
         return Ok(result);
@@ -102,7 +109,11 @@ impl<'a> Controller<'a> for MqttController {
         let qos = bound.mqtt_config.qos;
         let topic_pub = get_topic_pub(&bound.config, &bound.mqtt_config);
 
-        let result = try_result!(end(&bound.client, topic_pub, qos), "Could not end in mqtt controller");
+        let result = if !bound.dry_run {
+            end(&bound.client, topic_pub, qos)?
+        } else {
+            dry_run!(format!("Sending end command on MQTT topic '{}'", &topic_pub));
+        };
 
         debug!("MQTT controller end run is done");
         return Ok(result);

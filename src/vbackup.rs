@@ -9,7 +9,7 @@ use crate::modules::backup::BackupModule;
 use crate::modules::check::{Reference,CheckModule};
 use crate::modules::reporting::ReportingModule;
 
-use crate::{try_option};
+use crate::{try_option, dry_run};
 
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 use std::path::Path;
@@ -124,21 +124,40 @@ pub fn main() -> Result<(),String> {
 }
 
 fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(u64,u64),String> {
+    // Collect total sizes of the backup
     let mut original_size_acc = 0;
     let mut backup_size_acc = 0;
 
+    // Go through all configurations in the config directory
     for mut config in get_config_list(args, paths)? {
-        let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
-        let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
+        // Get paths specifically for this module
+        let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
+
+        // Only do something else if a backup is present in this configuration
         if config.backup.is_some() {
+
+            // Get savedata for this backup
+            let mut savedata_result = get_savedata(module_paths.save_data.as_str());
+            let mut savedata = match savedata_result {
+                Ok(savedata) => savedata,
+                Err(err) => {
+                    error!("Could not read savedata for '{}': {}", config.name, err);
+                    continue;
+                }
+            };
+
+            // Announcing the start of this backup
             reporter.report(Some(&["backup", config.name.as_str()]), "starting");
 
+            // Take ownership of config
             let backup_config = config.backup.take().unwrap();
 
+            // Save those paths for later, as the ModulePaths will be moved
             let original_path_opt = module_paths.original_path.clone();
             let store_path = module_paths.store_path.clone();
 
+            // Run the backup and evaluate the result
             let result = backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => {
@@ -155,9 +174,11 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                 }
             }
 
+            // If the original path is set (which it has to be to run the backup) calculate and report backup sizes
+            // Else should never happen, but this ensures reporting does not break anything
             if let Some(original_path) = original_path_opt {
-                // Else should never happen, but this ensures reporting does not break anything
 
+                // Calculate and report the size of the original files
                 match file::size(original_path.as_str(), args.no_docker) {
                     Ok(curr_size) => {
                         reporter.report(Some(&["backup", config.name.as_str(), "size", "original"]), curr_size.to_string().as_str());
@@ -166,6 +187,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                     Err(err) => error!("Could not read size of sync: {}", err)
                 }
 
+                // Calculate and report the size of the backup files
                 match file::size(store_path.as_str(), args.no_docker) {
                     Ok(curr_size) => {
                         reporter.report(Some(&["backup", config.name.as_str(), "size", "backup"]), curr_size.to_string().as_str());
@@ -174,6 +196,9 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                     Err(err) => error!("Could not read size of sync: {}", err)
                 }
             }
+
+            // Announce that this backup is done now
+            reporter.report(Some(&["backup", config.name.as_str()]), "done");
         } else {
             info!("No backup is configured for '{}'", config.name.as_str());
         }
@@ -184,9 +209,10 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
 }
 
 fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
+    // Get the backup module that should be used
     let mut module: BackupModule = modules::backup::get_module(backup_config.backup_type.as_str())?;
 
-    // Timing check
+    // Prepare current timestamp (for consistency) and queue of timeframes for backup
     let current_time = SystemTime::now();
     let mut queue_refs: Vec<&TimeFrameReference> = vec![];
     let mut queue_frame_entry: Vec<(&TimeFrame, Option<&TimeEntry>)> = vec![];
@@ -195,10 +221,11 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     let mut check_module = if !args.force {
         check_helper::init(&args, &paths.base_paths, &config, &backup_config.check, Reference::Backup)?
     } else {
-        // No additional check is required if forced run
+        // No additional check is required if forced run (would be disregarded anyways)
         None
     };
 
+    // Log that this run is forced
     if args.force {
         // Run is forced
         info!("Forcing run of '{}' backup", config.name.as_str());
@@ -206,7 +233,8 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
     // Fill queue with timeframes to run backup for
     for timeframe_ref in &backup_config.timeframes {
-        // if amount of saves is zero, just skip it
+
+        // if amount of saves is zero just skip further checks
         if timeframe_ref.amount.eq(&usize::min_value()) {
             // min_value is 0
             warn!("Amount of saves in timeframe '{}' for '{}' backup is zero, no backup will be created", &timeframe_ref.frame, config.name.as_str());
@@ -225,27 +253,35 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
         // Get last backup (option as there might not be a last one)
         let last_backup = savedata.lastsync.get(&timeframe.identifier);
 
-        // Only actually check if the run is not forced (continue loop for not saving)
+        // Only actually do check if the run is not forced
         if !args.force {
+
+            // Try to compare timings to the last run
             if last_backup.is_some() {
+
+                // Compare elapsed time since last backup and the configured timeframe
                 if last_backup.unwrap().timestamp.add(timeframe.interval).lt(&current_time) {
                     // do sync
                     debug!("Backup for '{}' is required in timeframe '{}' considering the interval only", config.name.as_str(), timeframe_ref.frame.as_str());
                 } else {
-                    // don't sync
+                    // don not sync
                     info!("Backup for '{}' is not executed in timeframe '{}' due to the interval", config.name.as_str(), timeframe_ref.frame.as_str());
                     continue;
                 }
             } else {
+
                 // Probably the first backup in this timeframe, just do it
                 info!("This is probably the first backup run in timeframe '{}' for '{}', interval check is skipped", timeframe_ref.frame.as_str(), config.name.as_str());
             }
 
             // If this point of the loop is reached, only additional check is left to run
+            // The helper would check if there is a check module, but this is for more consistent log output
             if check_module.is_some() {
                 if check_helper::run(&check_module, timeframe, &last_backup)? {
+                    // Do backup
                     debug!("Backup for '{}' is required in timeframe '{}' considering the additional check", config.name.as_str(), timeframe_ref.frame.as_str());
                 } else {
+                    // Don't run backup
                     info!("Backup for '{}' is not executed in timeframe '{}' due to the additional check", config.name.as_str(), timeframe_ref.frame.as_str());
                     continue;
                 }
@@ -254,46 +290,53 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
             debug!("Run in timeframe '{}' is forced", timeframe_ref.frame.as_str())
         }
 
-        // Do the backup for this one!
+        // Loop was not continued to this point, do the backup for this one!
         queue_refs.push(timeframe_ref);
         queue_frame_entry.push((timeframe, last_backup));
     }
 
     // Is any backup required?
     if queue_refs.is_empty() {
+        // No backup at all is required (for this configuration)
         return Ok(false);
-    } else if check_module.is_none() && !args.force {
-        // Print this here to not have it over and over from the loop
+    }
+
+    // Print this here to not have it over and over from the loop
+    if check_module.is_none() && !args.force {
         debug!("There is no additional check for the backup of '{}', only using the interval checks", config.name.as_str());
     }
 
+    // For traceability in the log
     debug!("Executing backup for '{}'", config.name.as_str());
 
-    // Save value from paths
+    // Save value from paths for later
     let save_data_path = paths.save_data.clone();
 
-    // Do backup (all at once to enable optimizations)
+    // Set up backup module now
     trace!("Invoking backup module");
     module.init(&config.name, &backup_config.config, paths, args.dry_run, args.no_docker)?;
+
+    // Do backups (all timeframes at once to enable optimizations)
     let backup_result = module.backup(&current_time, &queue_refs);
     trace!("Backup module is done");
 
-    // Update check and savedata
+    // Update internal state of check module and savedata
     if backup_result.is_ok() {
+
+        // Write timestamp and nicely formatted time to savedata
         let time_this_save = current_time.clone();
         let date_this_save = DateTime::<Local>::from(time_this_save.clone());
 
+        // Update needs to be done for all active timeframes
         for (frame, entry_opt) in queue_frame_entry {
+
             // Update check state
-            if !args.dry_run {
-                trace!("Invoking state update for additional check in timeframe '{}'", frame.identifier.as_str());
-                if let Err(err) = check_helper::update(&check_module, frame, &entry_opt) {
-                    error!("State update for additional check in timeframe '{}' failed ({})", frame.identifier.as_str(), err);
-                }
-            } else {
-                // TODO: dry-run
+            trace!("Invoking state update for additional check in timeframe '{}'", frame.identifier.as_str());
+            if let Err(err) = check_helper::update(&check_module, frame, &entry_opt) {
+                error!("State update for additional check in timeframe '{}' failed ({})", frame.identifier.as_str(), err);
             }
 
+            // Estimate the time of the next required backup (only considering timeframes)
             let time_next_save = current_time.clone().add(frame.interval);
             let date_next_save = DateTime::<Local>::from(time_next_save.clone());
 
@@ -320,7 +363,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
                 error!("Could not update savedata for '{}' backup ({})", config.name.as_str(), err);
             }
         } else {
-            // TODO: dry-run
+            dry_run!(format!("Updating savedata ({})", save_data_path.as_str()));
         }
     }
 
@@ -329,7 +372,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
         error!("Could not clear the check module: {}", err);
     }
 
-    // Free backup module
+    // Free backup module now
     if let Err(err) = module.clear() {
         error!("Could not clear backup module: {}", err);
     }
@@ -338,17 +381,36 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 }
 
 fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<u64,String> {
+    // Collect the total size of synchronized files
     let mut acc_size = 0;
 
+    // Go through all configurations in the config directory
     for mut config in get_config_list(args, paths)? {
-        let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
-        let mut savedata = get_savedata(module_paths.save_data.as_str())?; // TODO: Return this error?
 
+        // Get paths specifically for this module
+        let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
+
+        // Get savedata for this sync
+        let mut savedata_result = get_savedata(module_paths.save_data.as_str());
+        let mut savedata = match savedata_result {
+            Ok(savedata) => savedata,
+            Err(err) => {
+                error!("Could not read savedata for '{}': {}", config.name, err);
+                continue;
+            }
+        };
+
+        // Only do something else if a sync is present in this configuration
         if config.sync.is_some() {
+
+            // Announce that this sync is starting
             reporter.report(Some(&["sync", config.name.as_str()]), "starting");
 
+            // Save owned objects of configuration and path
             let sync_config = config.sync.take().unwrap();
             let store_path = module_paths.store_path.clone();
+
+            // Run the backup and evaluate the result
             let result = sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => {
@@ -365,6 +427,8 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
                 }
             }
 
+            // Calculate and report size of the synced files
+            // TODO: Current implementation just takes the size of the local files...
             match file::size(store_path.as_str(), args.no_docker) {
                 Ok(curr_size) => {
                     reporter.report(Some(&["sync", config.name.as_str(), "size", "sync"]), curr_size.to_string().as_str());
@@ -372,6 +436,9 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
                 },
                 Err(err) => error!("Could not read size of sync: {}", err)
             }
+
+            // Announce that this sync is done now
+            reporter.report(Some(&["sync", config.name.as_str()]), "done");
         } else {
             info!("No sync is configured for '{}'", config.name.as_str());
         }
@@ -382,13 +449,15 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
 }
 
 fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
+    // Get the sync module that should be used
     let mut module: SyncModule = modules::sync::get_module(sync_config.sync_type.as_str())?;
 
-    // Timing check
+    // Prepare current timestamp and get timestamp of last backup + referenced timeframe
     let current_time = SystemTime::now();
     let last_sync = savedata.lastsync.get(&sync_config.interval.frame);
     let timeframe: &TimeFrame = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
 
+    // Save base path for later as it will be moved
     let base_paths = paths.base_paths.borrow();
     let mut check_module = if !args.force {
         check_helper::init(&args, base_paths, &config, &sync_config.check, Reference::Sync)?
@@ -397,8 +466,13 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
         None
     };
 
+    // If the run is forced no other checks are required
     if !args.force {
+
+        // Compare to last sync timestamp (if it exists)
         if last_sync.is_some() {
+
+            // Compare elapsed time since last sync and the configured timeframe
             if last_sync.unwrap().timestamp.add(timeframe.interval).lt(&current_time) {
                 // do sync
                 debug!("Sync for '{}' is required considering the timeframe '{}' only", config.name.as_str(), timeframe.identifier.as_str());
@@ -408,6 +482,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
                 return Ok(false);
             }
         } else {
+
             // This is probably the first sync, so just do it
             info!("This is probably the first sync run for '{}', interval check is skipped", config.name.as_str());
         }
@@ -415,8 +490,10 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
         // Run additional check
         if check_module.is_some() {
             if check_helper::run(&check_module, timeframe, &last_sync)? {
+                // Do sync
                 debug!("Sync for '{}' is required considering the additional check", config.name.as_str());
             } else {
+                // Do not run sync
                 debug!("");
                 return Ok(false);
             }
@@ -428,62 +505,58 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
         info!("Forcing run of '{}' sync", config.name.as_str())
     }
 
+    // If we did not leave the function by now sync is necessary
     debug!("Executing sync for '{}'", config.name.as_str());
 
-    // Initialize sync module
+    // Save path is still required after move, make a copy
     let save_data_path = paths.save_data.clone();
+
+    // Initialize sync module
     module.init(&config.name, &sync_config.config, paths, args.dry_run, args.no_docker)?;
 
     // Set up controller (if configured)
     let mut controller_module = controller_helper::init(&args, base_paths, &config, &sync_config.controller)?;
-    if !args.dry_run {
+
+    // Run controller (if there is one)
+    if controller_module.is_some() {
         trace!("Invoking remote device controller");
         if controller_helper::start(&controller_module)? {
             // There is no controller or device is ready for sync
-            info!("");
+            info!("Remote device is now available");
         } else {
             // Device did not start before timeout or is not available
             warn!("Remote device is not available, aborting sync");
             return Ok(false);
         }
-    } else {
-        // TODO: dry-run
     }
 
-    // Run backup
-    let sync_result = if !args.dry_run {
-        trace!("Invoking sync module");
-        let sync_result = module.sync();
-        trace!("Sync module is done");
-        if sync_result.is_ok() {
-            // Update internal state of check
-            trace!("Invoking state update for additional check in timeframe '{}'", timeframe.identifier.as_str());
-            if let Err(err) = check_helper::update(&check_module, timeframe, &last_sync) {
-                error!("State update for additional check in timeframe '{}' failed ({})", timeframe.identifier.as_str(), err);
-            }
+    // Run sync
+    trace!("Invoking sync module");
+    let sync_result = module.sync();
 
-            // Update save data
-            let date = DateTime::<Local>::from(current_time.clone());
-            savedata.lastsync.insert(timeframe.identifier.clone(), TimeEntry {
-                timestamp: current_time,
-                date: Some(time_format(&date))
-            });
-        } else {
-            error!("Sync failed, cleaning up");
+    // Check result of sync and act accordingly
+    if sync_result.is_ok() {
+        trace!("Sync module is done");
+
+        // Update internal state of check
+        trace!("Invoking state update for additional check in timeframe '{}'", timeframe.identifier.as_str());
+        if let Err(err) = check_helper::update(&check_module, timeframe, &last_sync) {
+            error!("State update for additional check in timeframe '{}' failed ({})", timeframe.identifier.as_str(), err);
         }
-        sync_result
+
+        // Update save data
+        let date = DateTime::<Local>::from(current_time.clone());
+        savedata.lastsync.insert(timeframe.identifier.clone(), TimeEntry {
+            timestamp: current_time,
+            date: Some(time_format(&date))
+        });
     } else {
-        // TODO: dry-run
-        Ok(())
-    };
+        error!("Sync failed, cleaning up");
+    }
 
     // Run controller end (result is irrelevant here)
-    if !args.dry_run {
-        if let Err(err) = controller_helper::end(&controller_module) {
-            error!("Stopping the remote device after use failed");
-        }
-    } else {
-        // TODO: dry-run
+    if let Err(err) = controller_helper::end(&controller_module) {
+        error!("Stopping the remote device after use failed");
     }
 
     // Write savedata update only if sync was successful
@@ -494,7 +567,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
                 error!("Could not update savedata for '{}' sync ({})", config.name.as_str(), err);
             }
         } else {
-            // TODO: dry-run
+            dry_run!(format!("Updating savedata ({})", save_data_path.as_str()));
         }
     }
 
@@ -518,6 +591,8 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 }
 
 pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
+
+    // Helper to output an additional check nicely formatted
     fn print_check(config: &Option<Value>) {
         if let Some(check_config) = config.as_ref() {
             if let Some(check_type) = check_config.get("type") {
@@ -534,6 +609,7 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
         }
     }
 
+    // Helper to output a controller nicely formatted
     fn print_controller(config: &Option<Value>) {
         if let Some(controller_config) = config.as_ref() {
             if let Some(controller_type) = controller_config.get("type") {
@@ -550,6 +626,7 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
         }
     }
 
+    // Helper to output a timeframe reference nicely formatted
     fn print_timeframe_ref(frame: &TimeFrameReference, with_amount: bool) {
         print!("       - {}", frame.frame);
         if with_amount {
@@ -558,19 +635,27 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
         println!();
     }
 
+    // Description
     println!("vBackup configurations:");
 
+    // Go through all configurations
     for mut config in get_config_list(args, paths)? {
+
+        // Get paths for both backup and sync module
         let backup_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
         let sync_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
 
+        // Pre-formatted backup path (might be not configured if there is no backup)
         let backup_path = backup_paths.original_path.unwrap_or(String::from("Not configured"));
 
+        // Configuration header
         println!("- Configuration for: {} is {}", config.name.as_str(), if config.disabled {"disabled"} else {"enabled"});
 
+        // Print information on backup if configured
         if let Some(backup_config) = config.backup.as_ref() {
             println!("   + Backup of type '{}' is {}", backup_config.backup_type, if backup_config.disabled {"disabled"} else {"enabled"});
 
+            // Only show more information if not disabled
             if !backup_config.disabled {
                 println!("     * Original data path: {}", backup_path);
                 println!("     * Backup data path:   {}", sync_paths.store_path);
@@ -584,9 +669,11 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
             println!("   x No backup configured");
         }
 
+        // Print information on sync if configured
         if let Some(sync_config) = config.sync.as_ref() {
             println!("   + Sync of type '{}' is {}", sync_config.sync_type, if sync_config.disabled {"disabled"} else {"enabled"});
 
+            // Only show more if not disabled
             if !sync_config.disabled {
                 println!("     * Path of synced data: {}", sync_paths.store_path);
 
@@ -601,21 +688,27 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
         }
     }
 
-    Ok(())
+    return Ok(());
 }
 
 fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
+    // Get directory containing configurations
     let volume_config_path = format!("{}/volumes", &paths.config_dir);
 
+    // Check if a specific one should be outputted
     let files = if args.name.is_some() {
-        // Only run this one
+
+        // Only run this one -> Let the list only contain this item
         let path = format!("{}/{}.json", volume_config_path, args.name.as_ref().unwrap());
         vec![Path::new(&path).to_path_buf()]
     } else {
-        // Run all
+
+        // Run all -> Return all the files in the configuration directory
         file::list_in_dir(volume_config_path.as_str())?
     };
 
+    // Load all the configuration files parsed as Configuration
+    // TODO: Only logs inaccessible files and then disregards the error
     let configs = files.iter().filter_map(|file_path| {
         let result = json::from_file::<Configuration>(file_path);
         if result.is_ok() {
@@ -630,9 +723,14 @@ fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>
 }
 
 fn get_savedata(path: &str) -> Result<SaveData, String> {
+    // Check if there is a file with savedata
     let savedata = if file::exists(path) {
+
+        // File exists: Read savedata
         json::from_file::<SaveData>(Path::new(path))?
     } else {
+
+        // File does not exist: Create new savedata
         SaveData {
             lastsave: HashMap::new(),
             nextsave: HashMap::new(),

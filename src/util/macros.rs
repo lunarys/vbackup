@@ -90,9 +90,8 @@ macro_rules! change_error {
 }
 
 #[macro_export]
-macro_rules! throw {
-    ($err:expr) => {
-        error!("{}", $err);
-        return Err($err);
+macro_rules! dry_run {
+    ($output:expr) => {
+        println!("DRY-RUN: {}", $output);
     }
 }

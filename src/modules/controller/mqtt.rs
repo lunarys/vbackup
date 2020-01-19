@@ -113,6 +113,7 @@ impl<'a> Controller<'a> for MqttController {
             end(&bound.client, topic_pub, qos)?
         } else {
             dry_run!(format!("Sending end command on MQTT topic '{}'", &topic_pub));
+            true
         };
 
         debug!("MQTT controller end run is done");

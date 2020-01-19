@@ -2,6 +2,7 @@ use crate::modules::traits::Sync;
 use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
+use crate::util::docker;
 
 use crate::{try_result,try_option};
 
@@ -62,6 +63,9 @@ impl<'a> Sync<'a> for Rsync<'a> {
             error!("{}", msg);
             return Err(msg);
         }
+
+        // Build local docker image if missing
+        docker::build_image_if_missing(&paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
 
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths)?;
@@ -168,7 +172,7 @@ impl<'a> Rsync<'a> {
             command.arg_string(format!("--volume='{}:{}'", &bound.paths.module_data_dir, "/module"));
 
             // End docker command
-            command.arg_str("my-rsync"); // Docker image name
+            command.arg_str("vbackup-rsync"); // Docker image name
 
             // Start rsync command
             command.arg_str("rsync");

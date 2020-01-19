@@ -3,3 +3,4 @@ pub mod io;
 
 pub mod macros;
 pub mod command;
+pub mod docker;

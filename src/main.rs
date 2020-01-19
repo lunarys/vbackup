@@ -68,7 +68,8 @@ fn main() {
         tmp_dir: "/tmp/vbackup".to_string(),
         auth_data_file: None,
         savedata_in_store: false,
-        reporting_file: None
+        reporting_file: None,
+        docker_images: None
     };
 
     let paths = Paths::from(base_paths);

@@ -3,6 +3,7 @@ use crate::modules::object::*;
 use crate::{try_result,try_option,dry_run};
 use crate::util::io::{json,savefile,file};
 use crate::util::command::CommandWrapper;
+use crate::util::docker;
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -40,6 +41,9 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             return Err(msg);
         }
 
+        // Build local docker image
+        docker::build_image_if_missing(&paths.base_paths, "p7zip.Dockerfile", "vbackup-p7zip")?;
+
         let config = json::from_value(config_json.clone())?; // TODO: - clone
 
         if paths.original_path.is_none() {
@@ -71,7 +75,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 .arg_string(format!("--volume='{}/volume'", "<volume>"))
                 .arg_string(format!("--volume='{}/savedir'", "<savedir>"))
                 .arg_str("--name=volume-backup-tmp")
-                .arg_str("my-p7zip")
+                .arg_str("vbackup-p7zip")
                 .arg_str("sh")
                 .arg_str("-c");
             tmp

@@ -95,7 +95,8 @@ pub struct PathBase {
     pub auth_data_file: Option<String>, // File containing shared authentication information
     #[serde(default="default_bool_true")]
     pub savedata_in_store: bool,
-    pub reporting_file: Option<String>
+    pub reporting_file: Option<String>,
+    pub docker_images: Option<String>
 }
 
 fn default_config_dir() -> String { String::from("/etc/vbackup") }
@@ -109,7 +110,8 @@ pub struct Paths {
     pub tmp_dir: String, // Directory for temporary files
     pub auth_data_file: String, // File containing shared authentication information
     pub savedata_in_store: bool,
-    pub reporting_file: String
+    pub reporting_file: String,
+    pub docker_images: String
 }
 
 pub struct ModulePaths<'a> {
@@ -126,6 +128,7 @@ impl Paths {
             timeframes_file: base.timeframes_file.unwrap_or(format!("{}/timeframes.json", &base.config_dir)),
             auth_data_file: base.auth_data_file.unwrap_or(format!("{}/auth_data.json", &base.config_dir)),
             reporting_file: base.reporting_file.unwrap_or(format!("{}/reporting.json", &base.config_dir)),
+            docker_images: base.docker_images.unwrap_or(format!("{}/images", &base.config_dir)),
             config_dir: base.config_dir,
             save_dir: base.save_dir,
             tmp_dir: base.tmp_dir,

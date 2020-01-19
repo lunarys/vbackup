@@ -749,9 +749,6 @@ fn time_format(date: &DateTime<Local>) -> String {
     return date.format("%Y-%m-%d %H:%M:%S").to_string();
 }
 
-// TODO: Proper dry-run implementation
-// TODO: Prepare docker image
-
 // Do maybe:
 // TODO: Proper Error in Results instead of String
 // TODO: Proper path representation instead of string

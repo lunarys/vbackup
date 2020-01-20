@@ -39,7 +39,7 @@ such that the backup server is not started for each sync separately and can prof
 | -d, --debug | yes | false | Enable debug logging (Loglevel: Debug). |
 | -q, --quiet | yes | false | Disable info logging (Loglevel: Warn). |
 | -f, --force | yes | false | Disregard all constraints, forcing the run. |
-| -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes and might affect the structure of the resulting backup. Not tested thoroughly. |    
+| -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes (duh!) and might affect the structure of the resulting backup. Not tested thoroughly. |    
 
 ## Configuration
 ### Base configuration
@@ -96,7 +96,7 @@ Default directory: `/etc/vbackup/volumes`
 |-----|----------|---------|-------------|
 | name | yes | | A unique name for this configuration. Filename is recommended. |
 | disabled | no | false | Flag to disable this configuration. |
-| original_path | depends | | Required if backup is configured. Path of the directory to back up. |
+| original_path | depends | | Required if backup is configured. Path of the directory or name of the docker volume to back up. |
 | store_path | no | $save_dir/$name | Path to store backups in and path to sync from.  If only a sync is configured, set this to the original path. |
 | savedata_in_store | no | false | Wether to store the savedata file in `store_path` or not. Overwrites the global flag if set. |
 | backup | no | | The backup configuration for this volume. |

@@ -46,7 +46,7 @@ struct SshConfig {
     port: i32,
     user: String,
     password: Option<String>,
-    login_key: Option<String>, // SSH private key (unencrypted)
+    ssh_key: Option<String>, // SSH private key (unencrypted)
     host_key: String // SSH public key of host
 }
 
@@ -181,11 +181,11 @@ impl<'a> Rsync<'a> {
 
         // Authentication: password or private key
         let ssh_option_end = format!("-oUserKnownHostsFile={} {}'", known_host_file, bound.ssh_config.port);
-        if bound.ssh_config.login_key.is_some() {
+        if bound.ssh_config.ssh_key.is_some() {
             // SSH private key needs to be written to a file
             file::write_if_change(&identity_file_actual,
                                   Some("600"),
-                                  bound.ssh_config.login_key.as_ref().unwrap(),
+                                  bound.ssh_config.ssh_key.as_ref().unwrap(),
                                   true)?;
 
             // Now it can be used in the command

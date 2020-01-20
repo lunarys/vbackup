@@ -39,14 +39,160 @@ such that the backup server is not started for each sync separately and can prof
 | -d, --debug | yes | false | Enable debug logging (Debug) |
 | -q, --quiet | yes | false | Disable info logging (Warn) |
 | -f, --force | yes | false | Disregard all constraints, forcing the run |
-| -b, --bare, --no-docker | yes | false | Do not use docker, warning: Can't backup docker volumes then and might affect resulting backup |    
+| -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes and might affect resulting backup. Not tested thoroughly. |    
 
 ## Configuration
 ### Base configuration
+Default file: `/etc/vbackup/config.json`
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| config_dir | no | /etc/vbackup | Defines the base directory for all configuration files. |
+| save_dir | no | /var/vbackup | Defines the base directory for all saves. |
+| tmp_dir | no | /tmp/vbackup | Defines the base directory for temporary files. |
+| timeframes_file | no | $base_dir/timeframes.json | Path to the file containing all timeframe definitions. |
+| auth_data_file | no | $base_dir/auth_data.json | Path to the file containing all shared authentication data. |
+| reporting_file | no | $base_dir/reporting.json | Path to the file containing all reporting module configurations. |
+| docker_images | no | $base_dir/images | Path to the directory containing all docker files. |
+| savedata_in_store | no | false | Flag for writing all savedata into the store_path of the configuration instead of the module data directory. |
+
+```json
+{
+  "config_dir": "/etc/vbackup",
+  "save_dir": "/var/vbackup",
+  "timeframes_file": "/etc/vbackup/timeframes.json",
+  "tmp_dir": "/tmp/vbackup",
+  "auth_data_file": "/etc/vbackup/auth_data.json",
+  "savedata_in_store": false,
+  "reporting_file": "/etc/vbackup/reporting.json",
+  "docker_images": "/etc/vbackup/images"
+}
+```
+
 ### Timeframes
+Default file: `/etc/vbackup/timeframes.json`
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| identifier | yes | | The unique identifier for this timeframe. |
+| interval | yes | | Length of this timeframe in seconds.
+
+```json
+{
+  "DAILY": {
+    "identifier": "DAILY",
+    "interval": 86400
+  },
+  "WEEKLY": {
+    "identifier": "WEEKLY",
+    "interval": 604800
+  }
+}
+```
 ### Volumes
+Default directory: `/etc/vbackup/volumes`
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| name | yes | | A unique name for this configuration. Filename is recommended. |
+| disabled | no | false | Flag to disable this configuration. |
+| original_path | depends | | Required if backup is configured. Path of the directory to back up. |
+| store_path | no | $save_dir/$name | Path to store backups in and path to sync from.  If only a sync is configured, set this to the original path. |
+| savedata_in_store | no | false | Wether to store the savedata file in `store_path` or not. Overwrites the global flag if set. |
+| backup | no | | The backup configuration for this volume. |
+| sync | no | | The sync configuration for this volume. | 
+
+```json
+{
+  "name": "my-important-volume",
+  "disabled": false,
+  "original_path": "important-volume",
+  "store_path": "/var/vbackup/my-important-volume",
+  "savedata_in_store": false,
+  "backup": { ... },
+  "sync": { ... }
+}
+```
+#### Backup
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| disabled | no | false | Flag to disable the backup configuration. | 
+| type | yes | | The type of this backup configuration / which backup module to use. |
+| config | yes | | The module specific backup configuration. |
+| check | no | | Configuration of an additional check for this backup. |
+| timeframes | yes | | Timeframes in which to run this backup. |
+| timeframes.x.frame | yes | | Identifier of the referenced timeframe. |
+| timeframes.x.amount | no | 1 | The number of backups to keep for this timeframe. |
+
+```json
+{
+  "disabled": false,
+  "type": "tar7zip",
+  "config": { ... },
+  "check": { ... },
+  "timeframes": [
+    {
+      "frame": "DAILY",
+      "amount": 5
+    }
+  ]
+}
+```
+#### Sync
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| disabled | no | false | Flag to disable the sync configuration. |
+| type | yes | | The type of this sync configuration / which sync module to use. |
+| config | yes | | The module specific sync configuration. |
+| check | no | | Configuration of an additional check for this sync. |
+| controller | no | | Configuration of an controller for the remote device. |
+| interval | yes | | The timeframe to run this sync in. |
+| interval.frame | yes | | The identifier of the referenced timeframe. | 
+
+```json
+{
+  "disabled": false,
+  "type": "rsync-ssh",
+  "config": { ... },
+  "check": { ... },
+  "controller": { ... },
+  "interval": {
+    "frame": "WEEKLY"
+  }
+}
+```
 ### Reporting
+Default file: `/etc/vbackup/reporting.json`
+```json
+[
+  {
+    "type": "mqtt",
+    ...
+  }
+]
+```
 ### Shared authentication
+Default file: `/etc/vbackup/auth_data.json`
+```json
+{
+  "some-ssh-login": {
+    "hostname": "ssh-server.local",
+    "port": 22,
+    "user": "foo",
+    "password": "hackme",
+    "ssh_key": "TODO",
+    "host_key": "TODO",
+    "fingerprint_rsa": "TODO"
+  }, 
+  "another_login_mqtt": {
+    "host": "mqtt-broker.local",
+    "port": 1883,
+    "user": "user",
+    "password": "hackme",
+    "qos": 2
+  }
+}
+```
 
 ## Base conditions
 
@@ -89,7 +235,7 @@ Todo: module-data, savedata.json
   "dirname": "my-backup-dir/sub-dir",
   "host": {
     "hostname": "my-ssh-server.local",
-    "port": "22",
+    "port": 22,
     "user": "foo",
     "password": "bar",
     "ssh_key": "TODO",
@@ -153,9 +299,9 @@ Todo: module-data, savedata.json
 |-----|----------|---------|-------------|
 | start | no | true | Wether to start the remote device or not. |
 | device | yes | | Name of the remote device. (Used in default topics) |
-| auth_reference | depends | | Reference to authentication information in the shared authentication store. |
 | topic_sub | no | device/%d/controller/to/%u | Topic to receive messages from the controller on. |
 | topic_pub | no | device/%d/controller/from/%u | Topic to send messages to the controller on. |
+| auth_reference | depends | | Reference to authentication information in the shared authentication store. |
 | auth | depends | | Authentication for the MQTT broker. Note: Either this or the `auth_reference` has to be provided. |
 | auth.host | yes | | Hostname of the MQTT broker. |
 | auth.port | no | 1883 | Port of the MQTT broker. |
@@ -168,7 +314,6 @@ Todo: module-data, savedata.json
   "type": "mqtt",
   "start": true,
   "device": "sundavar",
-  "auth_reference": "",
   "topic_sub": "device/sundavar/controller/to/user",
   "topic_pub": "device/sundavar/controller/from/user",
   "auth": {
@@ -210,3 +355,5 @@ Todo: module-data, savedata.json
 
 ## Todo
 - Implement automatic restore of backups
+- Implement module for minecraft server usetime check
+- Proper way of configuring ssh-keys

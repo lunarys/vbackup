@@ -31,7 +31,7 @@ pub fn build_image(paths: &Paths, image_file: &str, image_name: &str) -> Result<
 }
 
 pub fn build_image_if_missing(paths: &Paths, image_file: &str, image_name: &str) -> Result<bool,String> {
-    if image_exists(image_name) {
+    if image_exists(image_name)? {
         return Ok(false);
     } else {
         return build_image(paths, image_file, image_name).map(|_| true);

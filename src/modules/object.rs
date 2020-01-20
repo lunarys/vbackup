@@ -87,7 +87,7 @@ pub struct TimeEntry {
 pub struct PathBase {
     #[serde(default="default_config_dir")]
     pub config_dir: String, // Here should be the configuration files
-    #[serde(default="default_tmp_dir")]
+    #[serde(default="default_save_dir")]
     pub save_dir: String, // Default base directory for saves
     pub timeframes_file: Option<String>, // File containing timeframe definitions
     #[serde(default="default_tmp_dir")]
@@ -136,7 +136,7 @@ impl Paths {
         }
     }
 
-    pub fn for_module(&self, name: &str, module_type: &str, original_path: &Option<String>, save_path_option: &Option<String>) -> ModulePaths {
+    pub fn for_module(&self, name: &str, module_type: &str, original_path: &Option<String>, save_path_option: &Option<String>, savedata_in_store: &Option<bool>) -> ModulePaths {
         let backup_path = if save_path_option.is_some() {
             String::from(save_path_option.as_ref().unwrap())
         } else {
@@ -149,7 +149,7 @@ impl Paths {
         let module_data_base = format!("{}/.module_data/{}", self.save_dir.as_str(), name);
         let module_data_dir = format!("{}/{}", module_data_base.as_str(), module_type);
 
-        let save_data = if self.savedata_in_store {
+        let save_data = if savedata_in_store.unwrap_or(self.savedata_in_store) {
             format!("{}/.savedata.json", backup_path.as_str())
         } else {
             format!("{}/savedata.json", module_data_base.as_str())

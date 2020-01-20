@@ -16,7 +16,7 @@ use SyncModule::*;
 pub fn get_module(name: &str) -> Result<SyncModule,String> {
     return Ok(match name.to_lowercase().as_str() {
         "duplicati" => Duplicati(duplicati::Duplicati::new_empty()),
-        "rsync" => Rsync(rsync::Rsync::new_empty()),
+        "rsync-ssh" => Rsync(rsync::Rsync::new_empty()),
         unknown => {
             let msg = format!("Unknown sync module: '{}'", unknown);
             error!("{}", msg);

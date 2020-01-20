@@ -73,7 +73,7 @@ fn main() {
     };
 
     let paths = Paths::from(base_paths);
-    let modules_paths = paths.for_module("test", "controller", &None, &None);
+    let modules_paths = paths.for_module("test", "controller", &None, &None, &Some(false));
 
     let mut controller = modules::controller::get_module("mqtt").unwrap();
     controller.init(&"test", &serde_json::from_str(controller_config).unwrap(), modules_paths, false, false).expect("Failed getting controller");

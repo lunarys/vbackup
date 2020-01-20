@@ -10,7 +10,7 @@ use serde_json::Value;
 pub fn init<'a>(args: &Arguments, paths: &'a Paths, config: &Configuration, check_config: &'a Option<Value>, reference: Reference) -> Result<Option<CheckModule<'a>>,String> {
     if check_config.is_some() {
         let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
-        let module_paths = paths.for_module(config.name.as_str(), "check", &config.original_path, &config.store_path);
+        let module_paths = paths.for_module(config.name.as_str(), "check", &config.original_path, &config.store_path, &config.savedata_in_store);
 
         let mut module = check::get_module(try_option!(check_type.as_str(), "Expected controller type as string"))?;
         module.init(config.name.as_str(), check_config.as_ref().unwrap(), module_paths, args.dry_run, args.no_docker, reference)?;

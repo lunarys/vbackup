@@ -132,7 +132,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
     for mut config in get_config_list(args, paths)? {
 
         // Get paths specifically for this module
-        let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
+        let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path, &config.savedata_in_store);
 
         // Only do something else if a backup is present in this configuration
         if config.backup.is_some() {
@@ -388,7 +388,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
     for mut config in get_config_list(args, paths)? {
 
         // Get paths specifically for this module
-        let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
+        let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path, &config.savedata_in_store);
 
         // Get savedata for this sync
         let mut savedata_result = get_savedata(module_paths.save_data.as_str());
@@ -642,8 +642,8 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
     for mut config in get_config_list(args, paths)? {
 
         // Get paths for both backup and sync module
-        let backup_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path);
-        let sync_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path);
+        let backup_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path, &config.savedata_in_store);
+        let sync_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path, &config.savedata_in_store);
 
         // Pre-formatted backup path (might be not configured if there is no backup)
         let backup_path = backup_paths.original_path.unwrap_or(String::from("Not configured"));

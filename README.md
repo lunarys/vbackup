@@ -32,14 +32,14 @@ such that the backup server is not started for each sync separately and can prof
 
 | Option | is flag | Default value | Description |
 |--------|------|:-------------:|-------------|
-| -n, --name | no | | Name of a specific configuration to run operation on |
-| -c, --config | no | /etc/vbackup/config.json | Specify the base configuration file |
-| --dry-run | yes | false | Do not actually perform any permanent changes |
-| -v, --verbose | yes | false | Enable verbose logging (Trace) |
-| -d, --debug | yes | false | Enable debug logging (Debug) |
-| -q, --quiet | yes | false | Disable info logging (Warn) |
-| -f, --force | yes | false | Disregard all constraints, forcing the run |
-| -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes and might affect resulting backup. Not tested thoroughly. |    
+| -n, --name | no | | Name of a specific configuration to run operation on. |
+| -c, --config | no | /etc/vbackup/config.json | Specify the base configuration file. |
+| --dry-run | yes | false | Do not perform any permanent changes, instead print what would be done. |
+| -v, --verbose | yes | false | Enable verbose logging (Loglevel: Trace). |
+| -d, --debug | yes | false | Enable debug logging (Loglevel: Debug). |
+| -q, --quiet | yes | false | Disable info logging (Loglevel: Warn). |
+| -f, --force | yes | false | Disregard all constraints, forcing the run. |
+| -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes and might affect the structure of the resulting backup. Not tested thoroughly. |    
 
 ## Configuration
 ### Base configuration
@@ -357,3 +357,4 @@ Todo: module-data, savedata.json
 - Implement automatic restore of backups
 - Implement module for minecraft server usetime check
 - Proper way of configuring ssh-keys
+- Proper checks if directories exist!

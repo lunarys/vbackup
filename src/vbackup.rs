@@ -11,7 +11,6 @@ use crate::modules::reporting::ReportingModule;
 
 use crate::{try_option, dry_run};
 
-use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 use std::path::Path;
 use std::time::SystemTime;
 use serde_json::Value;
@@ -20,49 +19,12 @@ use std::ops::Add;
 use core::borrow::Borrow;
 use chrono::{DateTime, Local};
 
-pub fn main() -> Result<(),String> {
-    let mut operation = String::new();
-    let mut args = Arguments {
-        dry_run: false,
-        verbose: false,
-        debug: false,
-        quiet: false,
-        force: false,
-        name: None,
-        base_config: String::from("/etc/vbackup/config.json"),
-        no_docker: false
-    };
-
-    {
-        let mut parser = ArgumentParser::new();
-        parser.set_description("Client to interact with a MQTT device controller");
-        parser.refer(&mut operation)
-            .add_argument("operation", Store, "Operation to perform (run,backup,sync,list)")
-            .required();
-        parser.refer(&mut args.name)
-            .add_option(&["-n", "--name"], StoreOption, "Name of the specific backup to run");
-        parser.refer(&mut args.base_config)
-            .add_option(&["-c", "--config"], Store, "Change base configuration file path");
-        parser.refer(&mut args.dry_run)
-            .add_option(&["--dry-run"], StoreTrue, "Print actions instead of performing them");
-        parser.refer(&mut args.verbose)
-            .add_option(&["-v", "--verbose", "--trace"], StoreTrue, "Print additional trace information");
-        parser.refer(&mut args.debug)
-            .add_option(&["-d", "--debug"], StoreTrue, "Print additional debug information");
-        parser.refer(&mut args.quiet)
-            .add_option(&["-q", "--quiet"], StoreTrue, "Only print warnings and errors");
-        parser.refer(&mut args.force)
-            .add_option(&["-f", "--force"], StoreTrue, "Force the run to disregard time constraints");
-        parser.refer(&mut args.no_docker)
-            .add_option(&["-b", "--bare", "--no-docker"], StoreTrue, "'Bare' run without using docker");
-        parser.parse_args_or_exit();
-    }
-
+pub fn main(args: Arguments) -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
     let paths = Paths::from(base_paths);
 
     let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
-    let mut reporter = match operation.as_str() {
+    let mut reporter = match args.operation.as_str() {
         "run" | "backup" | "sync" => {
             let reporter_config_opt = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))?;
             if let Some(reporter_config) = reporter_config_opt {
@@ -77,9 +39,9 @@ pub fn main() -> Result<(),String> {
     };
 
     // Only actually does something if run, backup or sync
-    reporter.report(None, operation.as_str());
+    reporter.report(None, args.operation.as_str());
 
-    let result = match operation.as_str() {
+    let result = match args.operation.as_str() {
         "run" => {
             let backup_result = backup_wrapper(&args, &paths, &timeframes, &reporter);
             if let Ok((original_size, backup_size)) = backup_result.as_ref() {

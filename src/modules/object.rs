@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 
 #[derive(Deserialize)]
 pub struct Arguments {
+    pub operation: String,
     pub dry_run: bool,
     pub verbose: bool,
     pub debug: bool,

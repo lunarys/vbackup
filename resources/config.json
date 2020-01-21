@@ -1,0 +1,10 @@
+{
+  "config_dir": "/etc/vbackup",
+  "save_dir": "/var/vbackup",
+  "timeframes_file": "/etc/vbackup/timeframes.json",
+  "tmp_dir": "/tmp/vbackup",
+  "auth_data_file": "/etc/vbackup/auth_data.json",
+  "savedata_in_store": false,
+  "reporting_file": "/etc/vbackup/reporting.json",
+  "docker_images": "/etc/vbackup/images"
+}

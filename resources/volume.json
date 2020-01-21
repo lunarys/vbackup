@@ -1,0 +1,57 @@
+{
+  "name": "my-important-volume",
+  "disabled": false,
+  "original_path": "important-volume",
+  "store_path": "/var/vbackup/my-important-volume",
+  "savedata_in_store": false,
+  "backup": {
+    "disabled": false,
+    "type": "tar7zip",
+    "config": {
+      "type": "tar7zip",
+      "encryption_key": "passw0rd"
+    },
+    "check": {
+      "type": "file-age"
+    },
+    "timeframes": [
+      {
+        "frame": "DAILY",
+        "amount": 5
+      }
+    ]
+  },
+  "sync": {
+    "disabled": false,
+    "type": "rsync-ssh",
+    "config": {
+      "type": "rsync-ssh",
+      "compress": false,
+      "path_prefix": "/home/foo",
+      "dirname": "my-backup-dir/sub-dir",
+      "host": {
+        "hostname": "sundavar.elda",
+        "port": 22222,
+        "user": "foo",
+        "password": "bar",
+        "ssh_key": "TODO",
+        "host_key": "TODO"
+      }
+    },
+    "controller": {
+      "type": "mqtt",
+      "start": true,
+      "device": "sundavar",
+      "auth": {
+        "host": "ebrithil.elda",
+        "port": 1883,
+        "user": "user",
+        "password": "hackme",
+        "qos": 2
+      }
+    },
+    "interval": {
+      "frame": "WEEKLY"
+    }
+  }
+}

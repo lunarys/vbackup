@@ -1,0 +1,38 @@
+{
+  "name": "documents",
+  "store_path": "/home/ju/Documents",
+  "sync": {
+    "type": "rsync-ssh",
+    "config": {
+      "compress": false,
+      "path_prefix": "/home/ilirea",
+      "dirname": "documents",
+      "host": {
+        "hostname": "sundavar.elda",
+        "port": 22222,
+        "user": "ilirea",
+        "password": "secret",
+        "ssh_key": "TODO",
+        "host_key": "TODO"
+      }
+    },
+    "check": {
+      "type": "file-age"
+    },
+    "controller": {
+      "type": "mqtt",
+      "start": true,
+      "device": "sundavar",
+      "auth": {
+        "host": "ebrithil.elda",
+        "port": 1883,
+        "user": "ilirea",
+        "password": "hackme",
+        "qos": 2
+      }
+    },
+    "interval": {
+      "frame": "WEEKLY"
+    }
+  }
+}

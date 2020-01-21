@@ -1,0 +1,11 @@
+{
+  "identifier": {
+    "hostname": "",
+    "port": "",
+    "user": "",
+    "password": "",
+    "fingerprint-rsa": "",
+    "fingerprint-pubkey": "",
+    "login-key": ""
+  }
+}

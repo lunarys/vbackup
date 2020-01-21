@@ -1,0 +1,27 @@
+{
+  "MINUTELY": {
+    "identifier": "MINUTELY",
+    "interval": 60,
+    "comment": "For testing purposes..."
+  },
+  "DAILY": {
+    "identifier": "DAILY",
+    "interval": 85800,
+    "comment": "10min tolerance substracted here"
+  },
+  "WEEKLY": {
+    "identifier": "WEEKLY",
+    "interval": 603900,
+    "comment": "15min tolerance substracted here"
+  },
+  "MONTHLY": {
+    "identifier": "MONTHLY",
+    "interval": 2628000,
+    "comment": "30min tolerance substracted here"
+  },
+  "CUSTOM": {
+    "identifier": "CUSTOM",
+    "interval": 1,
+    "comment": "Use this if a custom check is all that matters"
+  }
+}

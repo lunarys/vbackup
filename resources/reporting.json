@@ -1,0 +1,14 @@
+[
+  {
+    "type": "mqtt",
+    "base_topic": "device/user/vbackup",
+    "auth_reference": "",
+    "auth": {
+      "host": "mqtt-broker.local",
+      "port": 1883,
+      "user": "user",
+      "password": "hackme",
+      "qos": 2
+    }
+  }
+]

@@ -54,6 +54,16 @@ impl CommandWrapper {
         return Ok(());
     }
 
+    pub fn run_get_status_without_output(&mut self) -> Result<ExitStatus, String> {
+        let result = self.command.output();
+
+        if let Ok(output) = result {
+            return Ok(output.status);
+        } else {
+            return Err(format!("Failed executing command: {}", result.unwrap_err().to_string()))
+        }
+    }
+
     pub fn run_get_status(&mut self) -> Result<ExitStatus, String> {
         let mut process: Child = try_result!(self.spawn(), "Failed to start command execution");
         let exit_status: ExitStatus = try_result!(process.wait(), "Failed to run command");

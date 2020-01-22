@@ -23,11 +23,11 @@ pub fn init(args: &Arguments, paths: &Paths, config: &Configuration, controller_
 pub fn start(module: &Option<ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
         let result = module.as_ref().unwrap().begin()?;
-        if result {
+        /*if result {
             debug!("");
         } else {
             debug!("");
-        }
+        }*/
         return Ok(result);
     }
 

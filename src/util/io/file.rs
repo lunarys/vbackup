@@ -3,6 +3,7 @@ use crate::util::command::CommandWrapper;
 
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, Read};
+use std::fs;
 use std::fs::{OpenOptions, File, read_dir, metadata};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -15,12 +16,12 @@ pub fn write_with_perm(file_name: &str, mode: &str, to_write: &str, overwrite: b
         .create(true)
         .mode(try_result!(u32::from_str_radix(mode, 8), "Mode is not a number")) // Only sets mode when creating the file...
         .open(file_name);
-    let mut file: File = try_result!(file_result, "Could not open file");
+    let mut file: File = try_result!(file_result, format!("Could not open file '{}'", file_name));
 
     set_permission(file_name, mode)?;
 
-    try_result!(file.write_all(to_write.as_bytes()), "Could not write to file");
-    try_result!(file.flush(), "Could not flush file");
+    try_result!(file.write_all(to_write.as_bytes()), format!("Could not write to file '{}'", file_name));
+    try_result!(file.flush(), format!("Could not flush file '{}'", file_name));
 
     return Ok(());
 }
@@ -32,10 +33,10 @@ pub fn write(file_name: &str, content: &str, overwrite: bool) -> Result<(), Stri
         .write(true)
         .create(true)
         .open(file_name);
-    let mut file: File = try_result!(file_result, "Could not open file for writing");
+    let mut file: File = try_result!(file_result, format!("Could not open file '{}' for writing", file_name));
 
-    try_result!(file.write_all(content.as_bytes()), "Could not write to file");
-    try_result!(file.flush(), "Could not flush file");
+    try_result!(file.write_all(content.as_bytes()), format!("Could not write to file '{}'", file_name));
+    try_result!(file.flush(), format!("Could not flush file '{}'", file_name));
 
     return Ok(());
 }
@@ -46,10 +47,10 @@ pub fn read(file_name: &str) -> Result<String, String> {
         .write(false)
         .create(false)
         .open(file_name);
-    let mut file: File = try_result!(file_result, "Could not open file for reading");
+    let mut file: File = try_result!(file_result, format!("Could not open file '{}' for reading", file_name));
 
     let mut file_content = String::new();
-    try_result!(file.read_to_string(&mut file_content), "Could not read from file");
+    try_result!(file.read_to_string(&mut file_content), format!("Could not read from file '{}'", file_name));
 
     return Ok(file_content);
 }
@@ -58,7 +59,7 @@ pub fn write_if_change(file_name: &str, mode: Option<&str>, to_write: &str, over
     if exists(file_name) {
         let file_content = read(file_name)?;
         if file_content.eq(&to_write) {
-            debug!("Not writing file, content is as desired");
+            debug!("Not writing file '{}', content is as desired", file_name);
             return Ok(false);
         }
     }
@@ -87,6 +88,23 @@ pub fn set_permission(file_name: &str, mode: &str) -> Result<(),String> {
 
 pub fn exists(file_name: &str) -> bool {
     Path::new(file_name).exists()
+}
+
+pub fn create_dir_if_missing(dir_name: &str) -> Result<bool,String> {
+    let path = Path::new(dir_name);
+    if path.exists() {
+        if path.is_dir() {
+            return Ok(false);
+        } else {
+            return Err(format!("Could not create directory '{}': A file with this name already exists", dir_name));
+        }
+    } else {
+        if let Err(err) = fs::create_dir(path) {
+            return Err(format!("Could not create directory '{}': {}", dir_name, err));
+        } else {
+            return Ok(true);
+        }
+    }
 }
 
 pub fn list_in_dir(dir_name: &str) -> Result<Vec<PathBuf>, String> {

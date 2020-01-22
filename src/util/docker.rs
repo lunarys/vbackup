@@ -22,11 +22,12 @@ pub fn build_image(paths: &Paths, image_file: &str, image_name: &str) -> Result<
         // Set context for build (just tmp dir for now as none is really required...)
         .arg_string(paths.tmp_dir.clone());
 
-    let status = cmd.run_get_status()?;
+    debug!("Building docker image '{}' (Dockerfile='{}')", image_name, image_file);
+    let status = cmd.run_get_status_without_output()?;
     if status.success() {
         return Ok(());
     } else {
-        return Err(format!("Failed building the docker image (Code: {})", status.to_string()));
+        return Err(format!("Failed building the docker image ({})", status.to_string()));
     }
 }
 

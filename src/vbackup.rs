@@ -22,6 +22,9 @@ pub fn main(args: Arguments) -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
     let paths = Paths::from(base_paths);
 
+    file::create_dir_if_missing(paths.save_dir.as_str())?;
+    file::create_dir_if_missing(paths.tmp_dir.as_str())?;
+
     let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
     let mut reporter = match args.operation.as_str() {
         "run" | "backup" | "sync" => {

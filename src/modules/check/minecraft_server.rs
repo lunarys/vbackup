@@ -6,6 +6,7 @@ use crate::modules::check::Reference;
 
 use serde_json::Value;
 use serde::{Deserialize};
+use chrono::{Local, DateTime};
 
 pub struct MinecraftServer<'a> {
     bind: Option<Bind<'a>>
@@ -49,11 +50,11 @@ impl<'a> Check<'a> for MinecraftServer<'a> {
         return Ok(());
     }
 
-    fn check(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
         unimplemented!()
     }
 
-    fn update(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
         unimplemented!()
     }
 

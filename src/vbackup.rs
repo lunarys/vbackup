@@ -238,7 +238,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
             // If this point of the loop is reached, only additional check is left to run
             // The helper would check if there is a check module, but this is for more consistent log output
             if check_module.is_some() {
-                if check_helper::run(&check_module, timeframe, &last_backup)? {
+                if check_helper::run(&check_module, &current_time, timeframe, &last_backup)? {
                     // Do backup
                     debug!("Backup for '{}' is required in timeframe '{}' considering the additional check", config.name.as_str(), timeframe_ref.frame.as_str());
                 } else {
@@ -289,7 +289,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
             // Update check state
             trace!("Invoking state update for additional check in timeframe '{}'", frame.identifier.as_str());
-            if let Err(err) = check_helper::update(&check_module, frame, &entry_opt) {
+            if let Err(err) = check_helper::update(&check_module, &current_time, frame, &entry_opt) {
                 error!("State update for additional check in timeframe '{}' failed ({})", frame.identifier.as_str(), err);
             }
 
@@ -445,7 +445,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
         // Run additional check
         if check_module.is_some() {
-            if check_helper::run(&check_module, timeframe, &last_sync)? {
+            if check_helper::run(&check_module, &current_time, timeframe, &last_sync)? {
                 // Do sync
                 debug!("Sync for '{}' is required considering the additional check", config.name.as_str());
             } else {
@@ -496,7 +496,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
         // Update internal state of check
         trace!("Invoking state update for additional check in timeframe '{}'", timeframe.identifier.as_str());
-        if let Err(err) = check_helper::update(&check_module, timeframe, &last_sync) {
+        if let Err(err) = check_helper::update(&check_module, &current_time, timeframe, &last_sync) {
             error!("State update for additional check in timeframe '{}' failed ({})", timeframe.identifier.as_str(), err);
         }
 

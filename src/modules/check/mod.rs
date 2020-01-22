@@ -16,6 +16,7 @@ pub enum CheckModule<'a> {
 }
 
 use CheckModule::*;
+use chrono::{DateTime, Local};
 
 pub fn get_module(name: &str) -> Result<CheckModule, String> {
     return Ok(match name.to_lowercase().as_str() {
@@ -34,11 +35,11 @@ impl<'a> Check<'a> for CheckModule<'a> {
         unimplemented!()
     }
 
-    fn check(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
         unimplemented!()
     }
 
-    fn update(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
         unimplemented!()
     }
 

@@ -14,8 +14,8 @@ pub trait Backup<'a> {
 
 pub trait Check<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String>;
-    fn check(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String>;
-    fn update(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String>;
+    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String>;
+    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
 }
 

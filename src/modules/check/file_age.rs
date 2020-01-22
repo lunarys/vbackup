@@ -9,7 +9,7 @@ use serde::{Deserialize};
 use std::process::exit;
 use std::time::{SystemTime, Duration};
 use std::convert::TryFrom;
-use chrono::Local;
+use chrono::{Local, DateTime};
 
 pub struct FileAge<'a> {
     bind: Option<Bind<'a>>
@@ -46,7 +46,7 @@ impl<'a> Check<'a> for FileAge<'a> {
         return Ok(());
     }
 
-    fn check(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
 
         let last_run = if last.is_none() {
@@ -104,7 +104,7 @@ impl<'a> Check<'a> for FileAge<'a> {
         }
     }
 
-    fn update(&self, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
         let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
         // This check is stateless, so no update is required
         return Ok(())

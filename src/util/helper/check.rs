@@ -6,6 +6,7 @@ use crate::modules::check::Reference;
 use crate::try_option;
 
 use serde_json::Value;
+use chrono::{DateTime, Local};
 
 pub fn init<'a>(args: &Arguments, paths: &'a Paths, config: &Configuration, check_config: &'a Option<Value>, reference: Reference) -> Result<Option<CheckModule<'a>>,String> {
     if check_config.is_some() {
@@ -21,23 +22,23 @@ pub fn init<'a>(args: &Arguments, paths: &'a Paths, config: &Configuration, chec
     }
 }
 
-pub fn run(module: &Option<CheckModule>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool,String> {
+pub fn run(module: &Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool,String> {
     if module.is_some() {
-        let result = module.as_ref().unwrap().check(frame, last)?;
-        if result {
-            debug!("");
+        let result = module.as_ref().unwrap().check(time, frame, last)?;
+        /*if result {
+            debug!("TODO: check_helper debug");
         } else {
-            debug!("");
-        }
+            debug!("TODO: check_helper debug");
+        }*/
         return Ok(result);
     }
 
     return Ok(true);
 }
 
-pub fn update(module: &Option<CheckModule>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(),String> {
+pub fn update(module: &Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(),String> {
     if module.is_some() {
-        module.as_ref().unwrap().update(frame, last)?;
+        module.as_ref().unwrap().update(time, frame, last)?;
     }
 
     return Ok(());

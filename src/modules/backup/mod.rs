@@ -25,18 +25,26 @@ pub fn get_module(name: &str) -> Result<BackupModule, String> {
 
 impl<'a> Backup<'a> for BackupModule<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
-        unimplemented!()
+        match self {
+            Tar7Zip(backup) => backup.init(name, config_json, paths, dry_run, no_docker)
+        }
     }
 
     fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
-        unimplemented!()
+        match self {
+            Tar7Zip(backup) => backup.backup(time, time_frames)
+        }
     }
 
     fn restore(&self) -> Result<(), String> {
-        unimplemented!()
+        match self {
+            Tar7Zip(backup) => backup.restore()
+        }
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        unimplemented!()
+        match self {
+            Tar7Zip(backup) => backup.clear()
+        }
     }
 }

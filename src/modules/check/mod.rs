@@ -32,18 +32,30 @@ pub fn get_module(name: &str) -> Result<CheckModule, String> {
 
 impl<'a> Check<'a> for CheckModule<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String> {
-        unimplemented!()
+        match self {
+            FileAge(check) => check.init(name, config_json, paths, dry_run, no_docker, reference),
+            MinecraftServer(check) => check.init(name, config_json, paths, dry_run, no_docker, reference)
+        }
     }
 
     fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
-        unimplemented!()
+        match self {
+            FileAge(check) => check.check(time, frame, last),
+            MinecraftServer(check) => check.check(time, frame, last)
+        }
     }
 
     fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
-        unimplemented!()
+        match self {
+            FileAge(check) => check.update(time, frame, last),
+            MinecraftServer(check) => check.update(time, frame, last)
+        }
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        unimplemented!()
+        match self {
+            FileAge(check) => check.clear(),
+            MinecraftServer(check) => check.clear()
+        }
     }
 }

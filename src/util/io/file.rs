@@ -90,7 +90,7 @@ pub fn exists(file_name: &str) -> bool {
     Path::new(file_name).exists()
 }
 
-pub fn create_dir_if_missing(dir_name: &str) -> Result<bool,String> {
+pub fn create_dir_if_missing(dir_name: &str, also_parent: bool) -> Result<bool,String> {
     let path = Path::new(dir_name);
     if path.exists() {
         if path.is_dir() {
@@ -99,7 +99,12 @@ pub fn create_dir_if_missing(dir_name: &str) -> Result<bool,String> {
             return Err(format!("Could not create directory '{}': A file with this name already exists", dir_name));
         }
     } else {
-        if let Err(err) = fs::create_dir(path) {
+        let result = if also_parent {
+            fs::create_dir_all(path)
+        } else {
+            fs::create_dir(path)
+        };
+        if let Err(err) = result {
             return Err(format!("Could not create directory '{}': {}", dir_name, err));
         } else {
             return Ok(true);

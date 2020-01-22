@@ -1,4 +1,4 @@
-use crate::{change_error, try_result};
+use crate::{change_error, try_result, dry_run};
 
 use std::process::{Command, Child, ExitStatus, Output};
 
@@ -41,7 +41,7 @@ impl CommandWrapper {
 
     pub fn run_or_dry_run(&mut self, dry_run: bool, name: &str) -> Result<(), String> {
         if dry_run {
-            info!("DRY-RUN: {}", self.to_string());
+            dry_run!(self.to_string());
         } else {
             let exit_status = self.run_get_status()?;
             if !exit_status.success() {

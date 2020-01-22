@@ -141,14 +141,20 @@ impl<'a> Rsync<'a> {
     fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
         let bound = try_option!(self.bind.as_ref(), "Rsync is not bound");
 
+        if !bound.dry_run {
+            file::create_dir_if_missing(bound.paths.module_data_dir.as_str(), true)?;
+        }
+
         let known_hosts_file_actual = format!("{}/known_host", &bound.paths.module_data_dir);
         let identity_file_actual = format!("{}/identity", &bound.paths.module_data_dir);
 
         // Known host is required anyway, write it now
-        file::write_if_change(&known_hosts_file_actual,
-                              Some("600"),
-                              &bound.ssh_config.host_key,
-                              true)?;
+        if !bound.dry_run {
+            file::write_if_change(&known_hosts_file_actual,
+                                  Some("600"),
+                                  &bound.ssh_config.host_key,
+                                  true)?;
+        }
 
         // Store path of known_host and identity relative to docker
         let (known_host_file, identity_file) = if bound.no_docker {
@@ -166,7 +172,7 @@ impl<'a> Rsync<'a> {
                 .arg_str("--rm")
                 .arg_str("--name=rsync-vbackup-tmp")
                 .arg_str("--env=SSHPASS")
-                .arg_string(format!("--volume='{}:{}'", &bound.paths.store_path, &bound.name));
+                .arg_string(format!("--volume='{}:/{}'", &bound.paths.store_path, &bound.name));
 
             // Volume for authentication files
             command.arg_string(format!("--volume='{}:{}'", &bound.paths.module_data_dir, "/module"));
@@ -183,10 +189,12 @@ impl<'a> Rsync<'a> {
         let ssh_option_end = format!("-oUserKnownHostsFile={} {}'", known_host_file, bound.ssh_config.port);
         if bound.ssh_config.ssh_key.is_some() {
             // SSH private key needs to be written to a file
-            file::write_if_change(&identity_file_actual,
-                                  Some("600"),
-                                  bound.ssh_config.ssh_key.as_ref().unwrap(),
-                                  true)?;
+            if !bound.dry_run {
+                file::write_if_change(&identity_file_actual,
+                                      Some("600"),
+                                      bound.ssh_config.ssh_key.as_ref().unwrap(),
+                                      true)?;
+            }
 
             // Now it can be used in the command
             command.arg_string(format!("-e 'ssh -oIdentityFile={} {}", identity_file, ssh_option_end));

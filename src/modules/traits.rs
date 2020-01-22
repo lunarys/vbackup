@@ -3,10 +3,11 @@ use crate::modules::check::Reference;
 
 use serde_json::Value;
 use std::time::SystemTime;
+use chrono::{DateTime, Local};
 
 pub trait Backup<'a> {
     fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String>;
-    fn backup(&self, time: &SystemTime, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String>;
+    fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
 }

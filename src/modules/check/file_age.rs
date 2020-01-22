@@ -92,9 +92,8 @@ impl<'a> Check<'a> for FileAge<'a> {
         debug!("Newest file is '{}' and was changed at '{}'", filename, timestamp_str);
 
         let file_timestamp: i64 = try_result!(timestamp_str.parse(), "Could not parse timestamp from string");
-        let last_run_timestamp = chrono::DateTime::<Local>::from(last_run.timestamp.clone()).timestamp();
 
-        if last_run_timestamp.lt(&file_timestamp) {
+        if last_run.timestamp < file_timestamp {
             // A file was written after last run
             info!("Newest file is newer that last run, run now");
             return Ok(true);

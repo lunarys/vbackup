@@ -9,6 +9,7 @@ use serde_json::Value;
 use serde::{Deserialize};
 use std::fs::{copy, rename, remove_file};
 use std::time::SystemTime;
+use chrono::{Local, DateTime};
 
 pub struct Tar7Zip<'a> {
     bind: Option<Bind<'a>>
@@ -61,7 +62,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         return Ok(());
     }
 
-    fn backup(&self, time: &SystemTime, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
+    fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
         let bound: &Bind = try_option!(self.bind.as_ref(), "Backup is not bound");
 
         let mut cmd = if bound.no_docker {

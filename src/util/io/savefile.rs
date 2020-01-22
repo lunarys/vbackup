@@ -8,11 +8,10 @@ use std::fs::remove_file;
 use std::time::SystemTime;
 use chrono::{DateTime, Local};
 
-pub fn format_filename(time: &SystemTime, timeframe: &TimeFrameReference, name: &str, suffix_opt: Option<&str>, extension_opt: Option<&str>) -> String {
+pub fn format_filename(time: &DateTime<Local>, timeframe: &TimeFrameReference, name: &str, suffix_opt: Option<&str>, extension_opt: Option<&str>) -> String {
     // Output: Name for savefile
 
-    let date = DateTime::<Local>::from(time.clone());
-    let iso_date = date.format("%Y-%m-%d_%H:%M").to_string(); // :%S for seconds?
+    let iso_date = time.format("%Y-%m-%d_%H:%M:%S").to_string();
 
     let suffix = suffix_opt.unwrap_or("backup");
 

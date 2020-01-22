@@ -12,12 +12,11 @@ use crate::modules::reporting::ReportingModule;
 use crate::{try_option, dry_run};
 
 use std::path::Path;
-use std::time::SystemTime;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Add;
 use core::borrow::Borrow;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Duration};
 
 pub fn main(args: Arguments) -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
@@ -175,7 +174,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     let mut module: BackupModule = modules::backup::get_module(backup_config.backup_type.as_str())?;
 
     // Prepare current timestamp (for consistency) and queue of timeframes for backup
-    let current_time = SystemTime::now();
+    let current_time : DateTime<Local> = chrono::Local::now();
     let mut queue_refs: Vec<&TimeFrameReference> = vec![];
     let mut queue_frame_entry: Vec<(&TimeFrame, Option<&TimeEntry>)> = vec![];
 
@@ -222,7 +221,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
             if last_backup.is_some() {
 
                 // Compare elapsed time since last backup and the configured timeframe
-                if last_backup.unwrap().timestamp.add(timeframe.interval).lt(&current_time) {
+                if last_backup.unwrap().timestamp + timeframe.interval < current_time.timestamp() {
                     // do sync
                     debug!("Backup for '{}' is required in timeframe '{}' considering the interval only", config.name.as_str(), timeframe_ref.frame.as_str());
                 } else {
@@ -285,10 +284,6 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     // Update internal state of check module and savedata
     if backup_result.is_ok() {
 
-        // Write timestamp and nicely formatted time to savedata
-        let time_this_save = current_time.clone();
-        let date_this_save = DateTime::<Local>::from(time_this_save.clone());
-
         // Update needs to be done for all active timeframes
         for (frame, entry_opt) in queue_frame_entry {
 
@@ -299,18 +294,17 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
             }
 
             // Estimate the time of the next required backup (only considering timeframes)
-            let time_next_save = current_time.clone().add(frame.interval);
-            let date_next_save = DateTime::<Local>::from(time_next_save.clone());
+            let next_save = current_time.clone().add(Duration::seconds(frame.interval));
 
             // Update savedata
             savedata.lastsave.insert(frame.identifier.clone(), TimeEntry {
-                timestamp: time_this_save.clone(),
-                date: Some(time_format(&date_this_save))
+                timestamp: current_time.timestamp(),
+                date: Some(time_format(&current_time))
             });
 
             savedata.nextsave.insert(frame.identifier.clone(), TimeEntry {
-                timestamp: time_next_save.clone(),
-                date: Some(time_format(&date_next_save))
+                timestamp: next_save.timestamp(),
+                date: Some(time_format(&next_save))
             });
         }
     } else {
@@ -415,7 +409,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     let mut module: SyncModule = modules::sync::get_module(sync_config.sync_type.as_str())?;
 
     // Prepare current timestamp and get timestamp of last backup + referenced timeframe
-    let current_time = SystemTime::now();
+    let current_time: DateTime<Local> = chrono::Local::now();
     let last_sync = savedata.lastsync.get(&sync_config.interval.frame);
     let timeframe: &TimeFrame = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
 
@@ -435,7 +429,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
         if last_sync.is_some() {
 
             // Compare elapsed time since last sync and the configured timeframe
-            if last_sync.unwrap().timestamp.add(timeframe.interval).lt(&current_time) {
+            if last_sync.unwrap().timestamp + timeframe.interval < current_time.timestamp() {
                 // do sync
                 debug!("Sync for '{}' is required considering the timeframe '{}' only", config.name.as_str(), timeframe.identifier.as_str());
             } else {
@@ -507,10 +501,9 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
         }
 
         // Update save data
-        let date = DateTime::<Local>::from(current_time.clone());
         savedata.lastsync.insert(timeframe.identifier.clone(), TimeEntry {
-            timestamp: current_time,
-            date: Some(time_format(&date))
+            timestamp: current_time.timestamp(),
+            date: Some(time_format(&current_time))
         });
     } else {
         error!("Sync failed, cleaning up");

@@ -63,7 +63,7 @@ pub type TimeFrames = HashMap<String, TimeFrame>;
 #[derive(Deserialize)]
 pub struct TimeFrame {
     pub identifier: String,
-    pub interval: Duration,
+    pub interval: i64,
 }
 
 fn default_usize_1() -> usize { 1 }
@@ -80,7 +80,7 @@ pub struct SaveData {
 #[derive(Deserialize,Serialize)]
 pub struct TimeEntry {
     // TODO: Maybe also add key here with flatten thingy or so
-    pub timestamp: SystemTime,
+    pub timestamp: i64,
     pub date: Option<String> // TODO: Is there a better data type?
 }
 

@@ -95,14 +95,14 @@ impl<'a> Controller<'a> for MqttController {
             true
         };
 
-        debug!("MQTT controller start run is done");
+        trace!("MQTT controller start run is done");
         return Ok(result);
     }
 
     fn end(&self) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "MQTT controller could not end, as it is not bound");
 
-        info!("MQTT controller end run for device '{}' (start={})", bound.config.device, bound.config.start);
+        debug!("MQTT controller end run for device '{}'", bound.config.device);
 
         let qos = bound.mqtt_config.qos;
         let topic_pub = get_topic_pub(&bound.config, &bound.mqtt_config);
@@ -114,7 +114,7 @@ impl<'a> Controller<'a> for MqttController {
             true
         };
 
-        debug!("MQTT controller end run is done");
+        trace!("MQTT controller end run is done");
         return Ok(result);
     }
 

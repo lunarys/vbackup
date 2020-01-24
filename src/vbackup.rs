@@ -322,7 +322,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
                 error!("Could not update savedata for '{}' backup ({})", config.name.as_str(), err);
             }
         } else {
-            dry_run!(format!("Updating savedata ({})", save_data_path.as_str()));
+            dry_run!(format!("Updating savedata: {}", save_data_path.as_str()));
         }
     }
 
@@ -509,7 +509,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
             date: Some(time_format(&current_time))
         });
     } else {
-        error!("Sync failed, cleaning up");
+        trace!("Sync failed, cleaning up");
     }
 
     // Run controller end (result is irrelevant here)
@@ -525,7 +525,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
                 error!("Could not update savedata for '{}' sync ({})", config.name.as_str(), err);
             }
         } else {
-            dry_run!(format!("Updating savedata ({})", save_data_path.as_str()));
+            dry_run!(format!("Updating savedata: {}", save_data_path.as_str()));
         }
     }
 

@@ -38,11 +38,11 @@ pub fn start(module: &Option<ControllerModule>) -> Result<bool,String> {
 pub fn end(module: &Option<ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
         let result = module.as_ref().unwrap().end()?;
-        if result {
+        /*if result {
             debug!("");
         } else {
             debug!("");
-        }
+        }*/
         return Ok(result);
     }
 

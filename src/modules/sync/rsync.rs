@@ -109,8 +109,8 @@ impl<'a> Sync<'a> for Rsync<'a> {
         let bound = try_option!(self.bind.as_ref(), "Rsync sync is not bound, it can not be used for syncing");
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("'{}'", &bound.sync_from))
-            .arg_string(format!("'{}'", &bound.sync_to));
+        command.arg_string(format!("{}", &bound.sync_from))
+            .arg_string(format!("{}", &bound.sync_to));
 
         command.run_or_dry_run(bound.dry_run, "rsync backup")?;
 
@@ -121,8 +121,8 @@ impl<'a> Sync<'a> for Rsync<'a> {
         let bound = try_option!(self.bind.as_ref(), "Rsync is not bound, it can not be used for restoring");
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("'{}'", &bound.sync_to))
-            .arg_string(format!("'{}'", &bound.sync_from));
+        command.arg_string(format!("{}", &bound.sync_to))
+            .arg_string(format!("{}", &bound.sync_from));
 
         command.run_or_dry_run(bound.dry_run, "rsync restore")?;
 
@@ -172,10 +172,10 @@ impl<'a> Rsync<'a> {
                 .arg_str("--rm")
                 .arg_str("--name=rsync-vbackup-tmp")
                 .arg_str("--env=SSHPASS")
-                .arg_string(format!("--volume='{}:/{}'", &bound.paths.store_path, &bound.name));
+                .arg_string(format!("--volume={}:/{}", &bound.paths.store_path, &bound.name));
 
             // Volume for authentication files
-            command.arg_string(format!("--volume='{}:{}'", &bound.paths.module_data_dir, "/module"));
+            command.arg_string(format!("--volume={}:{}", &bound.paths.module_data_dir, "/module"));
 
             // End docker command
             command.arg_str("vbackup-rsync"); // Docker image name
@@ -186,7 +186,8 @@ impl<'a> Rsync<'a> {
         };
 
         // Authentication: password or private key
-        let ssh_option_end = format!("-oUserKnownHostsFile={} {}'", known_host_file, bound.ssh_config.port);
+        command.arg_str("-e");
+        let ssh_option_end = format!("-oUserKnownHostsFile={} -oCheckHostIp=no -p {}", known_host_file, bound.ssh_config.port);
         if bound.ssh_config.ssh_key.is_some() {
             // SSH private key needs to be written to a file
             if !bound.dry_run {
@@ -197,10 +198,10 @@ impl<'a> Rsync<'a> {
             }
 
             // Now it can be used in the command
-            command.arg_string(format!("-e 'ssh -oIdentityFile={} {}", identity_file, ssh_option_end));
+            command.arg_string(format!("ssh -oIdentityFile={} {}", identity_file, ssh_option_end));
         } else if bound.ssh_config.password.is_some() {
             // Use sshpass to read password as environment variable
-            command.arg_string(format!("-e 'sshpass -e {}", ssh_option_end));
+            command.arg_string(format!("sshpass -e ssh {}", ssh_option_end));
             command.env("SSHPASS", bound.ssh_config.password.as_ref().unwrap());
         }
 

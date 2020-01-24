@@ -23,7 +23,7 @@ pub fn build_image(paths: &Paths, image_file: &str, image_name: &str) -> Result<
         .arg_string(paths.tmp_dir.clone());
 
     debug!("Building docker image '{}' (Dockerfile='{}')", image_name, image_file);
-    let status = cmd.run_get_status_without_output()?;
+    let status = cmd.run_get_status()?;
     if status.success() {
         return Ok(());
     } else {

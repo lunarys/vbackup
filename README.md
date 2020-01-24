@@ -180,8 +180,8 @@ Default file: `/etc/vbackup/auth_data.json`
     "port": 22,
     "user": "foo",
     "password": "hackme",
-    "ssh_key": "TODO",
-    "host_key": "TODO",
+    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...",
+    "host_key": "[my-ssh-server.local]:22 ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMjDsazoYSf3uTT5G8YPqGJq3Hgx/YmUdCDdemWOWg+H",
     "fingerprint_rsa": "TODO"
   }, 
   "another_login_mqtt": {
@@ -238,8 +238,8 @@ Todo: module-data, savedata.json
     "port": 22,
     "user": "foo",
     "password": "bar",
-    "ssh_key": "TODO",
-    "host_key": "TODO"
+    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...",
+    "host_key": "[my-ssh-server.local]:22 ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMjDsazoYSf3uTT5G8YPqGJq3Hgx/YmUdCDdemWOWg+H"
   }
 }
 ```
@@ -272,7 +272,7 @@ Todo: module-data, savedata.json
     "port": "22",
     "user": "foo",
     "password": "bar",
-    "ssh_key": "TODO",
+    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...",
     "fingerprint_rsa": "TODO"
   },
   "smart_retention": true,
@@ -347,7 +347,7 @@ Todo: module-data, savedata.json
     "host": "mqtt-broker.local",
     "port": 1883,
     "user": "user",
-    "password": "hackme,"
+    "password": "hackme",
     "qos": 2
   }
 }

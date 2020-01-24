@@ -11,7 +11,7 @@ use chrono::{DateTime, Local};
 pub fn format_filename(time: &DateTime<Local>, timeframe: &TimeFrameReference, name: &str, suffix_opt: Option<&str>, extension_opt: Option<&str>) -> String {
     // Output: Name for savefile
 
-    let iso_date = time.format("%Y-%m-%d_%H:%M:%S").to_string();
+    let iso_date = time.format("%Y-%m-%d_%H-%M-%S").to_string();
 
     let suffix = suffix_opt.unwrap_or("backup");
 

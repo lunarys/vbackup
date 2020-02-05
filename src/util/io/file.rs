@@ -4,7 +4,7 @@ use crate::util::command::CommandWrapper;
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, Read};
 use std::fs;
-use std::fs::{OpenOptions, File, read_dir, metadata};
+use std::fs::{OpenOptions, File, read_dir, metadata, remove_file};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -71,6 +71,19 @@ pub fn write_if_change(file_name: &str, mode: Option<&str>, to_write: &str, over
     }
 
     return Ok(true);
+}
+
+pub fn checked_remove(file_name: &str) -> Result<bool, String> {
+    let path = Path::new(file_name);
+    if path.exists() {
+        if let Err(err) = remove_file(path) {
+            return Err(format!("Could not remove file ({})", err.to_string()));
+        } else {
+            return Ok(true);
+        }
+    } else {
+        return Ok(false);
+    }
 }
 
 pub fn set_permission(file_name: &str, mode: &str) -> Result<(),String> {

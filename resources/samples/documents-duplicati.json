@@ -1,0 +1,42 @@
+{
+  "name": "documents-duplicati",
+  "store_path": "/home/ju/Documents",
+  "sync": {
+    "type": "duplicati",
+    "config": {
+      "encryption_key": "supersecure",
+      "directory_prefix": "/home/foo",
+      "directory": "documents-duplicati",
+      "auth": {
+        "hostname": "ilirea.elda",
+        "port": 22222,
+        "user": "foo",
+        "host_key": "[ilirea.elda]:22222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZff7FihzerO07wxa1DDNdsADpU9urbR7DlPdYG5aBH",
+	    "fingerprint": "ssh-rsa 2048 4d:fc:4e:4c:c7:b4:1f:78:f6:1f:42:7b:56:69:c1:85",
+	    "password": "pass"
+      },
+      "smart_retention": false,
+      "block_size": "200kb",
+      "file_size": "100mb",
+      "keep_versions": 2
+    },
+    "check": {
+      "type": "file-age"
+    },
+    "controller": {
+      "type": "mqtt",
+      "start": true,
+      "device": "sundavar",
+      "auth": {
+        "host": "ilirea.elda",
+        "port": 1883,
+        "user": "ilirea",
+        "password": "hackme",
+        "qos": 2
+      }
+    },
+    "interval": {
+      "frame": "WEEKLY"
+    }
+  }
+}

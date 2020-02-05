@@ -26,9 +26,9 @@ struct Bind<'a> {
 
 #[derive(Deserialize)]
 struct Configuration {
-    #[serde(default="default_to_remote")]
+    #[serde(default="default_true")]
     to_remote: bool,
-    #[serde(default="default_compress")]
+    #[serde(default="default_false")]
     compress: bool,
     path_prefix: Option<String>,
     dirname: String,
@@ -37,8 +37,8 @@ struct Configuration {
     host_reference: Option<String>
 }
 
-fn default_to_remote() -> bool { true }
-fn default_compress() -> bool { false }
+fn default_true() -> bool { true }
+fn default_false() -> bool { false }
 
 #[derive(Deserialize)]
 struct SshConfig {

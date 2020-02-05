@@ -1,0 +1,36 @@
+{
+  "name": "documents",
+  "store_path": "/home/ju/Documents",
+  "sync": {
+    "type": "rsync-ssh",
+    "config": {
+      "compress": false,
+      "dirname": "documents",
+      "host": {
+        "hostname": "ilirea.elda",
+        "port": 22222,
+        "user": "foo",
+        "host_key": "[ilirea.elda]:22222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZff7FihzerO07wxa1DDNdsADpU9urbR7DlPdYG5aBH",
+	    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACChgnJydSPWYRFRDFrVZ0aSTIL6XRMJQjAwkF3BosVgAAAAAJDCZZyswmWc\nrAAAAAtzc2gtZWQyNTUxOQAAACChgnJydSPWYRFRDFrVZ0aSTIL6XRMJQjAwkF3BosVgAA\nAAAECz6AfBIkw6iB6kkP5dFkrTJOnY4YWALnjO1VMgZMSLYaGCcnJ1I9ZhEVEMWtVnRpJM\ngvpdEwlCMDCQXcGixWAAAAAACWp1QElsaXJlYQECAwQ=\n-----END OPENSSH PRIVATE KEY-----\n"
+      }
+    },
+    "check": {
+      "type": "file-age"
+    },
+    "controller": {
+      "type": "mqtt",
+      "start": true,
+      "device": "sundavar",
+      "auth": {
+        "host": "ilirea.elda",
+        "port": 1883,
+        "user": "ilirea",
+        "password": "hackme",
+        "qos": 2
+      }
+    },
+    "interval": {
+      "frame": "WEEKLY"
+    }
+  }
+}

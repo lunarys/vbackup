@@ -3,7 +3,7 @@ use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 
-use crate::{try_result,try_option};
+use crate::{try_result,try_option,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -53,7 +53,7 @@ struct Authentication {
     user: String,
     password: Option<String>,
     ssh_key: Option<String>,
-    fingerprint_rsa: String
+    fingerprint: String
 }
 
 impl<'a> Duplicati<'a> {
@@ -95,9 +95,9 @@ impl<'a> Sync<'a> for Duplicati<'a> {
 
         // Add source and destination
         command.arg_str("backup");
-        command.arg_string(format!("'{}'", get_connection_uri(&bound.config, &bound.auth)));
+        command.arg_string(format!("{}", get_connection_uri(&bound.config, &bound.auth)));
         if bound.no_docker {
-            command.arg_string(format!("'{}'", &bound.paths.store_path));
+            command.arg_string(format!("{}", &bound.paths.store_path));
         } else {
             command.arg_str("/volume");
         }
@@ -107,7 +107,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
 
         // Add retention options
         if bound.config.smart_retention {
-            command.arg_string(format!("--retention-policy='{}'", bound.config.retention_policy));
+            command.arg_string(format!("--retention-policy={}", bound.config.retention_policy));
         } else {
             command.arg_string(format!("--keep-versions={}", bound.config.keep_versions));
         }
@@ -116,7 +116,18 @@ impl<'a> Sync<'a> for Duplicati<'a> {
         command.arg_str("--compression-module=zip");
         command.arg_str("--encryption-module=aes");
 
-        command.run_or_dry_run(bound.dry_run, "duplicati backup")?;
+        if bound.dry_run {
+            dry_run!(command.to_string());
+        } else {
+            let status = command.run_get_status()?;
+            if let Some(code) = status.code() {
+                if code != 0 && code != 1 {
+                    let msg = format!("Exit code indicates failure of duplicati backup");
+                    error!("{}", msg);
+                    return Err(msg);
+                }
+            }
+        }
 
         debug!("Duplicati sync for {} is done", bound.name);
         Ok(())
@@ -132,7 +143,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
             let mut command = get_base_cmd(bound.no_docker, &bound.paths);
 
             command.arg_str("repair");
-            command.arg_string(format!("'{}'", get_connection_uri(&bound.config, &bound.auth)));
+            command.arg_string(format!("{}", get_connection_uri(&bound.config, &bound.auth)));
 
             add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
 
@@ -144,16 +155,16 @@ impl<'a> Sync<'a> for Duplicati<'a> {
             let mut command = get_base_cmd(bound.no_docker, &bound.paths);
 
             command.arg_str("restore");
-            command.arg_string(format!("'{}'", get_connection_uri(&bound.config, &bound.auth)));
-            command.arg_str("'*'");
+            command.arg_string(format!("{}", get_connection_uri(&bound.config, &bound.auth)));
+            command.arg_str("*");
 
             add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
 
             command.arg_str("--restore-permission=true");
             if bound.no_docker {
-                command.arg_string(format!("--restore-path='{}'", &bound.paths.store_path));
+                command.arg_string(format!("--restore-path={}", &bound.paths.store_path));
             } else {
-                command.arg_str("--restore-path='/volume'");
+                command.arg_str("--restore-path=/volume");
             }
 
             command.run_or_dry_run(bound.dry_run, "duplicati restore")?;
@@ -181,12 +192,12 @@ fn get_base_cmd(no_docker: bool, paths: &ModulePaths) -> CommandWrapper {
         let mut command = CommandWrapper::new("docker");
         command.arg_str("run")
             .arg_str("--rm")
-            .arg_str("--name='vbackup-duplicati-tmp'")
-            .arg_string(format!("--volume='{}:/volume'", original_path))
-            .arg_string(format!("--volume='{}:/module'", module_data))
-            .arg_str("-e AUTH_USERNAME")
-            .arg_str("-e AUTH_PASSWORD")
-            .arg_str("-e PASSPHRASE")
+            .arg_str("--name=vbackup-duplicati-tmp")
+            .arg_string(format!("--volume={}:/volume", original_path))
+            .arg_string(format!("--volume={}:/module", module_data))
+            .arg_str("--env=AUTH_USERNAME")
+            .arg_str("--env=AUTH_PASSWORD")
+            .arg_str("--env=PASSPHRASE")
             .arg_str("duplicati/duplicati")
             .arg_str("duplicati-cli");
         return command;
@@ -213,7 +224,7 @@ fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Config
     }
 
     // SSH fingerprint of host is required to securely connect
-    command.arg_string(format!("--ssh-fingerprint='{}'", &auth.fingerprint_rsa));
+    command.arg_string(format!("--ssh-fingerprint={}", &auth.fingerprint));
 
     // Do not read input from console in order to prevent blocking by waiting
     command.arg_str("--disable-module=console-password-input");
@@ -230,26 +241,31 @@ fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Config
 
     // Set dbpath (distinguish docker and no-docker run)
     command.arg_string(if no_docker {
-        format!("--dbpath='{}/db/{}.sqlite'", &paths.module_data_dir, name)
+        format!("--dbpath={}/db/{}.sqlite", &paths.module_data_dir, name)
     } else {
-        format!("--dbpath='/module/db/{}.sqlite'", name)
+        format!("--dbpath=/module/db/{}.sqlite", name)
     });
 
     // SSH key or password options
+    let identity_file_actual = format!("{}/identity", &paths.module_data_dir);
     if auth.ssh_key.is_some() {
-        let identity_file_actual = format!("{}/identity", &paths.module_data_dir);
         file::write_if_change(&identity_file_actual,
                               Some("600"),
                               auth.ssh_key.as_ref().unwrap(),
                               true)?;
 
         command.arg_string(if no_docker {
-            format!("--ssh-keyfile='{}'", identity_file_actual)
+            format!("--ssh-keyfile={}", identity_file_actual)
         } else {
-            String::from("--ssh-keyfile='/module/identity'")
+            String::from("--ssh-keyfile=/module/identity")
         });
-    } else if auth.password.is_some() {
-        command.env("AUTH_PASSWORD", auth.password.as_ref().unwrap());
+    } else {
+        if auth.password.is_some() {
+            command.env("AUTH_PASSWORD", auth.password.as_ref().unwrap());
+        }
+
+        // If there was a SSH key defined at some point, remove it
+        file::checked_remove(identity_file_actual.as_str())?;
     }
 
     Ok(())

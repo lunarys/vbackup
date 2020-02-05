@@ -176,13 +176,13 @@ Default file: `/etc/vbackup/auth_data.json`
 ```json
 {
   "some-ssh-login": {
-    "hostname": "ssh-server.local",
+    "hostname": "my-ssh-server.local",
     "port": 22,
     "user": "foo",
     "password": "hackme",
-    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...",
+    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...\n",
     "host_key": "[my-ssh-server.local]:22 ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMjDsazoYSf3uTT5G8YPqGJq3Hgx/YmUdCDdemWOWg+H",
-    "fingerprint_rsa": "TODO"
+    "fingerprint": "ssh-rsa 2048 4d:fc:4e:4c:c7:b4:1f:78:f6:1f:42:7b:56:69:c1:85"
   }, 
   "another_login_mqtt": {
     "host": "mqtt-broker.local",
@@ -238,7 +238,7 @@ Todo: module-data, savedata.json
     "port": 22,
     "user": "foo",
     "password": "bar",
-    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...",
+    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...\n",
     "host_key": "[my-ssh-server.local]:22 ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMjDsazoYSf3uTT5G8YPqGJq3Hgx/YmUdCDdemWOWg+H"
   }
 }
@@ -260,7 +260,7 @@ Todo: module-data, savedata.json
 | auth.port | yes | | Port of the server. |
 | auth.user | yes | | Username for login on the server. |
 | auth.password | no | | Password for login on the server. |
-| auth.ssh_key | no | | Unencrypted private key for login on the server. This will be preferred over the password if both are given. |  
+| auth.ssh_key | no | | Unencrypted RSA private key for login on the server. This will be preferred over the password if both are given. Duplicati does not yet support newer SSH keys like ED25519.|
 | auth.fingerprint_rsa | yes | | RSA fingerprint of the server for server authentication. |
 ```json
 {
@@ -272,8 +272,8 @@ Todo: module-data, savedata.json
     "port": "22",
     "user": "foo",
     "password": "bar",
-    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...",
-    "fingerprint_rsa": "TODO"
+    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...\n",
+    "fingerprint": "ssh-rsa 2048 4d:fc:4e:4c:c7:b4:1f:78:f6:1f:42:7b:56:69:c1:85"
   },
   "smart_retention": true,
   "retention_policy": "1W:1D,4W:1W,12M:1M",

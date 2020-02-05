@@ -1,6 +1,6 @@
 use crate::{change_error,try_result};
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter};
 
 use serde_json::Value;
@@ -24,7 +24,14 @@ pub fn from_file_checked<T>(file_name: &Path) -> Result<Option<T>, String> where
 }
 
 pub fn to_file<T: Serialize>(file_name: &Path, value: &T) -> Result<(), String> {
-    let file = try_result!(File::open(file_name), "Could not open file for writing");
+    let file_result = OpenOptions::new()
+        .read(false)
+        .truncate(true)
+        .write(true)
+        .create(true)
+        .open(file_name);
+
+    let file = try_result!(file_result, "Could not open file for writing");
     let writer = BufWriter::new(file);
 
     let result = serde_json::to_writer_pretty(writer, value);
@@ -33,5 +40,5 @@ pub fn to_file<T: Serialize>(file_name: &Path, value: &T) -> Result<(), String> 
 
 pub fn from_value<T>(value: Value) -> Result<T,String> where for<'de> T: Deserialize<'de> {
     let result: Result<T,_> = serde_json::from_value(value);
-    return result.map_err(|_| format!("Could not parse object from json value"));
+    return result.map_err(|err| format!("Could not parse object from json value ({})", err.to_string()));
 }

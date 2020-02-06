@@ -72,8 +72,8 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             let mut tmp = CommandWrapper::new("docker");
             tmp.arg_str("run")
                 .arg_str("--rm")
-                .arg_string(format!("--volume='{}/volume'", "<volume>"))
-                .arg_string(format!("--volume='{}/savedir'", "<savedir>"))
+                .arg_string(format!("--volume={}:/volume", bound.paths.original_path.as_ref().unwrap())) // Init makes sure this can be safely unwrapped
+                .arg_string(format!("--volume={}:/savedir", bound.paths.base_paths.tmp_dir.as_str()))
                 .arg_str("--name=volume-backup-tmp")
                 .arg_str("vbackup-p7zip")
                 .arg_str("sh")
@@ -89,11 +89,12 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         };
 
         let tmp_file_name = "vbackup-tar7zip-backup.tar.7z";
-        let tmp_backup_file = format!("{}/{}", if bound.no_docker {
-            bound.paths.store_path.as_str()
+        let tmp_backup_file_actual = format!("{}/{}", bound.paths.base_paths.tmp_dir.as_str(), tmp_file_name);
+        let tmp_backup_file = if bound.no_docker {
+            tmp_backup_file_actual.clone()
         } else {
-            "/savedir"
-        }, tmp_file_name);
+            format!("/savedir/{}", tmp_file_name)
+        };
 
         let password_option = if bound.config.encryption_key.is_some() {
             format!("-p'{}' ", bound.config.encryption_key.as_ref().unwrap())
@@ -108,6 +109,9 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         // Create a backup as temporary file
         cmd.run_or_dry_run(bound.dry_run, bound.name.as_str())?;
 
+        // Create directory for backups
+        file::create_dir_if_missing(bound.paths.store_path.as_str(), true)?;
+
         {
             let mut from: Option<String> = None;
             for frame in time_frames {
@@ -117,13 +121,13 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 if from.is_none() {
                     if !bound.dry_run {
                         // TODO: Fails if from and to are on different filesystems...
-                        if rename(&tmp_backup_file, &backup_file).is_err() {
-                            let err = "Could not move temporary backup to persistent file";
-                            error!("{}", err);
-                            return Err(String::from("Could not move temporary backup to persistent file"));
+                        if let Err(err) = rename(&tmp_backup_file_actual, &backup_file) {
+                            let err_new = format!("Could not move temporary backup to persistent file: {}", err.to_string());
+                            error!("{}", err_new);
+                            return Err(err_new);
                         }
                     } else {
-                        dry_run!(format!("Moving file '{}' to '{}'", &tmp_backup_file, &backup_file));
+                        dry_run!(format!("Moving file '{}' to '{}'", &tmp_backup_file_actual, &backup_file));
                     }
                     from = Some(backup_file);
                 } else {
@@ -149,7 +153,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
 
         // Clear temporary file if still exists for some reason
         if file::exists(tmp_backup_file.as_str()) {
-            if let Err(err) = remove_file(tmp_backup_file) {
+            if let Err(err) = remove_file(tmp_backup_file_actual) {
                 error!("Could not remove temporary backup file ({})", err);
             }
         }

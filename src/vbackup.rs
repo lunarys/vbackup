@@ -150,7 +150,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                         log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "original"]), curr_size.to_string().as_str()));
                         original_size_acc += curr_size;
                     },
-                    Err(err) => error!("Could not read size of sync: {}", err)
+                    Err(err) => error!("Could not read size of the original files: {}", err)
                 }
 
                 // Calculate and report the size of the backup files
@@ -159,7 +159,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                         log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "backup"]), curr_size.to_string().as_str()));
                         backup_size_acc += curr_size;
                     },
-                    Err(err) => error!("Could not read size of sync: {}", err)
+                    Err(err) => error!("Could not read size of the backup up files: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
                 }
             }
 
@@ -181,7 +181,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     // Prepare current timestamp (for consistency) and queue of timeframes for backup
     let current_time : DateTime<Local> = chrono::Local::now();
     let mut queue_refs: Vec<&TimeFrameReference> = vec![];
-    let mut queue_frame_entry: Vec<(&TimeFrame, Option<&TimeEntry>)> = vec![];
+    let mut queue_frame_entry: Vec<(&TimeFrame, Option<TimeEntry>)> = vec![];
 
     // Init additional check
     let mut check_module = if !args.force {
@@ -217,10 +217,17 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
         };
 
         // Get last backup (option as there might not be a last one)
-        let last_backup = savedata.lastsync.get(&timeframe.identifier);
+        let last_backup_option = savedata.lastsave.remove_entry(&timeframe.identifier);
 
         // Only actually do check if the run is not forced
+        let mut do_backup = true;
         if !args.force {
+            let last_backup = if last_backup_option.is_some() {
+                let (_, tmp) = last_backup_option.as_ref().unwrap();
+                Some(tmp)
+            } else {
+                None
+            };
 
             // Try to compare timings to the last run
             if last_backup.is_some() {
@@ -232,7 +239,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
                 } else {
                     // don not sync
                     info!("Backup for '{}' is not executed in timeframe '{}' due to the interval", config.name.as_str(), timeframe_ref.frame.as_str());
-                    continue;
+                    do_backup = false;
                 }
             } else {
 
@@ -242,23 +249,29 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
             // If this point of the loop is reached, only additional check is left to run
             // The helper would check if there is a check module, but this is for more consistent log output
-            if check_module.is_some() {
+            if do_backup && check_module.is_some() {
                 if check_helper::run(&check_module, &current_time, timeframe, &last_backup)? {
                     // Do backup
                     debug!("Backup for '{}' is required in timeframe '{}' considering the additional check", config.name.as_str(), timeframe_ref.frame.as_str());
                 } else {
                     // Don't run backup
                     info!("Backup for '{}' is not executed in timeframe '{}' due to the additional check", config.name.as_str(), timeframe_ref.frame.as_str());
-                    continue;
+                    do_backup = false;
                 }
             }
         } else {
             debug!("Run in timeframe '{}' is forced", timeframe_ref.frame.as_str())
         }
 
-        // Loop was not continued to this point, do the backup for this one!
-        queue_refs.push(timeframe_ref);
-        queue_frame_entry.push((timeframe, last_backup));
+        if do_backup {
+            queue_refs.push(timeframe_ref);
+            queue_frame_entry.push((timeframe, last_backup_option.map(|(_,entry)| entry)));
+        } else {
+            // Reinsert into the map if not further processed
+            if let Some((key, value)) = last_backup_option {
+                savedata.lastsave.insert(key, value);
+            }
+        }
     }
 
     // Is any backup required?
@@ -291,10 +304,9 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
         // Update needs to be done for all active timeframes
         for (frame, entry_opt) in queue_frame_entry {
-
             // Update check state
             trace!("Invoking state update for additional check in timeframe '{}'", frame.identifier.as_str());
-            if let Err(err) = check_helper::update(&check_module, &current_time, frame, &entry_opt) {
+            if let Err(err) = check_helper::update(&check_module, &current_time, frame, &entry_opt.as_ref()) {
                 error!("State update for additional check in timeframe '{}' failed ({})", frame.identifier.as_str(), err);
             }
 
@@ -395,7 +407,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
                     log_error!(reporter.report(Some(&["sync", config.name.as_str(), "size", "sync"]), curr_size.to_string().as_str()));
                     acc_size += curr_size;
                 },
-                Err(err) => error!("Could not read size of sync: {}", err)
+                Err(err) => error!("Could not read size of sync: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
             }
 
             // Announce that this sync is done now

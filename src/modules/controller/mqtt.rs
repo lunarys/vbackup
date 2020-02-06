@@ -129,7 +129,7 @@ impl<'a> Controller<'a> for MqttController {
 }
 
 fn start(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, boot: bool, topic: String, qos: i32) -> Result<bool, String> {
-    let msg = mqtt::Message::new(topic, if boot { "START_BOOT" } else { "START_RUN" }, qos);
+    let msg = mqtt::Message::new(topic.as_str(), if boot { "START_BOOT" } else { "START_RUN" }, qos);
 
     if client.publish(msg).is_err() {
         return Err("Could not send start initiation message".to_string());
@@ -141,10 +141,44 @@ fn start(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, boot
 
     if received.to_lowercase().eq("disabled") {
         info!("Device is disabled and thus not available");
+        return Ok(false);
     }
 
+    // Device is already online
+    if received.to_lowercase().eq("ready") {
+        return Ok(true);
+    }
+
+    // Check only, do not boot, and device is offline
+    if received.to_lowercase().eq("off") {
+        return Ok(false);
+    }
+
+    // Wait until device is started
+    if !(received.to_lowercase().eq("wait")) {
+        return Err(format!("Expected to receive 'WAIT', but received '{}'", received));
+    }
+
+    // Second message should be CHECK
+    let timeout2 = Duration::new(600, 0);
+    let received2 = wait_for_message(receiver, timeout2, None)?;
+
+    // Wait for check from controller to confirm still waiting
+    if received2.to_lowercase().eq("check") {
+        let msg = mqtt::Message::new(topic.as_str(), "STILL_WAITING", qos);
+        if client.publish(msg).is_err() {
+            return Err(String::from("Could not send confirmation for still waiting"));
+        }
+    } else {
+        return Err(format!("Expected to receive 'CHECK', but received '{}'", received2));
+    }
+
+    // Third message should just be confirmation with READY
+    let timeout3 = Duration::new(600, 0);
+    let received3 = wait_for_message(receiver, timeout3, None)?;
+
     // Return wether device is available or not
-    Ok(received.to_lowercase().eq("ready"))
+    return Ok(received3.to_lowercase().eq("ready"))
 }
 
 fn end(client: &mqtt::Client, topic: String, qos: i32) -> Result<bool, String> {

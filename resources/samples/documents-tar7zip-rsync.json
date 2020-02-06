@@ -1,0 +1,54 @@
+{
+  "name": "documents",
+  "original_path": "/home/ju/Documents",
+  "backup": {
+    "disabled": false,
+    "type": "tar7zip",
+    "config": {
+      "type": "tar7zip",
+      "encryption_key": "passw0rd"
+    },
+    "check": {
+      "type": "file-age"
+    },
+    "timeframes": [
+      {
+        "frame": "DAILY",
+        "amount": 5
+      },
+      {
+        "frame": "WEEKLY",
+        "amount": 2
+      }
+    ]
+  },
+  "sync": {
+    "type": "rsync-ssh",
+    "config": {
+      "compress": false,
+      "dirname": "documents-archived",
+      "host": {
+        "hostname": "ilirea.elda",
+        "port": 22222,
+        "user": "foo",
+        "host_key": "[ilirea.elda]:22222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZff7FihzerO07wxa1DDNdsADpU9urbR7DlPdYG5aBH",
+	    "password": "pass"
+      }
+    },
+    "controller": {
+      "type": "mqtt",
+      "start": true,
+      "device": "sundavar",
+      "auth": {
+        "host": "ilirea.elda",
+        "port": 1883,
+        "user": "ilirea",
+        "password": "hackme",
+        "qos": 2
+      }
+    },
+    "interval": {
+      "frame": "WEEKLY"
+    }
+  }
+}

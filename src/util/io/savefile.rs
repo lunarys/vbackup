@@ -5,7 +5,6 @@ use crate::try_result;
 use glob::{Paths};
 use std::path::PathBuf;
 use std::fs::remove_file;
-use std::time::SystemTime;
 use chrono::{DateTime, Local};
 
 pub fn format_filename(time: &DateTime<Local>, timeframe: &TimeFrameReference, name: &str, suffix_opt: Option<&str>, extension_opt: Option<&str>) -> String {

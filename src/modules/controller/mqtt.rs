@@ -56,7 +56,7 @@ impl MqttController {
 }
 
 impl<'a> Controller<'a> for MqttController {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, _no_docker: bool) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Controller module is already bound");
             error!("{}", msg);

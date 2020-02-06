@@ -3,7 +3,7 @@ use crate::modules::object::ModulePaths;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 
-use crate::{try_result,try_option,dry_run};
+use crate::{try_option,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};

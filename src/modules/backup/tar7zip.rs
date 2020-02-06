@@ -1,6 +1,6 @@
 use crate::modules::traits::Backup;
 use crate::modules::object::*;
-use crate::{try_result,try_option,dry_run};
+use crate::{try_option,dry_run};
 use crate::util::io::{json,savefile,file};
 use crate::util::command::CommandWrapper;
 use crate::util::docker;
@@ -8,7 +8,6 @@ use crate::util::docker;
 use serde_json::Value;
 use serde::{Deserialize};
 use std::fs::{copy, rename, remove_file};
-use std::time::SystemTime;
 use chrono::{Local, DateTime};
 
 pub struct Tar7Zip<'a> {
@@ -139,7 +138,9 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 }
 
                 if !bound.dry_run {
-                    savefile::prune(bound.paths.store_path.as_str(), &frame.frame, &frame.amount);
+                    if !savefile::prune(bound.paths.store_path.as_str(), &frame.frame, &frame.amount)? {
+                        trace!("Amount of backups is below threshold, not removing anything");
+                    }
                 } else {
                     dry_run!("Removing oldest file from backup in timeframe")
                 }
@@ -148,7 +149,9 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
 
         // Clear temporary file if still exists for some reason
         if file::exists(tmp_backup_file.as_str()) {
-            remove_file(tmp_backup_file);
+            if let Err(err) = remove_file(tmp_backup_file) {
+                error!("Could not remove temporary backup file ({})", err);
+            }
         }
 
         Ok(())

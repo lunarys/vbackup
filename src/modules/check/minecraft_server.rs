@@ -1,7 +1,7 @@
 use crate::modules::traits::Check;
 use crate::modules::object::*;
 use crate::util::io::json;
-use crate::{try_result,try_option};
+use crate::{try_option};
 use crate::modules::check::Reference;
 
 use serde_json::Value;

@@ -5,10 +5,6 @@ use crate::util::command::CommandWrapper;
 use crate::modules::check::Reference;
 
 use serde_json::Value;
-use serde::{Deserialize};
-use std::process::exit;
-use std::time::{SystemTime, Duration};
-use std::convert::TryFrom;
 use chrono::{Local, DateTime};
 
 pub struct FileAge<'a> {
@@ -17,7 +13,6 @@ pub struct FileAge<'a> {
 
 struct Bind<'a> {
     paths: ModulePaths<'a>,
-    dry_run: bool,
     no_docker: bool,
     reference: Reference
 }
@@ -29,7 +24,7 @@ impl<'a> FileAge<'a> {
 }
 
 impl<'a> Check<'a> for FileAge<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, _dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);
@@ -38,7 +33,6 @@ impl<'a> Check<'a> for FileAge<'a> {
 
         self.bind = Some(Bind {
             paths,
-            dry_run,
             no_docker,
             reference
         });
@@ -46,7 +40,7 @@ impl<'a> Check<'a> for FileAge<'a> {
         return Ok(());
     }
 
-    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
 
         let last_run = if last.is_none() {
@@ -104,8 +98,8 @@ impl<'a> Check<'a> for FileAge<'a> {
         }
     }
 
-    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
+    fn update(&self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
+        let _bound = try_option!(self.bind.as_ref(), "Check module is not bound");
         // This check is stateless, so no update is required
         return Ok(())
     }

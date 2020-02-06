@@ -9,7 +9,6 @@ pub enum BackupModule<'a> {
 }
 
 use BackupModule::*;
-use std::time::SystemTime;
 use chrono::{DateTime, Local};
 
 pub fn get_module(name: &str) -> Result<BackupModule, String> {

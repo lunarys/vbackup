@@ -1,6 +1,6 @@
 use crate::{change_error, try_result, dry_run};
 
-use std::process::{Command, Child, ExitStatus, Output};
+use std::process::{Command, Child, ExitStatus};
 
 pub struct CommandWrapper {
     command: Command,
@@ -54,7 +54,7 @@ impl CommandWrapper {
         return Ok(());
     }
 
-    pub fn run_get_status_without_output(&mut self) -> Result<ExitStatus, String> {
+    pub fn _run_get_status_without_output(&mut self) -> Result<ExitStatus, String> {
         let result = self.command.output();
 
         if let Ok(output) = result {

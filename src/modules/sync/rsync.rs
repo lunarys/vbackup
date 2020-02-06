@@ -4,7 +4,7 @@ use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
 
-use crate::{try_result,try_option};
+use crate::{try_option};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -130,7 +130,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Rsync is not bound, thus it can not be cleared");
+        let _bound = try_option!(self.bind.as_ref(), "Rsync is not bound, thus it can not be cleared");
 
         self.bind = None;
         return Ok(());

@@ -2,12 +2,11 @@ use crate::modules::traits::Reporting;
 use crate::util::io::{auth_data,json};
 use crate::modules::object::Paths;
 
-use crate::{try_result,try_option,bool_result};
+use crate::{try_result,try_option};
 
 use serde_json::Value;
 use serde::{Deserialize};
 use paho_mqtt as mqtt;
-use std::sync::mpsc::Receiver;
 use std::ops::AddAssign;
 
 pub struct Reporter {
@@ -48,7 +47,7 @@ impl Reporter {
 }
 
 impl Reporting for Reporter {
-    fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Paths, _dry_run: bool, _no_docker: bool) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Reporting module is already bound");
             error!("{}", msg);
@@ -77,7 +76,8 @@ impl Reporting for Reporter {
         let mut topic = get_base_topic(&bound.config, &bound.mqtt_config);
 
         match context {
-            Some([operation, name, "size", what]) => {
+            // Size reporting for specific operation on specific volume
+            Some([_, name, "size", what]) => {
                 topic.push('/');
                 topic.add_assign(name);
                 topic.push('/');
@@ -85,12 +85,14 @@ impl Reporting for Reporter {
                 topic.push('/');
                 topic.add_assign("size");
             },
+            // Accumulated size reporting
             Some(["size", what]) => {
                 topic.push('/');
-                topic.add_assign(what);
-                topic.push('/');
                 topic.add_assign("size");
+                topic.push('/');
+                topic.add_assign(what);
             },
+            // General activity reporting
             Some([operation, name]) => {
                 topic.push('/');
                 topic.add_assign(name);
@@ -132,7 +134,7 @@ fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result
 
     trace!("Trying to connect to mqtt broker with address '{}'", mqtt_host);
 
-    let mut client: mqtt::Client = try_result!(mqtt::Client::new(mqtt_host), "Failed connecting to broker");
+    let client: mqtt::Client = try_result!(mqtt::Client::new(mqtt_host), "Failed connecting to broker");
 
     let mut options_builder = mqtt::ConnectOptionsBuilder::new();
     let mut options = options_builder.clean_session(true);

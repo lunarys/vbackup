@@ -14,14 +14,11 @@ mod util;
 
 use log::LevelFilter;
 use env_logger::Builder;
-use std::io::Result;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use fs2::FileExt;
 use std::os::unix::fs::OpenOptionsExt;
 
-use crate::modules::traits::Sync;
-use crate::modules::traits::Controller;
-use crate::modules::object::{Paths, PathBase, Arguments};
+use crate::modules::object::Arguments;
 use std::process::exit;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 

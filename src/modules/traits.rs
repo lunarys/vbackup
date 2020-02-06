@@ -2,7 +2,6 @@ use crate::modules::object::{Paths, ModulePaths, TimeEntry, TimeFrameReference, 
 use crate::modules::check::Reference;
 
 use serde_json::Value;
-use std::time::SystemTime;
 use chrono::{DateTime, Local};
 
 pub trait Backup<'a> {

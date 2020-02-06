@@ -95,3 +95,12 @@ macro_rules! dry_run {
         println!("DRY-RUN: {}", $output);
     }
 }
+
+#[macro_export]
+macro_rules! log_error {
+    ($result:expr) => {
+        if let Err(err) = $result {
+            error!("{}", err);
+        }
+    }
+}

@@ -15,7 +15,6 @@ pub enum ReportingModule {
 
 use ReportingModule::*;
 use std::ops::Add;
-use serde_json::value::Index;
 
 fn get_module(name: &str) -> Result<ReportingModule, String> {
     return Ok(match name.to_lowercase().as_str() {
@@ -96,7 +95,7 @@ impl Reporting for Reporter {
             vec![config_json]
         };
 
-        let mut result = array.iter().map(|value| {
+        let result = array.iter().map(|value| {
             if let Some(reporter) = value.get("type") {
                 if reporter.is_string() {
                     let mut result = get_module(reporter.as_str().unwrap())?;
@@ -132,7 +131,7 @@ impl Reporting for Reporter {
     fn clear(&mut self) -> Result<(), String> {
         let mut bound: Bind = try_option!(self.bind.take(), "Reporting module is not bound");
 
-        let result = bound.modules.iter_mut().map(|mut module| {
+        let result = bound.modules.iter_mut().map(|module| {
             module.clear()
         }).collect();
 

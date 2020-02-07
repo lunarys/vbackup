@@ -69,7 +69,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             tmp.arg_str("run")
                 .arg_str("--rm")
                 .arg_string(format!("--volume={}:/volume", bound.paths.source))
-                .arg_string(format!("--volume={}:/savedir", bound.paths.base_paths.tmp_dir))
+                .arg_string(format!("--volume={}:/savedir", bound.paths.module_data_dir))
                 .arg_str("--name=vbackup-tmp")
                 .arg_str("vbackup-p7zip")
                 .arg_str("sh")
@@ -85,7 +85,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         };
 
         let tmp_file_name = "vbackup-tar7zip-backup.tar.7z";
-        let tmp_backup_file_actual = format!("{}/{}", bound.paths.module_data_dir.as_str(), tmp_file_name);
+        let tmp_backup_file_actual = format!("{}/{}", bound.paths.module_data_dir, tmp_file_name);
         let tmp_backup_file = if bound.no_docker {
             tmp_backup_file_actual.clone()
         } else {

@@ -2,7 +2,6 @@ use crate::modules::traits::Check;
 use crate::modules::object::*;
 use crate::{try_result,try_option};
 use crate::util::command::CommandWrapper;
-use crate::modules::check::Reference;
 
 use serde_json::Value;
 use chrono::{Local, DateTime};

@@ -1,8 +1,7 @@
 use crate::modules::traits::Check;
 use crate::modules::object::*;
-use crate::util::io::json;
-use crate::{try_option};
-use crate::modules::check::Reference;
+use crate::util::io::{json,file};
+use crate::{try_option,try_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -19,9 +18,20 @@ struct Bind<'a> {
     no_docker: bool
 }
 
+struct BackupInfo {
+    usetime: i64,
+    save: bool
+}
+
 #[derive(Deserialize)]
 struct Configuration {
-    serverinfo: String
+    #[serde(default="relative_backup_info")]
+    backup_info: String,
+    targeted_usetime: i64
+}
+
+fn relative_backup_info() -> String {
+    return String::from("backupinfo/props.info");
 }
 
 impl<'a> MinecraftServer<'a> {
@@ -31,7 +41,7 @@ impl<'a> MinecraftServer<'a> {
 }
 
 impl<'a> Check<'a> for MinecraftServer<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);
@@ -50,12 +60,38 @@ impl<'a> Check<'a> for MinecraftServer<'a> {
         return Ok(());
     }
 
-    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
-        unimplemented!()
+    fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+        let bound = try_option!(self.bind.as_ref(), "Check is not bound");
+
+        if last.is_some() {
+            let backup_info = read_backupinfo(bound)?;
+            let test_result = bound.config.targeted_usetime < backup_info.usetime;
+
+            if test_result {
+                debug!("Usetime for server is larger than targeted usetime");
+            } else {
+                debug!("Usetime for server is smaller than targeted usetime");
+            }
+
+            return Ok(test_result);
+        } else {
+            debug!("There was no previous backup, additional check is not required");
+            return Ok(true);
+        }
     }
 
-    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
-        unimplemented!()
+    fn update(&self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
+        let bound = try_option!(self.bind.as_ref(), "Check is not bound");
+        let backup_info = read_backupinfo(bound)?;
+
+        debug!("Resetting usetime for server to zero");
+
+        if bound.dry_run {
+            dry_run!(format!("Writing usetime=0 to file '{}'", backupinfo_path(bound)));
+            return Ok(());
+        } else {
+            return reset_backupinfo(bound, &backup_info);
+        }
     }
 
     fn clear(&mut self) -> Result<(), String> {
@@ -63,4 +99,45 @@ impl<'a> Check<'a> for MinecraftServer<'a> {
         self.bind = None;
         return Ok(());
     }
+}
+
+fn backupinfo_path(bind: &Bind) -> String {
+    return format!("{}/{}", bind.paths.source, bind.config.backup_info);
+}
+
+fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
+    let file = backupinfo_path(bind);
+    let content = file::read(file.as_str())?;
+
+    let mut result = BackupInfo {
+        usetime: 0,
+        save: true
+    };
+
+    for line in content.split("\n") {
+        let separator_option = line.find("=");
+        if separator_option.is_none() {
+            continue;
+        } else {
+            let (key,value): (&str, &str) = line.split_at(separator_option.unwrap());
+            match key.to_lowercase().as_str() {
+                "usetime" => {
+                    result.usetime = try_result!(value.parse(), "Could not parse usetime for minecraft server")
+                },
+                "save" => {
+                    result.save = value.to_lowercase() == "true"
+                },
+                _ => ()
+            }
+        }
+    }
+
+    return Ok(result);
+}
+
+fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
+    let file = backupinfo_path(bind);
+    let content = format!("usetime={}\nsave={}", 0, info.save);
+
+    file::write(file.as_str(), content.as_str(), true)
 }

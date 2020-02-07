@@ -96,9 +96,9 @@ Default directory: `/etc/vbackup/volumes`
 |-----|----------|---------|-------------|
 | name | yes | | A unique name for this configuration. Filename is recommended. |
 | disabled | no | false | Flag to disable this configuration. |
-| original_path | depends | | Required if backup is configured. Path of the directory or name of the docker volume to back up. |
-| store_path | no | $save_dir/$name | Path to store backups in and path to sync from.  If only a sync is configured, set this to the original path. |
-| savedata_in_store | no | false | Wether to store the savedata file in `store_path` or not. Overwrites the global flag if set. |
+| source_path | yes | | Path of the directory or name of the docker volume to back up. |
+| backup_path | no | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. |
+| savedata_in_store | no | false | Wether to store the savedata file with the backup or not. Overwrites the global flag if set. |
 | backup | no | | The backup configuration for this volume. |
 | sync | no | | The sync configuration for this volume. | 
 
@@ -106,8 +106,8 @@ Default directory: `/etc/vbackup/volumes`
 {
   "name": "my-important-volume",
   "disabled": false,
-  "original_path": "important-volume",
-  "store_path": "/var/vbackup/my-important-volume",
+  "source_path": "important-volume",
+  "backup_path": "/var/vbackup/my-important-volume",
   "savedata_in_store": false,
   "backup": { ... },
   "sync": { ... }

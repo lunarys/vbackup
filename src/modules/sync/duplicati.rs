@@ -97,7 +97,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
         command.arg_str("backup");
         command.arg_string(format!("{}", get_connection_uri(&bound.config, &bound.auth)));
         if bound.no_docker {
-            command.arg_string(format!("{}", &bound.paths.store_path));
+            command.arg_string(format!("{}", &bound.paths.source));
         } else {
             command.arg_str("/volume");
         }
@@ -162,7 +162,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
 
             command.arg_str("--restore-permission=true");
             if bound.no_docker {
-                command.arg_string(format!("--restore-path={}", &bound.paths.store_path));
+                command.arg_string(format!("--restore-path={}", &bound.paths.source));
             } else {
                 command.arg_str("--restore-path=/volume");
             }
@@ -183,7 +183,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
 }
 
 fn get_base_cmd(no_docker: bool, paths: &ModulePaths) -> CommandWrapper {
-    let original_path= &paths.store_path;
+    let original_path= &paths.source;
     let module_data = &paths.module_data_dir;
 
     if no_docker {

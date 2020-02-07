@@ -9,7 +9,7 @@ use serde_json::Value;
 pub fn init(args: &Arguments, paths: &Paths, config: &Configuration, controller_config: &Option<Value>) -> Result<Option<ControllerModule>,String> {
     if controller_config.is_some() {
         let controller_type = try_option!(controller_config.as_ref().unwrap().get("type"), "Controller config contains no field 'type'");
-        let module_paths = paths.for_module(config.name.as_str(), "controller", &config.original_path, &config.store_path, &config.savedata_in_store);
+        let module_paths = paths.for_sync_module("controller", &config);
 
         let mut module = controller::get_module(try_option!(controller_type.as_str(), "Expected controller type as string"))?;
         module.init(config.name.as_str(), controller_config.as_ref().unwrap(), module_paths, args.dry_run, args.no_docker)?;

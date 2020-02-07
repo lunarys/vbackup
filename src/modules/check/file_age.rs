@@ -13,8 +13,7 @@ pub struct FileAge<'a> {
 
 struct Bind<'a> {
     paths: ModulePaths<'a>,
-    no_docker: bool,
-    reference: Reference
+    no_docker: bool
 }
 
 impl<'a> FileAge<'a> {
@@ -24,7 +23,7 @@ impl<'a> FileAge<'a> {
 }
 
 impl<'a> Check<'a> for FileAge<'a> {
-    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, _dry_run: bool, no_docker: bool, reference: Reference) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, _dry_run: bool, no_docker: bool) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);
@@ -33,8 +32,7 @@ impl<'a> Check<'a> for FileAge<'a> {
 
         self.bind = Some(Bind {
             paths,
-            no_docker,
-            reference
+            no_docker
         });
 
         return Ok(());
@@ -51,10 +49,7 @@ impl<'a> Check<'a> for FileAge<'a> {
             last.unwrap()
         };
 
-        let check_path = match bound.reference {
-            Reference::Backup => try_option!(bound.paths.original_path.as_ref(), "Check called for backup without backup being configured"),
-            Reference::Sync => &bound.paths.store_path
-        };
+        let check_path = &bound.paths.source;
 
         let mut command_base = if bound.no_docker {
             let mut command = CommandWrapper::new("sh");

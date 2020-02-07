@@ -1,6 +1,7 @@
 use serde_json::Value;
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
+use crate::modules::check::Reference;
 
 #[derive(Deserialize)]
 pub struct Arguments {
@@ -21,8 +22,8 @@ pub struct Configuration {
     pub disabled: bool,
     pub name: String,
     pub savedata_in_store: Option<bool>,
-    pub original_path: Option<String>,
-    pub store_path: Option<String>,
+    pub source_path: String,
+    pub backup_path: Option<String>,
     pub backup: Option<BackupConfiguration>,
     pub sync: Option<SyncConfiguration>
 }
@@ -117,8 +118,8 @@ pub struct Paths {
 pub struct ModulePaths<'a> {
     pub base_paths: &'a Paths,
     pub save_data: String, // Savedata file
-    pub original_path: Option<String>, // Path of the original directory to back up
-    pub store_path: String, // Path for a local backup (or just path that will be synced)
+    pub source: String, // Path of the original directory to back up
+    pub destination: String, // Path for a local backup (or just path that will be synced)
     pub module_data_dir: String // Path for the modules to store additional data
 }
 
@@ -136,13 +137,48 @@ impl Paths {
         }
     }
 
-    pub fn for_module(&self, name: &str, module_type: &str, original_path: &Option<String>, save_path_option: &Option<String>, savedata_in_store: &Option<bool>) -> ModulePaths {
-        let backup_path = if save_path_option.is_some() {
-            String::from(save_path_option.as_ref().unwrap())
+    pub fn for_check_module(&self, module_type: &str, config: &Configuration, reference: Reference) -> ModulePaths {
+        return match reference {
+            Reference::Backup => self.for_backup_module(module_type, config),
+            Reference::Sync => self.for_sync_module(module_type, config)
+        }
+    }
+
+    pub fn for_sync_module(&self, module_type: &str, config: &Configuration) -> ModulePaths {
+        let name = config.name.as_str();
+        let has_backup = config.backup.is_some();
+        let backup_path = &config.backup_path;
+        let source = &config.source_path;
+        let source_opt = if has_backup {
+            backup_path.as_ref()
         } else {
-            if original_path.is_none() {
-                warn!("Using default store path (to sync from) when no backup was configured");
-            }
+            Some(source)
+        };
+        let savedata_in_store = &config.savedata_in_store;
+        let savedata_store = &source_opt;
+
+        return self.for_module(name, module_type, source_opt, None, savedata_in_store, savedata_store);
+    }
+
+    pub fn for_backup_module(&self, module_type: &str, config: &Configuration) -> ModulePaths {
+        let name = config.name.as_str();
+        let source = &config.source_path;
+        let destination_opt = &config.backup_path;
+        let savedata_in_store = &config.savedata_in_store;
+        let savedata_store = &config.backup_path.as_ref();
+
+        return self.for_module(name, module_type, Some(source), destination_opt.as_ref(), savedata_in_store, savedata_store);
+    }
+
+    fn for_module(&self, name: &str, module_type: &str, source_opt: Option<&String>, destination_opt: Option<&String>, savedata_in_store: &Option<bool>, savedata_store: &Option<&String>) -> ModulePaths {
+        let source = if source_opt.is_some() {
+            String::from(source_opt.unwrap())
+        } else {
+            format!("{}/{}", self.save_dir.as_str(), name)
+        };
+        let destination = if destination_opt.is_some() {
+            String::from(destination_opt.unwrap())
+        } else {
             format!("{}/{}", self.save_dir.as_str(), name)
         };
 
@@ -150,7 +186,7 @@ impl Paths {
         let module_data_dir = format!("{}/{}", module_data_base.as_str(), module_type);
 
         let save_data = if savedata_in_store.unwrap_or(self.savedata_in_store) {
-            format!("{}/.savedata.json", backup_path.as_str())
+            format!("{}/.savedata.json", savedata_store.unwrap_or(&destination))
         } else {
             format!("{}/savedata.json", module_data_base.as_str())
         };
@@ -158,8 +194,8 @@ impl Paths {
         return ModulePaths {
             base_paths: self,
             save_data,
-            original_path: original_path.clone(),
-            store_path: backup_path,
+            source,
+            destination,
             module_data_dir
         }
     }

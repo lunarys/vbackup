@@ -79,9 +79,9 @@ impl<'a> Sync<'a> for Rsync<'a> {
 
         let (sync_from, sync_to) = if no_docker {
             if config.to_remote {
-                (String::from(&paths.store_path), remote_path)
+                (String::from(&paths.source), remote_path)
             } else {
-                (format!("{}/{}", remote_path, config.dirname), String::from(&paths.store_path))
+                (format!("{}/{}", remote_path, config.dirname), String::from(&paths.source))
             }
         } else {
             if config.to_remote {
@@ -172,7 +172,7 @@ impl<'a> Rsync<'a> {
                 .arg_str("--rm")
                 .arg_str("--name=rsync-vbackup-tmp")
                 .arg_str("--env=SSHPASS")
-                .arg_string(format!("--volume={}:/{}", &bound.paths.store_path, &bound.name));
+                .arg_string(format!("--volume={}:/{}", &bound.paths.source, &bound.name));
 
             // Volume for authentication files
             command.arg_string(format!("--volume={}:{}", &bound.paths.module_data_dir, "/module"));

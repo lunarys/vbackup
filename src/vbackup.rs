@@ -95,7 +95,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
     for mut config in get_config_list(args, paths)? {
 
         // Get paths specifically for this module
-        let module_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path, &config.savedata_in_store);
+        let module_paths = paths.for_backup_module("backup", &config);
 
         // Only do something else if a backup is present in this configuration
         if config.backup.is_some() {
@@ -117,8 +117,8 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
             let backup_config = config.backup.take().unwrap();
 
             // Save those paths for later, as the ModulePaths will be moved
-            let original_path_opt = module_paths.original_path.clone();
-            let store_path = module_paths.store_path.clone();
+            let original_path = module_paths.source.clone();
+            let store_path = module_paths.destination.clone();
 
             // Run the backup and evaluate the result
             let result = backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
@@ -140,27 +140,22 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                 }
             }
 
-            // If the original path is set (which it has to be to run the backup) calculate and report backup sizes
-            // Else should never happen, but this ensures reporting does not break anything
-            if let Some(original_path) = original_path_opt {
+            // Calculate and report the size of the original files
+            match file::size(original_path.as_str(), args.no_docker) {
+                Ok(curr_size) => {
+                    log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "original"]), curr_size.to_string().as_str()));
+                    original_size_acc += curr_size;
+                },
+                Err(err) => error!("Could not read size of the original files: {}", err)
+            }
 
-                // Calculate and report the size of the original files
-                match file::size(original_path.as_str(), args.no_docker) {
-                    Ok(curr_size) => {
-                        log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "original"]), curr_size.to_string().as_str()));
-                        original_size_acc += curr_size;
-                    },
-                    Err(err) => error!("Could not read size of the original files: {}", err)
-                }
-
-                // Calculate and report the size of the backup files
-                match file::size(store_path.as_str(), args.no_docker) {
-                    Ok(curr_size) => {
-                        log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "backup"]), curr_size.to_string().as_str()));
-                        backup_size_acc += curr_size;
-                    },
-                    Err(err) => error!("Could not read size of the backup up files: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
-                }
+            // Calculate and report the size of the backup files
+            match file::size(store_path.as_str(), args.no_docker) {
+                Ok(curr_size) => {
+                    log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "backup"]), curr_size.to_string().as_str()));
+                    backup_size_acc += curr_size;
+                },
+                Err(err) => error!("Could not read size of the backup up files: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
             }
 
             // Announce that this backup is done now
@@ -361,7 +356,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
     for mut config in get_config_list(args, paths)? {
 
         // Get paths specifically for this module
-        let module_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path, &config.savedata_in_store);
+        let module_paths = paths.for_sync_module("sync", &config);
 
         // Get savedata for this sync
         let savedata_result = get_savedata(module_paths.save_data.as_str());
@@ -381,7 +376,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
 
             // Save owned objects of configuration and path
             let sync_config = config.sync.take().unwrap();
-            let store_path = module_paths.store_path.clone();
+            let store_path = module_paths.source.clone();
 
             // Run the backup and evaluate the result
             let result = sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
@@ -614,11 +609,8 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
     for config in get_config_list(args, paths)? {
 
         // Get paths for both backup and sync module
-        let backup_paths = paths.for_module(config.name.as_str(), "backup", &config.original_path, &config.store_path, &config.savedata_in_store);
-        let sync_paths = paths.for_module(config.name.as_str(), "sync", &config.original_path, &config.store_path, &config.savedata_in_store);
-
-        // Pre-formatted backup path (might be not configured if there is no backup)
-        let backup_path = backup_paths.original_path.unwrap_or(String::from("Not configured"));
+        let backup_paths = paths.for_backup_module("backup", &config);
+        let sync_paths = paths.for_sync_module("sync", &config);
 
         // Configuration header
         println!("- Configuration for: {} is {}", config.name.as_str(), if config.disabled {"disabled"} else {"enabled"});
@@ -629,8 +621,8 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
 
             // Only show more information if not disabled
             if !backup_config.disabled {
-                println!("     * Original data path: {}", backup_path);
-                println!("     * Backup data path:   {}", sync_paths.store_path);
+                println!("     * Original data path: {}", backup_paths.source);
+                println!("     * Backup data path:   {}", backup_paths.destination);
 
                 println!("     * Timeframes for backup:");
                 backup_config.timeframes.iter().for_each(|f| print_timeframe_ref(f, true));
@@ -647,7 +639,7 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
 
             // Only show more if not disabled
             if !sync_config.disabled {
-                println!("     * Path of synced data: {}", sync_paths.store_path);
+                println!("     * Path of synced data: {}", sync_paths.source);
 
                 println!("     * Interval for sync:");
                 print_timeframe_ref(&sync_config.interval, false);

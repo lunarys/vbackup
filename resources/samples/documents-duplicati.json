@@ -1,6 +1,6 @@
 {
   "name": "documents-duplicati",
-  "store_path": "/home/ju/Documents",
+  "source_path": "/home/ju/Documents",
   "sync": {
     "type": "duplicati",
     "config": {

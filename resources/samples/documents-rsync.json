@@ -1,6 +1,6 @@
 {
   "name": "documents",
-  "store_path": "/home/ju/Documents",
+  "source_path": "/home/ju/Documents",
   "sync": {
     "type": "rsync-ssh",
     "config": {

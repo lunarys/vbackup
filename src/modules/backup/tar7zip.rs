@@ -46,10 +46,6 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
 
         let config = json::from_value(config_json.clone())?; // TODO: - clone
 
-        if paths.original_path.is_none() {
-            return Err(String::from("Original path to backup is missing for backup"));
-        }
-
         self.bind = Some(Bind {
             name: String::from(name),
             config,
@@ -72,8 +68,8 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             let mut tmp = CommandWrapper::new("docker");
             tmp.arg_str("run")
                 .arg_str("--rm")
-                .arg_string(format!("--volume={}:/volume", bound.paths.original_path.as_ref().unwrap())) // Init makes sure this can be safely unwrapped
-                .arg_string(format!("--volume={}:/savedir", bound.paths.module_data_dir.as_str()))
+                .arg_string(format!("--volume={}:/volume", bound.paths.source))
+                .arg_string(format!("--volume={}:/savedir", bound.paths.base_paths.tmp_dir))
                 .arg_str("--name=volume-backup-tmp")
                 .arg_str("vbackup-p7zip")
                 .arg_str("sh")
@@ -83,7 +79,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
 
         let save_path = if bound.no_docker {
             // Init made sure original path can be unwrapped
-            bound.paths.original_path.as_ref().unwrap().as_str()
+            bound.paths.source.as_str()
         } else {
             "/volume"
         };
@@ -110,13 +106,13 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         cmd.run_or_dry_run(bound.dry_run, bound.name.as_str())?;
 
         // Create directory for backups
-        file::create_dir_if_missing(bound.paths.store_path.as_str(), true)?;
+        file::create_dir_if_missing(bound.paths.destination.as_str(), true)?;
 
         {
             let mut from: Option<String> = None;
             for frame in time_frames {
                 let file_name = savefile::format_filename(time, *frame, bound.name.as_str(), None, Some("tar.7z"));
-                let backup_file = format!("{}/{}", bound.paths.store_path.as_str(), file_name);
+                let backup_file = format!("{}/{}", bound.paths.destination.as_str(), file_name);
 
                 if from.is_none() {
                     if !bound.dry_run {
@@ -137,7 +133,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 }
 
                 if !bound.dry_run {
-                    if !savefile::prune(bound.paths.store_path.as_str(), &frame.frame, &frame.amount)? {
+                    if !savefile::prune(bound.paths.destination.as_str(), &frame.frame, &frame.amount)? {
                         trace!("Amount of backups is below threshold, not removing anything");
                     }
                 } else {

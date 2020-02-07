@@ -147,7 +147,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
 
             add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
 
-            command.run_or_dry_run(bound.dry_run, "duplicati repair")?;
+            command.run_or_dry_run(bound.dry_run)?;
         }
 
         // Restore the data
@@ -167,7 +167,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
                 command.arg_str("--restore-path=/volume");
             }
 
-            command.run_or_dry_run(bound.dry_run, "duplicati restore")?;
+            command.run_or_dry_run(bound.dry_run)?;
         }
 
         debug!("Duplicati restore for {} is done", bound.name);

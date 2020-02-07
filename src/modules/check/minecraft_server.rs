@@ -1,5 +1,6 @@
 use crate::modules::traits::Check;
 use crate::modules::object::*;
+use crate::util::command::CommandWrapper;
 use crate::util::io::{json,file};
 use crate::{try_option,try_result,dry_run};
 
@@ -107,7 +108,20 @@ fn backupinfo_path(bind: &Bind) -> String {
 
 fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
     let file = backupinfo_path(bind);
-    let content = file::read(file.as_str())?;
+    let content = if bind.no_docker {
+        file::read(file.as_str())?
+    } else {
+        let mut cmd = CommandWrapper::new("docker");
+        cmd.arg_str("run")
+            .arg_str("--rm")
+            .arg_string(format!("--volume={}:/volume", file))
+            .arg_str("--name=vbackup-tmp")
+            .arg_str("alpine")
+            .arg_str("sh")
+            .arg_str("-c");
+        cmd.arg_string(format!("cat /volume/{}", bind.config.backup_info));
+        cmd.run_get_output()?
+    };
 
     let mut result = BackupInfo {
         usetime: 0,
@@ -139,5 +153,18 @@ fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
     let file = backupinfo_path(bind);
     let content = format!("usetime={}\nsave={}", 0, info.save);
 
-    file::write(file.as_str(), content.as_str(), true)
+    if bind.no_docker {
+        return file::write(file.as_str(), content.as_str(), true);
+    } else {
+        let mut cmd = CommandWrapper::new("docker");
+        cmd.arg_str("run")
+            .arg_str("--rm")
+            .arg_string(format!("--volume={}:/volume", file))
+            .arg_str("--name=vbackup-tmp")
+            .arg_str("alpine")
+            .arg_str("sh")
+            .arg_str("-c");
+        cmd.arg_string(format!("echo \"{}\" > /volume/{}", content, bind.config.backup_info));
+        return cmd.run();
+    }
 }

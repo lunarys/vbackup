@@ -39,16 +39,21 @@ impl CommandWrapper {
         change_error!(self.command.spawn(), "Failed spawning command")
     }
 
-    pub fn run_or_dry_run(&mut self, dry_run: bool, name: &str) -> Result<(), String> {
+    pub fn run(&mut self) -> Result<(), String> {
+        let exit_status = self.run_get_status()?;
+        if !exit_status.success() {
+            let msg = format!("Exit code indicates failure of command");
+            error!("{}", msg);
+            return Err(msg);
+        }
+        return Ok(());
+    }
+
+    pub fn run_or_dry_run(&mut self, dry_run: bool) -> Result<(), String> {
         if dry_run {
             dry_run!(self.to_string());
         } else {
-            let exit_status = self.run_get_status()?;
-            if !exit_status.success() {
-                let msg = format!("Exit code indicates failure of {}", name);
-                error!("{}", msg);
-                return Err(msg);
-            }
+            return self.run();
         }
 
         return Ok(());

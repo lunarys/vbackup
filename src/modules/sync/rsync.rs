@@ -112,7 +112,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
         command.arg_string(format!("{}", &bound.sync_from))
             .arg_string(format!("{}", &bound.sync_to));
 
-        command.run_or_dry_run(bound.dry_run, "rsync backup")?;
+        command.run_or_dry_run(bound.dry_run)?;
 
         return Ok(());
     }
@@ -124,7 +124,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
         command.arg_string(format!("{}", &bound.sync_to))
             .arg_string(format!("{}", &bound.sync_from));
 
-        command.run_or_dry_run(bound.dry_run, "rsync restore")?;
+        command.run_or_dry_run(bound.dry_run)?;
 
         return Ok(());
     }

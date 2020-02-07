@@ -70,7 +70,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 .arg_str("--rm")
                 .arg_string(format!("--volume={}:/volume", bound.paths.source))
                 .arg_string(format!("--volume={}:/savedir", bound.paths.base_paths.tmp_dir))
-                .arg_str("--name=volume-backup-tmp")
+                .arg_str("--name=vbackup-tmp")
                 .arg_str("vbackup-p7zip")
                 .arg_str("sh")
                 .arg_str("-c");
@@ -103,7 +103,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file
-        cmd.run_or_dry_run(bound.dry_run, bound.name.as_str())?;
+        cmd.run_or_dry_run(bound.dry_run)?;
 
         // Create directory for backups
         file::create_dir_if_missing(bound.paths.destination.as_str(), true)?;

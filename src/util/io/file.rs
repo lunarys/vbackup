@@ -177,6 +177,7 @@ pub fn size(path: &str, no_docker: bool) -> Result<u64,String> {
             "/volume"
         };
 
+        // TODO: 'du' does not seem to be very accurate
         cmd.arg_string(format!("du {} | tail -1 | cut -f1", cmd_path));
         let output = cmd.run_get_output()?;
 

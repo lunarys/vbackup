@@ -7,7 +7,7 @@ use crate::util::docker;
 
 use serde_json::Value;
 use serde::{Deserialize};
-use std::fs::{copy, rename, remove_file};
+use std::fs::{copy, remove_file};
 use chrono::{Local, DateTime};
 
 pub struct Tar7Zip<'a> {
@@ -73,7 +73,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             tmp.arg_str("run")
                 .arg_str("--rm")
                 .arg_string(format!("--volume={}:/volume", bound.paths.original_path.as_ref().unwrap())) // Init makes sure this can be safely unwrapped
-                .arg_string(format!("--volume={}:/savedir", bound.paths.base_paths.tmp_dir.as_str()))
+                .arg_string(format!("--volume={}:/savedir", bound.paths.module_data_dir.as_str()))
                 .arg_str("--name=volume-backup-tmp")
                 .arg_str("vbackup-p7zip")
                 .arg_str("sh")
@@ -89,7 +89,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         };
 
         let tmp_file_name = "vbackup-tar7zip-backup.tar.7z";
-        let tmp_backup_file_actual = format!("{}/{}", bound.paths.base_paths.tmp_dir.as_str(), tmp_file_name);
+        let tmp_backup_file_actual = format!("{}/{}", bound.paths.module_data_dir.as_str(), tmp_file_name);
         let tmp_backup_file = if bound.no_docker {
             tmp_backup_file_actual.clone()
         } else {
@@ -120,12 +120,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
 
                 if from.is_none() {
                     if !bound.dry_run {
-                        // TODO: Fails if from and to are on different filesystems...
-                        if let Err(err) = rename(&tmp_backup_file_actual, &backup_file) {
-                            let err_new = format!("Could not move temporary backup to persistent file: {}", err.to_string());
-                            error!("{}", err_new);
-                            return Err(err_new);
-                        }
+                        file::move_file(tmp_backup_file_actual.as_str(), backup_file.as_str())?;
                     } else {
                         dry_run!(format!("Moving file '{}' to '{}'", &tmp_backup_file_actual, &backup_file));
                     }

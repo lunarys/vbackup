@@ -4,7 +4,7 @@ use crate::util::command::CommandWrapper;
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, Read};
 use std::fs;
-use std::fs::{OpenOptions, File, read_dir, metadata, remove_file};
+use std::fs::{OpenOptions, File, read_dir, metadata, remove_file, rename};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -71,6 +71,21 @@ pub fn write_if_change(file_name: &str, mode: Option<&str>, to_write: &str, over
     }
 
     return Ok(true);
+}
+
+pub fn move_file(from: &str, to: &str) -> Result<(),String> {
+    if exists(from) {
+        // TODO: Fails if from and to are on different filesystems...
+        if let Err(err) = rename(from, to) {
+            let err_new = format!("Could not move temporary backup to persistent file: {}", err.to_string());
+            error!("{}", err_new);
+            return Err(err_new);
+        }
+
+        return Ok(());
+    } else {
+        return Err(format!("File to move does not exist: {}", from));
+    }
 }
 
 pub fn checked_remove(file_name: &str) -> Result<bool, String> {

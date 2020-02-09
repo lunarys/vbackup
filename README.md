@@ -98,7 +98,7 @@ Default directory: `/etc/vbackup/volumes`
 | name | yes | | A unique name for this configuration. Filename is recommended. |
 | disabled | no | false | Flag to disable this configuration. |
 | source_path | yes | | Path of the directory or name of the docker volume to back up. |
-| backup_path | no | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. |
+| backup_path | no | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. Uses the backup directory and the name of the configuration by default.|
 | savedata_in_store | no | false | Wether to store the savedata file with the backup or not. Overwrites the global flag if set. |
 | backup | no | | The backup configuration for this volume. |
 | sync | no | | The sync configuration for this volume. | 
@@ -251,7 +251,7 @@ Todo: module-data, savedata.json
 | directory | yes | | Directory to sync to on the server. | 
 | keep_versions | no | 1 | Number of versions of a file to keep. Note: Only if `smart_retention=false`.
 | smart_retention | no | false | Switch between smart retention policy or simple versioning. 
-| retention_policy | no | 1W:1D,4W:1W,12M:1M | Retention policy to use. Note: Only if `smart_retention=true`.
+| retention_policy | no | 1W:1D,4W:1W,12M:1M | Retention policy to use. Note: Only if `smart_retention=true`. [More here.](https://duplicati.readthedocs.io/en/latest/06-advanced-options/#retention-policy)
 | block_size | no | 100kb | Size of blocks files are fragmented into. [More here.](https://duplicati.readthedocs.io/en/latest/06-advanced-options/#blocksize)
 | file_size | no | 50mb | Size of dblock files on the server. [More here.](https://duplicati.readthedocs.io/en/latest/06-advanced-options/#dblock-size) 
 | encryption_key | no | | Key to use for encrypting the backup. |
@@ -356,6 +356,3 @@ Todo: module-data, savedata.json
 
 ## Todo
 - Implement automatic restore of backups
-- Implement module for minecraft server usetime check
-- Proper way of configuring ssh-keys
-- Proper checks if directories exist!

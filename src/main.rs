@@ -32,7 +32,8 @@ fn main() {
         force: false,
         name: None,
         base_config: String::from("/etc/vbackup/config.json"),
-        no_docker: false
+        no_docker: false,
+        no_reporting: false
     };
 
     {
@@ -57,6 +58,8 @@ fn main() {
             .add_option(&["-f", "--force"], StoreTrue, "Force the run to disregard time constraints");
         parser.refer(&mut args.no_docker)
             .add_option(&["-b", "--bare", "--no-docker"], StoreTrue, "'Bare' run without using docker");
+        parser.refer(&mut args.no_reporting)
+            .add_option(&["--no-reporting"], StoreTrue, "Disable reporting for this run");
         parser.parse_args_or_exit();
     }
 

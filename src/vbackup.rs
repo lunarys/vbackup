@@ -26,7 +26,7 @@ pub fn main(args: Arguments) -> Result<(),String> {
 
     let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
     let mut reporter = match args.operation.as_str() {
-        "run" | "backup" | "sync" => {
+        "run" | "backup" | "save" | "sync" if !args.no_reporting => {
             let reporter_config_opt = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))?;
             if let Some(reporter_config) = reporter_config_opt {
                 let mut r = ReportingModule::new_combined();

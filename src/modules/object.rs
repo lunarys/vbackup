@@ -13,7 +13,8 @@ pub struct Arguments {
     pub force: bool,
     pub name: Option<String>,
     pub base_config: String,
-    pub no_docker: bool
+    pub no_docker: bool,
+    pub no_reporting: bool
 }
 
 #[derive(Deserialize)]

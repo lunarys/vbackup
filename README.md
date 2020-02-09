@@ -39,7 +39,8 @@ such that the backup server is not started for each sync separately and can prof
 | -d, --debug | yes | false | Enable debug logging (Loglevel: Debug). |
 | -q, --quiet | yes | false | Disable info logging (Loglevel: Warn). |
 | -f, --force | yes | false | Disregard all constraints, forcing the run. |
-| -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes (duh!) and might affect the structure of the resulting backup. Not tested thoroughly. |    
+| -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes (duh!) and might affect the structure of the resulting backup. Not tested thoroughly. |
+| --no-reporting | yes | false | Disable reporting for this run. |    
 
 ## Configuration
 ### Base configuration

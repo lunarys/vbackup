@@ -79,6 +79,9 @@ fn main() {
 }
 
 fn run(args: Arguments) {
+    let operation = args.operation.clone();
+    info!("Starting '{}'", operation.as_str());
+
     // Ensure only one instance of this executable is running
     let lock_file_result = OpenOptions::new()
         .create(true) // Create file if it does not exist
@@ -111,4 +114,6 @@ fn run(args: Arguments) {
     if result.is_err() {
         exit(3);
     }
+
+    info!("Done with '{}'", operation.as_str());
 }

@@ -30,9 +30,10 @@ pub fn prune(directory: &str, identifier: &str, amount: &usize) -> Result<bool, 
     if list.len().gt(amount) {
         // Unstable sort works as file paths are unique and file names are prefixed with the ISO date
         list.sort_unstable();
-        let oldest_file = list.last();
-        if oldest_file.is_some() {
-            if remove_file(oldest_file.unwrap()).is_err() {
+        let oldest_file = list.first();
+        if let Some(oldest_file_path) = oldest_file {
+            debug!("Removing oldest file in timeframe: {:?}", oldest_file_path);
+            if remove_file(oldest_file_path).is_err() {
                 return Err(format!("Could not remove oldest file in '{}'", directory));
             }
         } else {

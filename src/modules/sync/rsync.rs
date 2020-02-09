@@ -14,7 +14,7 @@ pub struct Rsync<'a> {
 }
 
 struct Bind<'a> {
-    name: String,
+    _name: String,
     config: Configuration,
     ssh_config: SshConfig,
     paths: ModulePaths<'a>,
@@ -92,7 +92,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
         };
 
         self.bind = Some(Bind {
-            name: String::from(name),
+            _name: String::from(name),
             config,
             ssh_config,
             paths,
@@ -172,7 +172,7 @@ impl<'a> Rsync<'a> {
                 .arg_str("--rm")
                 .arg_str("--name=rsync-vbackup-tmp")
                 .arg_str("--env=SSHPASS")
-                .arg_string(format!("--volume={}:/{}", &bound.paths.source, &bound.name));
+                .arg_string(format!("--volume={}:/{}", &bound.paths.source, &bound.config.dirname));
 
             // Volume for authentication files
             command.arg_string(format!("--volume={}:{}", &bound.paths.module_data_dir, "/module"));

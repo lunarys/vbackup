@@ -58,7 +58,7 @@ pub fn main(args: Arguments) -> Result<(),String> {
 
             sync_result.map(|_| ())
         },
-        "backup" => {
+        "backup" | "save" => {
             let result = backup_wrapper(&args, &paths, &timeframes, &reporter);
             if let Ok((original_size, backup_size)) = result.as_ref() {
                 log_error!(reporter.report(Some(&["size", "original"]), original_size.to_string().as_str()));
@@ -66,7 +66,7 @@ pub fn main(args: Arguments) -> Result<(),String> {
             }
             result.map(|_| ())
         },
-        "save" => {
+        "sync" => {
             let result = sync_wrapper(&args, &paths, &timeframes, &reporter);
             if let Ok(sync_size) = result.as_ref() {
                 log_error!(reporter.report(Some(&["size", "sync"]), sync_size.to_string().as_str()));

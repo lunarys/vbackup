@@ -70,6 +70,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 .arg_str("--rm")
                 .arg_string(format!("--volume={}:/volume", bound.paths.source))
                 .arg_string(format!("--volume={}:/savedir", bound.paths.module_data_dir))
+                .arg_str("--env=ENCRYPTION_KEY")
                 .arg_str("--name=vbackup-tmp")
                 .arg_str("vbackup-p7zip")
                 .arg_str("sh")
@@ -77,33 +78,38 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             tmp
         };
 
+        // Relative path to backup (if docker is used)
         let save_path = if bound.no_docker {
-            // Init made sure original path can be unwrapped
             bound.paths.source.as_str()
         } else {
             "/volume"
         };
 
+        // File name for the temporary backup file
         let tmp_file_name = "vbackup-tar7zip-backup.tar.7z";
+        // Path to the temporary backup file on the disk
         let tmp_backup_file_actual = format!("{}/{}", bound.paths.module_data_dir, tmp_file_name);
+        // Relative path to the temporary backup file (if docker is used)
         let tmp_backup_file = if bound.no_docker {
             tmp_backup_file_actual.clone()
         } else {
             format!("/savedir/{}", tmp_file_name)
         };
 
-        let password_option = if bound.config.encryption_key.is_some() {
-            format!("-p'{}' ", bound.config.encryption_key.as_ref().unwrap())
+        // Store the password option for 7zip, if there is no password set it to an empty String
+        let password_option = if let Some(encryption_key) = bound.config.encryption_key.as_ref() {
+            cmd.env("ENCRYPTION_KEY", encryption_key);
+            String::from("-p\"$ENCRYPTION_KEY\" ")
         } else {
             String::new()
         };
 
-        //  > /dev/null?
-        let command_actual = format!("tar -cf - -C '{}' . | 7z a -si -mhe=on {}'{}'", save_path, password_option, tmp_backup_file);
+        //  Use full path to 7z executable to avoid additional forking without the password being replaced in the process overview
+        let command_actual = format!("tar -cf - -C '{}' . | /usr/lib/p7zip/7z a -si -mhe=on {}'{}'", save_path, password_option, tmp_backup_file);
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file
-        cmd.run_or_dry_run(bound.dry_run)?;
+        cmd.run_or_dry_run_without_output(bound.dry_run)?;
 
         // Create directory for backups
         file::create_dir_if_missing(bound.paths.destination.as_str(), true)?;

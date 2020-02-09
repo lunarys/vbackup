@@ -49,6 +49,16 @@ impl CommandWrapper {
         return Ok(());
     }
 
+    pub fn run_without_output(&mut self) -> Result<(), String> {
+        let exit_status = self.run_get_status_without_output()?;
+        if !exit_status.success() {
+            let msg = format!("Exit code indicates failure of command");
+            error!("{}", msg);
+            return Err(msg);
+        }
+        return Ok(());
+    }
+
     pub fn run_or_dry_run(&mut self, dry_run: bool) -> Result<(), String> {
         if dry_run {
             dry_run!(self.to_string());
@@ -59,7 +69,17 @@ impl CommandWrapper {
         return Ok(());
     }
 
-    pub fn _run_get_status_without_output(&mut self) -> Result<ExitStatus, String> {
+    pub fn run_or_dry_run_without_output(&mut self, dry_run: bool) -> Result<(), String> {
+        if dry_run {
+            dry_run!(self.to_string());
+        } else {
+            return self.run_without_output();
+        }
+
+        return Ok(());
+    }
+
+    pub fn run_get_status_without_output(&mut self) -> Result<ExitStatus, String> {
         let result = self.command.output();
 
         if let Ok(output) = result {

@@ -1,6 +1,6 @@
 use crate::modules::traits::Check;
 use crate::modules::object::*;
-use crate::{try_result,try_option};
+use crate::{try_result,try_option,dry_run};
 use crate::util::command::CommandWrapper;
 
 use serde_json::Value;
@@ -12,7 +12,8 @@ pub struct FileAge<'a> {
 
 struct Bind<'a> {
     paths: ModulePaths<'a>,
-    no_docker: bool
+    no_docker: bool,
+    dry_run: bool
 }
 
 impl<'a> FileAge<'a> {
@@ -22,7 +23,7 @@ impl<'a> FileAge<'a> {
 }
 
 impl<'a> Check<'a> for FileAge<'a> {
-    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, _dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);
@@ -31,7 +32,8 @@ impl<'a> Check<'a> for FileAge<'a> {
 
         self.bind = Some(Bind {
             paths,
-            no_docker
+            no_docker,
+            dry_run
         });
 
         return Ok(());
@@ -45,6 +47,7 @@ impl<'a> Check<'a> for FileAge<'a> {
             debug!("Check is not necessary as there was no run before");
             return Ok(true);
         } else {
+            trace!("Checking the age of files before doing anything");
             last.unwrap()
         };
 
@@ -59,8 +62,10 @@ impl<'a> Check<'a> for FileAge<'a> {
             command.arg_str("run")
                 .arg_str("--rm")
                 .arg_str("--name=vbackup-check-fileage-tmp")
-                .arg_string(format!("--volume='{}:/volume", check_path))
-                .arg_str("alpine");
+                .arg_string(format!("--volume={}:/volume", check_path))
+                .arg_str("alpine")
+                .arg_str("sh")
+                .arg_str("-c");
             command
         };
 
@@ -73,21 +78,25 @@ impl<'a> Check<'a> for FileAge<'a> {
         let command_actual = format!("[[ -d '{s}' ]] && [[ ! -z \"$(ls -A '{s}')\" ]] && find {s} -type f -print0 | xargs -0 stat -c '%Y;%n' | grep -v -e .savedata.json | sort -nr | head -n 1", s = search_path);
         command_base.arg_string(command_actual);
 
+        if bound.dry_run {
+            dry_run!(command_base.to_string());
+        }
+
         let output = command_base.run_get_output()?;
         let split_pos: usize = try_option!(output.find(";"), "Expected semicolon for split of check output");
         let (timestamp_str,filename) = output.split_at(split_pos);
 
-        debug!("Newest file is '{}' and was changed at '{}'", filename, timestamp_str);
+        trace!("Newest file is '{}' and was changed at '{}'", filename, timestamp_str);
 
         let file_timestamp: i64 = try_result!(timestamp_str.parse(), "Could not parse timestamp from string");
 
         if last_run.timestamp < file_timestamp {
             // A file was written after last run
-            info!("Newest file is newer that last run, run now");
+            debug!("Newest file is newer that last run, run now");
             return Ok(true);
         } else {
             // No file was written after last run
-            info!("Newest file is older than last run, do not run now");
+            debug!("Newest file is older than last run, do not run now");
             return Ok(false);
         }
     }

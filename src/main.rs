@@ -73,6 +73,7 @@ fn main() {
         LevelFilter::Info
     };
 
+    // TODO: Always prints timestamps in UTC
     Builder::new()
         .filter_level(log_level)
         .filter_module("paho_mqtt", LevelFilter::Warn)

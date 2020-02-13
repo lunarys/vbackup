@@ -120,6 +120,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 let file_name = savefile::format_filename(time, *frame, bound.name.as_str(), None, Some("tar.7z"));
                 let backup_file = format!("{}/{}", bound.paths.destination.as_str(), file_name);
 
+                // TODO: (?) Change permission on persisted files (currently readable by group and other due to default)?
                 if from.is_none() {
                     if !bound.dry_run {
                         file::move_file(tmp_backup_file_actual.as_str(), backup_file.as_str())?;

@@ -210,6 +210,13 @@ impl<'a> Rsync<'a> {
             .arg_str("--delete")
             .arg_str("--partial");
 
+        // TODO: Create an option for this?
+        // Set file permissions for receiving end
+        if bound.config.to_remote {
+            command.arg_str("--chmod=ug=rwX,o-rwx");
+            command.arg_str("--perms");
+        }
+
         if bound.config.compress {
             command.arg_str("--compress");
         }

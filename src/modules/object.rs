@@ -173,12 +173,12 @@ impl Paths {
 
     fn for_module(&self, name: &str, module_type: &str, source_opt: Option<&String>, destination_opt: Option<&String>, savedata_in_store: &Option<bool>, savedata_store: &Option<&String>) -> ModulePaths {
         let source = if source_opt.is_some() {
-            String::from(source_opt.unwrap())
+            String::from(source_opt.unwrap().as_str())
         } else {
             format!("{}/{}", self.save_dir.as_str(), name)
         };
         let destination = if destination_opt.is_some() {
-            String::from(destination_opt.unwrap())
+            String::from(destination_opt.unwrap().as_str())
         } else {
             format!("{}/{}", self.save_dir.as_str(), name)
         };

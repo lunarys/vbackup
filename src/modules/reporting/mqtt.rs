@@ -138,9 +138,9 @@ fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result
 
     let mut options_builder = mqtt::ConnectOptionsBuilder::new();
     let mut options = options_builder.clean_session(true);
-    options = options.user_name(&mqtt_config.user);
+    options = options.user_name(mqtt_config.user.as_str());
     if mqtt_config.password.is_some() {
-        options = options.password(mqtt_config.password.as_ref().unwrap());
+        options = options.password(mqtt_config.password.as_ref().unwrap().as_str());
     }
 
     //options.connect_timeout()
@@ -148,7 +148,7 @@ fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result
 
     // Set last will in case of whatever failure that includes a interrupted connection
     let testament_topic = get_base_topic(config, mqtt_config);
-    let testament = mqtt::Message::new(&testament_topic, "cancelled", mqtt_config.qos);
+    let testament = mqtt::Message::new(testament_topic.as_str(), "cancelled", mqtt_config.qos);
     options.will_message(testament);
 
     trace!("Base topic is '{}'", testament_topic);

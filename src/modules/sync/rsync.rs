@@ -79,9 +79,9 @@ impl<'a> Sync<'a> for Rsync<'a> {
 
         let (sync_from, sync_to) = if no_docker {
             if config.to_remote {
-                (String::from(&paths.source), remote_path)
+                (paths.source.clone(), remote_path)
             } else {
-                (format!("{}/{}", remote_path, config.dirname), String::from(&paths.source))
+                (format!("{}/{}", remote_path, config.dirname), paths.source.clone())
             }
         } else {
             if config.to_remote {

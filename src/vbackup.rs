@@ -422,7 +422,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
     // Prepare current timestamp and get timestamp of last backup + referenced timeframe
     let current_time: DateTime<Local> = chrono::Local::now();
-    let last_sync = savedata.lastsync.get(&sync_config.interval.frame);
+    let last_sync_opt = savedata.lastsync.get(&sync_config.interval.frame);
     let timeframe: &TimeFrame = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
 
     // Save base path for later as it will be moved
@@ -438,17 +438,24 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     if !args.force {
 
         // Compare to last sync timestamp (if it exists)
-        if last_sync.is_some() {
+        if let Some(last_sync) = last_sync_opt {
 
             // Compare elapsed time since last sync and the configured timeframe
-            if last_sync.unwrap().timestamp + timeframe.interval < current_time.timestamp() {
-                // do sync
-                debug!("Sync for '{}' is required considering the timeframe '{}' only", config.name.as_str(), timeframe.identifier.as_str());
-            } else {
+            if last_sync.timestamp + timeframe.interval >= current_time.timestamp() {
                 // sync not necessary
                 info!("Sync for '{}' is not executed due to the constraints of timeframe '{}'", config.name.as_str(), timeframe.identifier.as_str());
                 return Ok(false);
             }
+
+            // Check with last backup time
+            let backup_after_sync = savedata.lastsave.is_empty() || savedata.lastsave.values().any(|backup| backup.timestamp > last_sync.timestamp );
+            if !backup_after_sync {
+                info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.name.as_str());
+                return Ok(false);
+            }
+
+            // do sync
+            debug!("Sync for '{}' is required considering the timeframe '{}' only", config.name.as_str(), timeframe.identifier.as_str());
         } else {
 
             // This is probably the first sync, so just do it
@@ -457,7 +464,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
         // Run additional check
         if check_module.is_some() {
-            if check_helper::run(&check_module, &current_time, timeframe, &last_sync)? {
+            if check_helper::run(&check_module, &current_time, timeframe, &last_sync_opt)? {
                 // Do sync
                 debug!("Sync for '{}' is required considering the additional check", config.name.as_str());
             } else {
@@ -468,13 +475,13 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
         } else {
             debug!("There is no additional check for the sync of '{}', only using the interval check", config.name.as_str());
         }
+
+        // If we did not leave the function by now sync is necessary
+        info!("Executing sync for '{}'", config.name.as_str());
     } else {
         // Run is forced
-        info!("Forcing run of '{}' sync", config.name.as_str())
+        info!("Forcing sync for '{}'", config.name.as_str())
     }
-
-    // If we did not leave the function by now sync is necessary
-    debug!("Executing sync for '{}'", config.name.as_str());
 
     // Save path is still required after move, make a copy
     let save_data_path = paths.save_data.clone();
@@ -508,7 +515,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
 
         // Update internal state of check
         trace!("Invoking state update for additional check in timeframe '{}'", timeframe.identifier.as_str());
-        if let Err(err) = check_helper::update(&check_module, &current_time, timeframe, &last_sync) {
+        if let Err(err) = check_helper::update(&check_module, &current_time, timeframe, &last_sync_opt) {
             error!("State update for additional check in timeframe '{}' failed ({})", timeframe.identifier.as_str(), err);
         }
 

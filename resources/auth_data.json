@@ -4,8 +4,8 @@
     "port": 22,
     "user": "",
     "password": "",
-    "fingerprint-rsa": "",
-    "fingerprint-pubkey": "",
-    "login-key": ""
+    "fingerprint": "",
+    "host_key": "",
+    "ssh_key": ""
   }
 }

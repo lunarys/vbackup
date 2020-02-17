@@ -281,7 +281,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
     }
 
     // For traceability in the log
-    debug!("Executing backup for '{}'", config.name.as_str());
+    info!("Executing backup for '{}'", config.name.as_str());
 
     // Save value from paths for later
     let save_data_path = paths.save_data.clone();

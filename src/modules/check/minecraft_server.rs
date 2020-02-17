@@ -108,18 +108,25 @@ fn backupinfo_path(bind: &Bind) -> String {
 
 fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
     let file = backupinfo_path(bind);
+
+    // TODO: Currently does not handle missing backupinfo file properly (exit with error)
     let content = if bind.no_docker {
         file::read(file.as_str())?
     } else {
         let mut cmd = CommandWrapper::new("docker");
         cmd.arg_str("run")
             .arg_str("--rm")
-            .arg_string(format!("--volume={}:/volume", file))
+            .arg_string(format!("--volume={}:/file", file))
             .arg_str("--name=vbackup-tmp")
             .arg_str("alpine")
             .arg_str("sh")
             .arg_str("-c");
-        cmd.arg_string(format!("cat /volume/{}", bind.config.backup_info));
+        cmd.arg_str("cat /file");
+
+        if bind.dry_run {
+            dry_run!(cmd.to_string());
+        }
+
         cmd.run_get_output()?
     };
 
@@ -133,9 +140,16 @@ fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
         if separator_option.is_none() {
             continue;
         } else {
-            let (key,value): (&str, &str) = line.split_at(separator_option.unwrap());
+            let (key,value_tmp): (&str, &str) = line.split_at(separator_option.unwrap());
+            let value = if value_tmp.starts_with("=") {
+                let (_, tmp) = value_tmp.split_at(1);
+                tmp
+            } else {
+                value_tmp
+            };
             match key.to_lowercase().as_str() {
                 "usetime" => {
+                    debug!("Value for usetime: {}", value);
                     result.usetime = try_result!(value.parse(), "Could not parse usetime for minecraft server")
                 },
                 "save" => {
@@ -151,7 +165,8 @@ fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
 
 fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
     let file = backupinfo_path(bind);
-    let content = format!("usetime={}\nsave={}", 0, info.save);
+    // To uppercase to ensure legacy compatibility (not sure if it is handled correctly otherwise)
+    let content = format!("usetime={}\nsave={}", 0, info.save.to_string().to_uppercase());
 
     if bind.no_docker {
         return file::write(file.as_str(), content.as_str(), true);
@@ -159,12 +174,12 @@ fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
         let mut cmd = CommandWrapper::new("docker");
         cmd.arg_str("run")
             .arg_str("--rm")
-            .arg_string(format!("--volume={}:/volume", file))
+            .arg_string(format!("--volume={}:/file", file))
             .arg_str("--name=vbackup-tmp")
             .arg_str("alpine")
             .arg_str("sh")
             .arg_str("-c");
-        cmd.arg_string(format!("echo \"{}\" > /volume/{}", content, bind.config.backup_info));
+        cmd.arg_string(format!("echo \"{}\" > /file", content));
         return cmd.run();
     }
 }

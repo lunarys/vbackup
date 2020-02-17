@@ -30,6 +30,8 @@ impl<'a> Check<'a> for FileAge<'a> {
             return Err(msg);
         }
 
+        // TODO: Could include an ignore list in _config_json
+
         self.bind = Some(Bind {
             paths,
             no_docker,

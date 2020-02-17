@@ -263,8 +263,13 @@ Todo: module-data, savedata.json
 | auth.password | no | | Password for login on the server. |
 | auth.ssh_key | no | | Unencrypted RSA private key for login on the server. This will be preferred over the password if both are given. Duplicati does not yet support newer SSH keys like ED25519.|
 | auth.fingerprint_rsa | yes | | RSA fingerprint of the server for server authentication. |
+
+Read more about choosing file sizes (block size and file_size) [in this github issue](https://github.com/duplicati/duplicati/issues/2466)
+and [this guideline by the developers](https://www.duplicati.com/articles/Choosing-Sizes/).
+
 ```json
 {
+  "type": "duplicati",
   "encryption_key": "supersecure",
   "directory_prefix": "/home/foo",
   "directory": "directory/sub-directory",
@@ -291,6 +296,24 @@ Todo: module-data, savedata.json
 ```json
 {
   "type": "file-age"
+}
+```
+
+#### minecraft-server
+
+The backupinfo for this script is updated by a plugin running on the minecraft server. It counts the accumulated time users
+have spent on the server and writes this to a file (by default "backupinfo/props.info") in the server files.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| backup_info | no | backupinfo/props.info | The path to the file containing the backup information (usetime) relative to the volume location. |
+| targeted_usetime | yes | | The time in seconds the server has to be in use before a backup is run. |  
+
+```json
+{
+  "type": "minecraft-server",
+  "backup_info": "backupinfo/props.info",
+  "targeted_usetime": 100
 }
 ```
 

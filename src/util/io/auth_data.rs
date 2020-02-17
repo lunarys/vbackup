@@ -13,7 +13,7 @@ fn load_from_file(name: &String, paths: &Paths) -> Result<Value,String> {
     let auth_file_content = json::from_file::<Value>(Path::new(&paths.auth_data_file))?;
     match auth_file_content.get(name) {
         Some(value) => Ok(value.clone()), // TODO: - clone
-        None => Err("Key does not exist in file".to_string())
+        None => Err(format!("Key does not exist in authentication data file: '{}'", name))
     }
 }
 

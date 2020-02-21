@@ -161,41 +161,40 @@ pub fn list_in_dir(dir_name: &str) -> Result<Vec<PathBuf>, String> {
 }
 
 pub fn size(path: &str, no_docker: bool) -> Result<u64,String> {
+    // TODO: Not ideal as it relies on other tools
+    let mut cmd = if no_docker {
+        let mut tmp = CommandWrapper::new("sh");
+        tmp.arg_str("-c");
+        tmp
+    } else {
+        let mut tmp = CommandWrapper::new("docker");
+        tmp.arg_str("run")
+            .arg_str("--rm")
+            .arg_str("--name=vbackup-size-calc-tmp")
+            .arg_string(format!("--volume={}:/volume", path))
+            .arg_str("alpine")
+            .arg_str("sh")
+            .arg_str("-c");
+        tmp
+    };
+
+    let cmd_path = if no_docker {
+        path
+    } else {
+        "/volume"
+    };
+
+    cmd.arg_string(format!("du {} | tail -1 | cut -f1", cmd_path));
+
+    let output = cmd.run_get_output()?;
+    return output.parse().map_err(|_| String::from("Could not parse size in bytes from command output"));
+}
+
+pub fn _size_checked(path: &str, no_docker: bool) -> Result<u64,String> {
     let meta = try_result!(metadata(Path::new(path)), "Could not read metadata");
 
     if meta.is_dir() {
-        // TODO: Not ideal as directories are always counted as 4KB
-        /*let result = list_in_dir(path)?.iter()
-            .filter_map(|pb| pb.as_path().metadata().ok())
-            .fold(0,|acc, m| acc + m.len());*/
-
-        // TODO: Not ideal as it relies on other tools
-        let mut cmd = if no_docker {
-            let mut tmp = CommandWrapper::new("sh");
-            tmp.arg_str("-c");
-            tmp
-        } else {
-            let mut tmp = CommandWrapper::new("docker");
-            tmp.arg_str("run")
-                .arg_str("--rm")
-                .arg_str("--name=vbackup-size-calc-tmp")
-                .arg_string(format!("--volume={}:/volume", path))
-                .arg_str("alpine")
-                .arg_str("sh")
-                .arg_str("-c");
-            tmp
-        };
-
-        let cmd_path = if no_docker {
-            path
-        } else {
-            "/volume"
-        };
-
-        cmd.arg_string(format!("du {} | tail -1 | cut -f1", cmd_path));
-        let output = cmd.run_get_output()?;
-
-        return output.parse().map_err(|_| String::from("Could not parse size in bytes from command output"));
+        return size(path, no_docker);
     } else {
         return Ok(meta.len());
     }

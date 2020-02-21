@@ -9,15 +9,26 @@
     "interval": 85800,
     "comment": "10min tolerance substracted here"
   },
+  "SEMIWEEKLY": {
+    "identifier": "SEMIWEEKLY",
+    "interval": 302400
+  },
   "WEEKLY": {
     "identifier": "WEEKLY",
     "interval": 603900,
     "comment": "15min tolerance substracted here"
   },
+  "SEMIMONTHLY": {
+    "identifier": "SEMIMONTHLY",
+    "interval": 1286000
+  },
   "MONTHLY": {
     "identifier": "MONTHLY",
-    "interval": 2628000,
-    "comment": "30min tolerance substracted here"
+    "interval": 2592000
+  },
+  "YEARLY": {
+    "identifier": "YEARLY",
+    "interval": 31536000
   },
   "CUSTOM": {
     "identifier": "CUSTOM",

@@ -57,6 +57,11 @@ cp ../target/release/vbackup ${EXECUTABLE}
 if ! ${UPDATE_ONLY}; then
     mkdir "${CONFIG_DIR}/volumes"
     cp -r ../resources/images ../resources/config.json ../resources/reporting.json ../resources/auth_data.json ../resources/timeframes.json ${CONFIG_DIR}
+else
+    # Update timeframes config only
+    cp ../resources/timeframes.json ${CONFIG_DIR}/timeframes.json
+    chown root:root ${CONFIG_DIR}/timeframes.json
+    chmod u+rwX,go-rwx ${CONFIG_DIR}/timeframes.json
 fi
 
 # Set permissions on files

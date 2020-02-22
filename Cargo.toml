@@ -1,6 +1,6 @@
 [package]
 name = "vbackup"
-version = "1.0.2"
+version = "1.0.3"
 authors = ["Julian Ulrich <vbackup@lujanu.de>"]
 edition = "2018"
 

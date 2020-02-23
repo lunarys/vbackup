@@ -40,7 +40,7 @@ fn main() {
         let mut parser = ArgumentParser::new();
         parser.set_description("Client to interact with a MQTT device controller");
         parser.refer(&mut args.operation)
-            .add_argument("operation", Store, "Operation to perform (run,backup,sync,list)")
+            .add_argument("operation", Store, "Operation to perform (run,backup,sync,list,version)")
             .required();
         parser.refer(&mut args.name)
             .add_option(&["-n", "--name"], StoreOption, "Name of the specific backup to run");
@@ -84,6 +84,13 @@ fn main() {
 
 fn run(args: Arguments) {
     let operation = args.operation.clone();
+
+    if operation == "version" {
+        let version = env!("CARGO_PKG_VERSION");
+        println!("vbackup v{}", version);
+        exit(0);
+    }
+
     info!("Starting '{}'", operation.as_str());
 
     // Ensure only one instance of this executable is running

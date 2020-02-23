@@ -12,7 +12,7 @@ pub fn init(args: &Arguments, paths: &Paths, config: &Configuration, controller_
         let module_paths = paths.for_sync_module("controller", &config);
 
         let mut module = controller::get_module(try_option!(controller_type.as_str(), "Expected controller type as string"))?;
-        module.init(config.name.as_str(), controller_config.as_ref().unwrap(), module_paths, args.dry_run, args.no_docker)?;
+        module.init(config.name.as_str(), controller_config.as_ref().unwrap(), module_paths, args)?;
 
         return Ok(Some(module));
     } else {

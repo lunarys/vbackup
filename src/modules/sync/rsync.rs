@@ -1,5 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::ModulePaths;
+use crate::modules::object::{ModulePaths,Arguments};
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
@@ -57,7 +57,7 @@ impl<'a> Rsync<'a> {
 }
 
 impl<'a> Sync<'a> for Rsync<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Sync module is already bound");
             error!("{}", msg);
@@ -77,7 +77,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
                                   ssh_config.hostname,
                                   path_prefix);
 
-        let (sync_from, sync_to) = if no_docker {
+        let (sync_from, sync_to) = if args.no_docker {
             if config.to_remote {
                 (paths.source.clone(), remote_path)
             } else {
@@ -98,8 +98,8 @@ impl<'a> Sync<'a> for Rsync<'a> {
             paths,
             sync_from,
             sync_to,
-            dry_run,
-            no_docker
+            dry_run: args.dry_run,
+            no_docker: args.no_docker
         });
 
         return Ok(());

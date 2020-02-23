@@ -1,6 +1,6 @@
 use crate::modules::traits::Reporting;
 use crate::util::io::{auth_data,json};
-use crate::modules::object::Paths;
+use crate::modules::object::{Paths,Arguments};
 
 use crate::{try_result,try_option};
 
@@ -47,7 +47,7 @@ impl Reporter {
 }
 
 impl Reporting for Reporter {
-    fn init(&mut self, config_json: &Value, paths: &Paths, _dry_run: bool, _no_docker: bool) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Paths, _args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Reporting module is already bound");
             error!("{}", msg);

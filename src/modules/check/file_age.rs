@@ -23,7 +23,7 @@ impl<'a> FileAge<'a> {
 }
 
 impl<'a> Check<'a> for FileAge<'a> {
-    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);
@@ -34,8 +34,8 @@ impl<'a> Check<'a> for FileAge<'a> {
 
         self.bind = Some(Bind {
             paths,
-            no_docker,
-            dry_run
+            no_docker: args.no_docker,
+            dry_run: args.dry_run
         });
 
         return Ok(());

@@ -14,7 +14,7 @@ pub fn init<'a>(args: &Arguments, paths: &'a Paths, config: &Configuration, chec
         let module_paths = paths.for_check_module("check", &config, reference);
 
         let mut module = check::get_module(try_option!(check_type.as_str(), "Expected controller type as string"))?;
-        module.init(config.name.as_str(), check_config.as_ref().unwrap(), module_paths, args.dry_run, args.no_docker)?;
+        module.init(config.name.as_str(), check_config.as_ref().unwrap(), module_paths, args)?;
 
         return Ok(Some(module));
     } else {

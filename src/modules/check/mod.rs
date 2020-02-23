@@ -1,5 +1,5 @@
 use crate::modules::traits::Check;
-use crate::modules::object::{ModulePaths,TimeEntry, TimeFrame};
+use crate::modules::object::{ModulePaths,TimeEntry,TimeFrame,Arguments};
 use serde_json::Value;
 
 mod file_age;
@@ -31,10 +31,10 @@ pub fn get_module(name: &str) -> Result<CheckModule, String> {
 }
 
 impl<'a> Check<'a> for CheckModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         match self {
-            FileAge(check) => check.init(name, config_json, paths, dry_run, no_docker),
-            MinecraftServer(check) => check.init(name, config_json, paths, dry_run, no_docker)
+            FileAge(check) => check.init(name, config_json, paths, args),
+            MinecraftServer(check) => check.init(name, config_json, paths, args)
         }
     }
 

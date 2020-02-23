@@ -34,7 +34,7 @@ impl<'a> Tar7Zip<'a> {
 }
 
 impl<'a> Backup<'a> for Tar7Zip<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Backup module is already bound");
             error!("{}", msg);
@@ -50,8 +50,8 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             name: String::from(name),
             config,
             paths,
-            dry_run,
-            no_docker
+            dry_run: args.dry_run,
+            no_docker: args.no_docker
         });
 
         return Ok(());

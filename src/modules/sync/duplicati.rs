@@ -1,5 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::ModulePaths;
+use crate::modules::object::{ModulePaths,Arguments};
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 
@@ -63,7 +63,7 @@ impl<'a> Duplicati<'a> {
 }
 
 impl<'a> Sync<'a> for Duplicati<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Sync module is already bound");
             error!("{}", msg);
@@ -78,8 +78,8 @@ impl<'a> Sync<'a> for Duplicati<'a> {
             config,
             auth,
             paths,
-            dry_run,
-            no_docker
+            dry_run: args.dry_run,
+            no_docker: args.no_docker
         });
 
         Ok(())

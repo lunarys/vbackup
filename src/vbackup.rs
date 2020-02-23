@@ -30,7 +30,7 @@ pub fn main(args: Arguments) -> Result<(),String> {
             let reporter_config_opt = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))?;
             if let Some(reporter_config) = reporter_config_opt {
                 let mut r = ReportingModule::new_combined();
-                r.init(&reporter_config, &paths, args.dry_run, args.no_docker)?;
+                r.init(&reporter_config, &paths, &args)?;
                 r
             } else {
                 ReportingModule::new_empty()
@@ -288,7 +288,7 @@ fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_c
 
     // Set up backup module now
     trace!("Invoking backup module");
-    module.init(&config.name, &backup_config.config, paths, args.dry_run, args.no_docker)?;
+    module.init(&config.name, &backup_config.config, paths, args)?;
 
     // Do backups (all timeframes at once to enable optimizations)
     let backup_result = module.backup(&current_time, &queue_refs);
@@ -487,7 +487,7 @@ fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_confi
     let save_data_path = paths.save_data.clone();
 
     // Initialize sync module
-    module.init(&config.name, &sync_config.config, paths, args.dry_run, args.no_docker)?;
+    module.init(&config.name, &sync_config.config, paths, args)?;
 
     // Set up controller (if configured)
     let mut controller_module = controller_helper::init(&args, base_paths, &config, &sync_config.controller)?;

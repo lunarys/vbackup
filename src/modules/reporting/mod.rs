@@ -1,5 +1,5 @@
 use crate::modules::traits::Reporting;
-use crate::modules::object::Paths;
+use crate::modules::object::{Paths,Arguments};
 
 use crate::try_option;
 
@@ -38,10 +38,10 @@ impl ReportingModule {
 }
 
 impl Reporting for ReportingModule {
-    fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Paths, args: &Arguments) -> Result<(), String> {
         return match self {
-            Combined(reporter) => reporter.init(config_json, paths, dry_run, no_docker),
-            Mqtt(reporter) => reporter.init(config_json, paths, dry_run, no_docker),
+            Combined(reporter) => reporter.init(config_json, paths, args),
+            Mqtt(reporter) => reporter.init(config_json, paths, args),
             Empty => Ok(())
         }
     }
@@ -78,7 +78,7 @@ impl Reporter {
 }
 
 impl Reporting for Reporter {
-    fn init(&mut self, config_json: &Value, paths: &Paths, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Paths, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Reporting module is already bound");
             error!("{}", msg);
@@ -99,7 +99,7 @@ impl Reporting for Reporter {
             if let Some(reporter) = value.get("type") {
                 if reporter.is_string() {
                     let mut result = get_module(reporter.as_str().unwrap())?;
-                    result.init(*value, paths, dry_run, no_docker)?;
+                    result.init(*value, paths, args)?;
                     return Ok(result);
                 } else {
                     return Err(String::from(""));

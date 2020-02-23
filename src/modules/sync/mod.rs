@@ -1,5 +1,5 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::ModulePaths;
+use crate::modules::object::{ModulePaths,Arguments};
 
 use serde_json::Value;
 
@@ -26,10 +26,10 @@ pub fn get_module(name: &str) -> Result<SyncModule,String> {
 }
 
 impl<'a> Sync<'a> for SyncModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         return match self {
-            Duplicati(sync) => sync.init(name, config_json, paths, dry_run, no_docker),
-            Rsync(sync) => sync.init(name, config_json, paths, dry_run, no_docker)
+            Duplicati(sync) => sync.init(name, config_json, paths, args),
+            Rsync(sync) => sync.init(name, config_json, paths, args)
         };
     }
 

@@ -1,5 +1,5 @@
 use crate::modules::traits::Controller;
-use crate::modules::object::ModulePaths;
+use crate::modules::object::{ModulePaths,Arguments};
 use crate::util::io::{auth_data,json};
 
 use crate::{try_result,try_option,bool_result,dry_run};
@@ -57,7 +57,7 @@ impl MqttController {
 }
 
 impl<'a> Controller<'a> for MqttController {
-    fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, _no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Controller module is already bound");
             error!("{}", msg);
@@ -83,7 +83,7 @@ impl<'a> Controller<'a> for MqttController {
             mqtt_config,
             client,
             receiver,
-            dry_run,
+            dry_run: args.dry_run,
             is_controller_online
         });
 

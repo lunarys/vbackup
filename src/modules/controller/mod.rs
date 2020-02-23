@@ -1,5 +1,5 @@
 use crate::modules::traits::Controller;
-use crate::modules::object::ModulePaths;
+use crate::modules::object::{ModulePaths,Arguments};
 use serde_json::Value;
 
 mod mqtt;
@@ -22,9 +22,9 @@ pub fn get_module(name: &str) -> Result<ControllerModule, String> {
 }
 
 impl<'a> Controller<'a> for ControllerModule {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, dry_run: bool, no_docker: bool) -> Result<(), String> {
+    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         return match self {
-            MQTT(controller) => controller.init(name, config_json, paths, dry_run, no_docker)
+            MQTT(controller) => controller.init(name, config_json, paths, args)
         }
     }
 

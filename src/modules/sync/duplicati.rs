@@ -18,7 +18,8 @@ struct Bind<'a> {
     auth: Authentication,
     paths: ModulePaths<'a>,
     dry_run: bool,
-    no_docker: bool
+    no_docker: bool,
+    print_command: bool
 }
 
 #[derive(Deserialize)]
@@ -79,7 +80,8 @@ impl<'a> Sync<'a> for Duplicati<'a> {
             auth,
             paths,
             dry_run: args.dry_run,
-            no_docker: args.no_docker
+            no_docker: args.no_docker,
+            print_command: args.debug || args.dry_run
         });
 
         Ok(())
@@ -119,7 +121,13 @@ impl<'a> Sync<'a> for Duplicati<'a> {
         if bound.dry_run {
             dry_run!(command.to_string());
         } else {
-            let status = command.run_get_status()?;
+            let status = if bound.print_command {
+                println!("-> {}", command.to_string());
+                command.run_get_status()?
+            } else {
+                command.run_get_status_without_output()?
+            };
+
             if let Some(code) = status.code() {
                 if code != 0 && code != 1 {
                     let msg = format!("Exit code indicates failure of duplicati backup");
@@ -147,7 +155,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
 
             add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
 
-            command.run_or_dry_run(bound.dry_run)?;
+            command.run_configuration(bound.print_command, bound.dry_run)?;
         }
 
         // Restore the data
@@ -167,7 +175,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
                 command.arg_str("--restore-path=/volume");
             }
 
-            command.run_or_dry_run(bound.dry_run)?;
+            command.run_configuration(bound.print_command, bound.dry_run)?;
         }
 
         debug!("Duplicati restore for {} is done", bound.name);

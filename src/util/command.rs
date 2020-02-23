@@ -32,7 +32,8 @@ impl CommandWrapper {
 
     pub fn env(&mut self, key: &str, value: &str) {
         self.command.env(key, value);
-        self.envs.push(format!("{}={}", key, value));
+        //self.envs.push(format!("{}={}", key, value));
+        self.envs.push(format!("{}=xxx", key));
     }
 
     pub fn spawn(&mut self) -> Result<Child,String> {
@@ -49,6 +50,18 @@ impl CommandWrapper {
         return Ok(());
     }
 
+    pub fn run_configuration(&mut self, print: bool, dry_run: bool) -> Result<(),String> {
+        if dry_run {
+            dry_run!(self.to_string());
+            return Ok(());
+        } else if print {
+            println!("-> {}", self.to_string());
+            return self.run();
+        } else {
+            return self.run_without_output();
+        }
+    }
+
     pub fn run_without_output(&mut self) -> Result<(), String> {
         let exit_status = self.run_get_status_without_output()?;
         if !exit_status.success() {
@@ -59,7 +72,7 @@ impl CommandWrapper {
         return Ok(());
     }
 
-    pub fn run_or_dry_run(&mut self, dry_run: bool) -> Result<(), String> {
+    pub fn _run_or_dry_run(&mut self, dry_run: bool) -> Result<(), String> {
         if dry_run {
             dry_run!(self.to_string());
         } else {
@@ -69,7 +82,7 @@ impl CommandWrapper {
         return Ok(());
     }
 
-    pub fn run_or_dry_run_without_output(&mut self, dry_run: bool) -> Result<(), String> {
+    pub fn _run_or_dry_run_without_output(&mut self, dry_run: bool) -> Result<(), String> {
         if dry_run {
             dry_run!(self.to_string());
         } else {

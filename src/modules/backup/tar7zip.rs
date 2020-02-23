@@ -19,7 +19,8 @@ struct Bind<'a> {
     config: Configuration,
     paths: ModulePaths<'a>,
     dry_run: bool,
-    no_docker: bool
+    no_docker: bool,
+    print_command: bool
 }
 
 #[derive(Deserialize)]
@@ -51,7 +52,8 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
             config,
             paths,
             dry_run: args.dry_run,
-            no_docker: args.no_docker
+            no_docker: args.no_docker,
+            print_command: args.debug || args.verbose
         });
 
         return Ok(());
@@ -109,7 +111,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file
-        cmd.run_or_dry_run_without_output(bound.dry_run)?;
+        cmd.run_configuration(bound.print_command, bound.dry_run)?;
 
         // Create directory for backups
         file::create_dir_if_missing(bound.paths.destination.as_str(), true)?;

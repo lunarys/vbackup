@@ -21,7 +21,9 @@ struct Bind<'a> {
     sync_from: String,
     sync_to: String,
     dry_run: bool,
-    no_docker: bool
+    no_docker: bool,
+    verbose: bool,
+    print_command: bool
 }
 
 #[derive(Deserialize)]
@@ -99,7 +101,9 @@ impl<'a> Sync<'a> for Rsync<'a> {
             sync_from,
             sync_to,
             dry_run: args.dry_run,
-            no_docker: args.no_docker
+            no_docker: args.no_docker,
+            verbose: args.verbose,
+            print_command: args.debug || args.verbose
         });
 
         return Ok(());
@@ -112,7 +116,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
         command.arg_string(format!("{}", &bound.sync_from))
             .arg_string(format!("{}", &bound.sync_to));
 
-        command.run_or_dry_run(bound.dry_run)?;
+        command.run_configuration(bound.print_command, bound.dry_run)?;
 
         return Ok(());
     }
@@ -124,7 +128,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
         command.arg_string(format!("{}", &bound.sync_to))
             .arg_string(format!("{}", &bound.sync_from));
 
-        command.run_or_dry_run(bound.dry_run)?;
+        command.run_configuration(bound.print_command, bound.dry_run)?;
 
         return Ok(());
     }
@@ -223,6 +227,10 @@ impl<'a> Rsync<'a> {
 
         if bound.dry_run {
             command.arg_str("--dry-run");
+        }
+
+        if bound.verbose {
+            command.arg_str("--verbose");
         }
 
         return Ok(command);

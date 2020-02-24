@@ -94,11 +94,30 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
     // Go through all configurations in the config directory
     for mut config in get_config_list(args, paths)? {
 
+        // Check if the while configuration is disabled
+        if config.disabled {
+            info!("Configuration for '{}' is disabled", config.name.as_str());
+            let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "disabled");
+            log_error!(report_result);
+            continue;
+        }
+
         // Get paths specifically for this module
         let module_paths = paths.for_backup_module("backup", &config);
 
         // Only do something else if a backup is present in this configuration
         if config.backup.is_some() {
+
+            // Take ownership of config
+            let backup_config = config.backup.take().unwrap();
+
+            // Check if this backup is disabled
+            if backup_config.disabled {
+                info!("Backup for '{}' is disabled", config.name.as_str());
+                let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "success");
+                log_error!(report_result);
+                continue;
+            }
 
             // Get savedata for this backup
             let savedata_result = get_savedata(module_paths.save_data.as_str());
@@ -113,9 +132,6 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
             // Announcing the start of this backup
             log_error!(reporter.report(Some(&["backup", config.name.as_str()]), "starting"));
 
-            // Take ownership of config
-            let backup_config = config.backup.take().unwrap();
-
             // Save those paths for later, as the ModulePaths will be moved
             let original_path = module_paths.source.clone();
             let store_path = module_paths.destination.clone();
@@ -125,12 +141,12 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
             match result {
                 Ok(true) => {
                     info!("Backup for '{}' was successfully executed", config.name.as_str());
-                    let report_result =reporter.report(Some(&["backup", config.name.as_str()]), "success");
+                    let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "success");
                     log_error!(report_result);
                 },
                 Ok(false) => {
                     info!("Backup for '{}' was not executed due to constraints", config.name.as_str());
-                    let report_result =reporter.report(Some(&["backup", config.name.as_str()]), "skipped");
+                    let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "skipped");
                     log_error!(report_result);
                 },
                 Err(err) => {
@@ -355,6 +371,14 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
     // Go through all configurations in the config directory
     for mut config in get_config_list(args, paths)? {
 
+        // Check if the while configuration is disabled
+        if config.disabled {
+            info!("Configuration for '{}' is disabled", config.name.as_str());
+            let report_result = reporter.report(Some(&["sync", config.name.as_str()]), "disabled");
+            log_error!(report_result);
+            continue;
+        }
+
         // Get paths specifically for this module
         let module_paths = paths.for_sync_module("sync", &config);
 
@@ -371,12 +395,20 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
         // Only do something else if a sync is present in this configuration
         if config.sync.is_some() {
 
-            // Announce that this sync is starting
-            log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "starting"));
-
             // Save owned objects of configuration and path
             let sync_config = config.sync.take().unwrap();
             let store_path = module_paths.source.clone();
+
+            // Check if the while configuration is disabled
+            if sync_config.disabled {
+                info!("Configuration for '{}' is disabled", config.name.as_str());
+                let report_result = reporter.report(Some(&["sync", config.name.as_str()]), "disabled");
+                log_error!(report_result);
+                continue;
+            }
+
+            // Announce that this sync is starting
+            log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "starting"));
 
             // Run the backup and evaluate the result
             let result = sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);

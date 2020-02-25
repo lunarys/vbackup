@@ -81,7 +81,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
             paths,
             dry_run: args.dry_run,
             no_docker: args.no_docker,
-            print_command: args.debug || args.dry_run
+            print_command: args.debug || args.verbose
         });
 
         Ok(())
@@ -129,7 +129,14 @@ impl<'a> Sync<'a> for Duplicati<'a> {
             };
 
             if let Some(code) = status.code() {
-                if code != 0 && code != 1 {
+                trace!("Exit code is '{}'", code);
+                if code == 50 {
+                    let msg = format!("Backup uploaded some files, but did not finish");
+                    error!("{}", msg);
+                    return Err(msg);
+                } else if code == 2 {
+                    warn!("Duplicati exited with warnings");
+                } else if code != 0 && code != 1 {
                     let msg = format!("Exit code indicates failure of duplicati backup");
                     error!("{}", msg);
                     return Err(msg);

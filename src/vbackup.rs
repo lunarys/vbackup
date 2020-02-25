@@ -173,9 +173,6 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
                 },
                 Err(err) => error!("Could not read size of the backup up files: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
             }
-
-            // Announce that this backup is done now
-            log_error!(reporter.report(Some(&["backup", config.name.as_str()]), "done"));
         } else {
             info!("No backup is configured for '{}'", config.name.as_str());
         }
@@ -436,9 +433,6 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
                 },
                 Err(err) => error!("Could not read size of sync: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
             }
-
-            // Announce that this sync is done now
-            log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "done"));
         } else {
             info!("No sync is configured for '{}'", config.name.as_str());
         }

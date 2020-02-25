@@ -96,7 +96,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
 
         // Check if the while configuration is disabled
         if config.disabled {
-            info!("Configuration for '{}' is disabled", config.name.as_str());
+            info!("Configuration for '{}' is disabled, skipping backup", config.name.as_str());
             let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "disabled");
             log_error!(report_result);
             continue;
@@ -373,7 +373,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
 
         // Check if the while configuration is disabled
         if config.disabled {
-            info!("Configuration for '{}' is disabled", config.name.as_str());
+            info!("Configuration for '{}' is disabled, skipping sync", config.name.as_str());
             let report_result = reporter.report(Some(&["sync", config.name.as_str()]), "disabled");
             log_error!(report_result);
             continue;
@@ -401,7 +401,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
 
             // Check if the while configuration is disabled
             if sync_config.disabled {
-                info!("Configuration for '{}' is disabled", config.name.as_str());
+                info!("Sync for '{}' is disabled", config.name.as_str());
                 let report_result = reporter.report(Some(&["sync", config.name.as_str()]), "disabled");
                 log_error!(report_result);
                 continue;

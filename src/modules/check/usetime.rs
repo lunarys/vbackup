@@ -8,7 +8,7 @@ use serde_json::Value;
 use serde::{Deserialize};
 use chrono::{Local, DateTime};
 
-pub struct MinecraftServer<'a> {
+pub struct Usetime<'a> {
     bind: Option<Bind<'a>>
 }
 
@@ -21,7 +21,7 @@ struct Bind<'a> {
 
 struct BackupInfo {
     usetime: i64,
-    save: bool
+    file_content: String
 }
 
 #[derive(Deserialize)]
@@ -35,13 +35,13 @@ fn relative_backup_info() -> String {
     return String::from("backupinfo/props.info");
 }
 
-impl<'a> MinecraftServer<'a> {
+impl<'a> Usetime<'a> {
     pub fn new_empty() -> Self {
         return Self { bind: None };
     }
 }
 
-impl<'a> Check<'a> for MinecraftServer<'a> {
+impl<'a> Check<'a> for Usetime<'a> {
     fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
@@ -130,11 +130,7 @@ fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
         cmd.run_get_output()?
     };
 
-    let mut result = BackupInfo {
-        usetime: 0,
-        save: true
-    };
-
+    let mut usetime: Option<i64> = None;
     for line in content.split("\n") {
         let separator_option = line.find("=");
         if separator_option.is_none() {
@@ -150,25 +146,27 @@ fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
             match key.to_lowercase().as_str() {
                 "usetime" => {
                     debug!("Value for usetime: {}", value);
-                    result.usetime = try_result!(value.parse(), "Could not parse usetime for minecraft server")
-                },
-                "save" => {
-                    result.save = value.to_lowercase() == "true"
-                },
+                    usetime = Some(try_result!(value.parse(), "Could not parse usetime for minecraft server"))
+                }
                 _ => ()
             }
         }
     }
+
+    let result = BackupInfo {
+        usetime: usetime.unwrap_or(0),
+        file_content: content
+    };
 
     return Ok(result);
 }
 
 fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
     let file = backupinfo_path(bind);
-    // To uppercase to ensure legacy compatibility (not sure if it is handled correctly otherwise)
-    let content = format!("usetime={}\nsave={}", 0, info.save.to_string().to_uppercase());
-
     if bind.no_docker {
+        // Use the original value to reset the usetime
+        let to_replace = format!("usetime={}", info.usetime);
+        let content = info.file_content.replace(to_replace.as_str(), "usetime=0");
         return file::write(file.as_str(), content.as_str(), true);
     } else {
         let mut cmd = CommandWrapper::new("docker");
@@ -179,7 +177,7 @@ fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
             .arg_str("alpine")
             .arg_str("sh")
             .arg_str("-c");
-        cmd.arg_string(format!("echo \"{}\" > /file", content));
+        cmd.arg_str("sed -i 's/usetime=.*/usetime=0/g' /file");
         return cmd.run();
     }
 }

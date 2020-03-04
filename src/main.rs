@@ -8,6 +8,7 @@ extern crate chrono;
 extern crate glob;
 extern crate fs2;
 
+mod scheduling;
 mod vbackup;
 mod modules;
 mod util;

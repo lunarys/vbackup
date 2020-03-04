@@ -3,6 +3,7 @@ use crate::modules::object::{ModulePaths, TimeFrameReference, Arguments};
 use serde_json::Value;
 
 mod tar7zip;
+mod mysql;
 
 pub enum BackupModule<'a> {
     Tar7Zip(tar7zip::Tar7Zip<'a>)

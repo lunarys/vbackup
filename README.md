@@ -14,6 +14,19 @@ so there are some imperfections that I either learned about later or am still le
 Some parts are also not written as general as I'd like them to, 
 but this is a tradeoff I was willing to make considering the effort.
 
+## How does it work?
+In general backups for directories or docker volumes are defined in a new configuration file.
+A backup may consist of a **backup** and a **sync** part or either one of those.
+Backups generally only create a *local* backup of the source, while syncs transfer the source 
+to a remote destination. If both are defined, a local backup is created and then 
+transferred to the remote device instead of directly syncing the source,
+but only if a backup that has not been synced before exists.  
+
+## Related projects
+- [Backup trigger](https://github.com/lunarys/mqtt-vbackup-trigger): Remotely start the backup over MQTT
+- [Device controller](https://github.com/lunarys/mqtt-device-controller): Remotely start and stop devices for the backup over MQTT  
+- [Shutdown trigger](https://github.com/lunarys/mqtt-shutdown-trigger): Shut down a device over MQTT
+
 ## Running as a service
 I use MQTT to trigger runs. 
 For that I wrote a simple service running the executable whenever a specific message is received on specific MQTT topics. 
@@ -91,7 +104,7 @@ Default file: `/etc/vbackup/timeframes.json`
 }
 ```
 ### Volumes
-Default directory: `/etc/vbackup/volumes`
+Default directory: `/etc/vbackup/volumes`. This is the configuration file for a source to back up.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
@@ -122,8 +135,8 @@ Default directory: `/etc/vbackup/volumes`
 | config | yes | | The module specific backup configuration. |
 | check | no | | Configuration of an additional check for this backup. |
 | timeframes | yes | | Timeframes in which to run this backup. |
-| timeframes.x.frame | yes | | Identifier of the referenced timeframe. |
-| timeframes.x.amount | no | 1 | The number of backups to keep for this timeframe. |
+| timeframes[].frame | yes | | Identifier of the referenced timeframe. |
+| timeframes[].amount | no | 1 | The number of backups to keep for this timeframe. |
 
 ```json
 {
@@ -163,7 +176,7 @@ Default directory: `/etc/vbackup/volumes`
 }
 ```
 ### Reporting
-Default file: `/etc/vbackup/reporting.json`
+Default file: `/etc/vbackup/reporting.json`. Send information to additional destinations, currently only MQTT.
 ```json
 [
   {
@@ -173,7 +186,9 @@ Default file: `/etc/vbackup/reporting.json`
 ]
 ```
 ### Shared authentication
-Default file: `/etc/vbackup/auth_data.json`
+Default file: `/etc/vbackup/auth_data.json`. Define configuration objects that can be 
+referenced from volume configurations, this is useful if different sources are transferred
+to the same destination.
 ```json
 {
   "some-ssh-login": {
@@ -201,6 +216,8 @@ Default file: `/etc/vbackup/auth_data.json`
 Todo: module-data, savedata.json
 ### Backup
 #### tar7zip
+Create a compressed backup in a `.tar.7z` archive.
+
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | encryption_key | false | | Encrypt archives with this key. | 
@@ -214,6 +231,8 @@ Todo: module-data, savedata.json
 
 ### Synchronization
 #### rsync-ssh
+Send the backup to a remote destination using rsync over ssh.
+
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | compress | no | false | Compress the files before transmitting. |
@@ -245,6 +264,9 @@ Todo: module-data, savedata.json
 }
 ```
 #### duplicati (over sftp)
+Send a backup to a remote destination using [duplicati](https://www.duplicati.com/) over sftp.
+Only really makes sense without creating a local backup before.
+
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | directory_prefix | no | |  Prefix for the remote path. |
@@ -289,7 +311,13 @@ and [this guideline by the developers](https://www.duplicati.com/articles/Choosi
 ```
 
 ### Conditions
+Additional conditions to check before creating a backup or running a sync.
+Those checks are always applied additionally to timeframes.
+
 #### file-age
+Check if the newest file in the source directory has been created / edited after the last run.
+Can prevent backup and sync runs on unchanged data.
+
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 
@@ -299,10 +327,11 @@ and [this guideline by the developers](https://www.duplicati.com/articles/Choosi
 }
 ```
 
-#### minecraft-server
+#### usetime
 
-The backupinfo for this script is updated by a plugin running on the minecraft server. It counts the accumulated time users
-have spent on the server and writes this to a file (by default "backupinfo/props.info") in the server files.
+Used for creating backups of game servers like minecraft and factorio.
+Checks the time players have spent on the server by reading the usetime from a file 
+updated by an external program, like a server plugin.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
@@ -313,11 +342,13 @@ have spent on the server and writes this to a file (by default "backupinfo/props
 {
   "type": "minecraft-server",
   "backup_info": "backupinfo/props.info",
-  "targeted_usetime": 100
+  "targeted_usetime": 3600
 }
 ```
 
 ### Controller
+Controller for starting remote devices for syncs and stopping them afterwards.
+
 #### mqtt
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
@@ -350,6 +381,8 @@ have spent on the server and writes this to a file (by default "backupinfo/props
 }
 ```
 ### Reporting
+Send information about backup and sync runs to additional destinations.
+
 #### mqtt
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|

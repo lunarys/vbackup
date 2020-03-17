@@ -340,7 +340,7 @@ updated by an external program, like a server plugin.
 
 ```json
 {
-  "type": "minecraft-server",
+  "type": "usetime",
   "backup_info": "backupinfo/props.info",
   "targeted_usetime": 3600
 }

@@ -162,9 +162,9 @@ fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
 }
 
 fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
-    let file = backupinfo_path(bind);
     if bind.no_docker {
         // Use the original value to reset the usetime
+        let file = backupinfo_path(bind);
         let to_replace = format!("usetime={}", info.usetime);
         let content = info.file_content.replace(to_replace.as_str(), "usetime=0");
         return file::write(file.as_str(), content.as_str(), true);
@@ -172,12 +172,12 @@ fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
         let mut cmd = CommandWrapper::new("docker");
         cmd.arg_str("run")
             .arg_str("--rm")
-            .arg_string(format!("--volume={}:/file", file))
+            .arg_string(format!("--volume={}:/volume", bind.paths.source))
             .arg_str("--name=vbackup-tmp")
             .arg_str("alpine")
             .arg_str("sh")
             .arg_str("-c");
-        cmd.arg_str("sed -i 's/usetime=.*/usetime=0/g' /file");
+        cmd.arg_string(format!("sed -i 's/usetime=.*/usetime=0/g' /volume/{}", bind.config.backup_info));
         return cmd.run();
     }
 }

@@ -1,12 +1,15 @@
 use crate::modules::object::*;
 use crate::util::io::{file,json};
-use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::modules;
 use crate::modules::traits::{Sync, Backup, Reporting};
 use crate::modules::sync::SyncModule;
 use crate::modules::backup::BackupModule;
 use crate::modules::check::Reference;
 use crate::modules::reporting::ReportingModule;
+use crate::util::io::savefile::{get_savedata};
+
+use crate::processing::scheduler::get_config_list;
+use crate::processing::{backup,sync};
 
 use crate::{try_option, dry_run,log_error};
 
@@ -137,7 +140,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
             let store_path = module_paths.destination.clone();
 
             // Run the backup and evaluate the result
-            let result = backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
+            let result = backup::backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => {
                     info!("Backup for '{}' was successfully executed", config.name.as_str());
@@ -182,184 +185,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
     Ok((original_size_acc, backup_size_acc))
 }
 
-fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
-    // Get the backup module that should be used
-    let mut module: BackupModule = modules::backup::get_module(backup_config.backup_type.as_str())?;
 
-    // Prepare current timestamp (for consistency) and queue of timeframes for backup
-    let current_time : DateTime<Local> = chrono::Local::now();
-    let mut queue_refs: Vec<&TimeFrameReference> = vec![];
-    let mut queue_frame_entry: Vec<(&TimeFrame, Option<TimeEntry>)> = vec![];
-
-    // Init additional check
-    let mut check_module = if !args.force {
-        check_helper::init(&args, &paths.base_paths, &config, &backup_config.check, Reference::Backup)?
-    } else {
-        // No additional check is required if forced run (would be disregarded anyways)
-        None
-    };
-
-    // Log that this run is forced
-    if args.force {
-        // Run is forced
-        info!("Forcing run of '{}' backup", config.name.as_str());
-    }
-
-    // Fill queue with timeframes to run backup for
-    for timeframe_ref in &backup_config.timeframes {
-
-        // if amount of saves is zero just skip further checks
-        if timeframe_ref.amount.eq(&usize::min_value()) {
-            // min_value is 0
-            warn!("Amount of saves in timeframe '{}' for '{}' backup is zero, no backup will be created", &timeframe_ref.frame, config.name.as_str());
-            continue;
-        }
-
-        // Parse time frame data
-        let timeframe_opt = timeframes.get(&timeframe_ref.frame);
-        let timeframe = if timeframe_opt.is_some() {
-            timeframe_opt.unwrap()
-        } else {
-            error!("Referenced timeframe '{}' for '{}' backup does not exist", &timeframe_ref.frame, config.name.as_str());
-            continue;
-        };
-
-        // Get last backup (option as there might not be a last one)
-        let last_backup_option = savedata.lastsave.remove_entry(&timeframe.identifier);
-
-        // Only actually do check if the run is not forced
-        let mut do_backup = true;
-        if !args.force {
-            let last_backup = if last_backup_option.is_some() {
-                let (_, tmp) = last_backup_option.as_ref().unwrap();
-                Some(tmp)
-            } else {
-                None
-            };
-
-            // Try to compare timings to the last run
-            if last_backup.is_some() {
-
-                // Compare elapsed time since last backup and the configured timeframe
-                if last_backup.unwrap().timestamp + timeframe.interval < current_time.timestamp() {
-                    // do sync
-                    debug!("Backup for '{}' is required in timeframe '{}' considering the interval only", config.name.as_str(), timeframe_ref.frame.as_str());
-                } else {
-                    // don not sync
-                    info!("Backup for '{}' is not executed in timeframe '{}' due to the interval", config.name.as_str(), timeframe_ref.frame.as_str());
-                    do_backup = false;
-                }
-            } else {
-
-                // Probably the first backup in this timeframe, just do it
-                info!("This is probably the first backup run in timeframe '{}' for '{}', interval check is skipped", timeframe_ref.frame.as_str(), config.name.as_str());
-            }
-
-            // If this point of the loop is reached, only additional check is left to run
-            // The helper would check if there is a check module, but this is for more consistent log output
-            if do_backup && check_module.is_some() {
-                if check_helper::run(&check_module, &current_time, timeframe, &last_backup)? {
-                    // Do backup
-                    debug!("Backup for '{}' is required in timeframe '{}' considering the additional check", config.name.as_str(), timeframe_ref.frame.as_str());
-                } else {
-                    // Don't run backup
-                    info!("Backup for '{}' is not executed in timeframe '{}' due to the additional check", config.name.as_str(), timeframe_ref.frame.as_str());
-                    do_backup = false;
-                }
-            }
-        } else {
-            debug!("Run in timeframe '{}' is forced", timeframe_ref.frame.as_str())
-        }
-
-        if do_backup {
-            queue_refs.push(timeframe_ref);
-            queue_frame_entry.push((timeframe, last_backup_option.map(|(_,entry)| entry)));
-        } else {
-            // Reinsert into the map if not further processed
-            if let Some((key, value)) = last_backup_option {
-                savedata.lastsave.insert(key, value);
-            }
-        }
-    }
-
-    // Is any backup required?
-    if queue_refs.is_empty() {
-        // No backup at all is required (for this configuration)
-        return Ok(false);
-    }
-
-    // Print this here to not have it over and over from the loop
-    if check_module.is_none() && !args.force {
-        debug!("There is no additional check for the backup of '{}', only using the interval checks", config.name.as_str());
-    }
-
-    // For traceability in the log
-    info!("Executing backup for '{}'", config.name.as_str());
-
-    // Save value from paths for later
-    let save_data_path = paths.save_data.clone();
-
-    // Set up backup module now
-    trace!("Invoking backup module");
-    module.init(&config.name, &backup_config.config, paths, args)?;
-
-    // Do backups (all timeframes at once to enable optimizations)
-    let backup_result = module.backup(&current_time, &queue_refs);
-    trace!("Backup module is done");
-
-    // Update internal state of check module and savedata
-    if backup_result.is_ok() {
-
-        // Update needs to be done for all active timeframes
-        for (frame, entry_opt) in queue_frame_entry {
-            // Update check state
-            trace!("Invoking state update for additional check in timeframe '{}'", frame.identifier.as_str());
-            if let Err(err) = check_helper::update(&check_module, &current_time, frame, &entry_opt.as_ref()) {
-                error!("State update for additional check in timeframe '{}' failed ({})", frame.identifier.as_str(), err);
-            }
-
-            // Estimate the time of the next required backup (only considering timeframes)
-            let next_save = current_time.clone().add(Duration::seconds(frame.interval));
-
-            // Update savedata
-            savedata.lastsave.insert(frame.identifier.clone(), TimeEntry {
-                timestamp: current_time.timestamp(),
-                date: Some(time_format(&current_time))
-            });
-
-            savedata.nextsave.insert(frame.identifier.clone(), TimeEntry {
-                timestamp: next_save.timestamp(),
-                date: Some(time_format(&next_save))
-            });
-        }
-    } else {
-        error!("Backup failed, cleaning up");
-    }
-
-    // Write savedata update only if backup was successful
-    if backup_result.is_ok() {
-        if !args.dry_run {
-            trace!("Writing new savedata to '{}'", save_data_path.as_str());
-            if let Err(err) = write_savedata(save_data_path.as_str(), savedata) {
-                error!("Could not update savedata for '{}' backup ({})", config.name.as_str(), err);
-            }
-        } else {
-            dry_run!(format!("Updating savedata: {}", save_data_path.as_str()));
-        }
-    }
-
-    // Check can be freed as it is not required anymore
-    if let Err(err) = check_helper::clear(&mut check_module) {
-        error!("Could not clear the check module: {}", err);
-    }
-
-    // Free backup module now
-    if let Err(err) = module.clear() {
-        error!("Could not clear backup module: {}", err);
-    }
-
-    return backup_result.map(|_| true);
-}
 
 fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<u64,String> {
     // Collect the total size of synchronized files
@@ -408,7 +234,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
             log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "starting"));
 
             // Run the backup and evaluate the result
-            let result = sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
+            let result = sync::sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
             match result {
                 Ok(true) => {
                     info!("Sync for '{}' was successfully executed", config.name.as_str());
@@ -440,154 +266,6 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
 
     // Only fails if some general configuration is not available, failure in single syncs is only logged
     Ok(acc_size)
-}
-
-fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
-    // Get the sync module that should be used
-    let mut module: SyncModule = modules::sync::get_module(sync_config.sync_type.as_str())?;
-
-    // Prepare current timestamp and get timestamp of last backup + referenced timeframe
-    let current_time: DateTime<Local> = chrono::Local::now();
-    let last_sync_opt = savedata.lastsync.get(&sync_config.interval.frame);
-    let timeframe: &TimeFrame = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
-
-    // Save base path for later as it will be moved
-    let base_paths = paths.base_paths.borrow();
-    let mut check_module = if !args.force {
-        check_helper::init(&args, base_paths, &config, &sync_config.check, Reference::Sync)?
-    } else {
-        // No additional check is required if forced run
-        None
-    };
-
-    // If the run is forced no other checks are required
-    if !args.force {
-
-        // Compare to last sync timestamp (if it exists)
-        if let Some(last_sync) = last_sync_opt {
-
-            // Compare elapsed time since last sync and the configured timeframe
-            if last_sync.timestamp + timeframe.interval >= current_time.timestamp() {
-                // sync not necessary
-                info!("Sync for '{}' is not executed due to the constraints of timeframe '{}'", config.name.as_str(), timeframe.identifier.as_str());
-                return Ok(false);
-            }
-
-            // Check with last backup time
-            let backup_after_sync = savedata.lastsave.is_empty() || savedata.lastsave.values().any(|backup| backup.timestamp > last_sync.timestamp );
-            if !backup_after_sync {
-                info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.name.as_str());
-                return Ok(false);
-            }
-
-            // do sync
-            debug!("Sync for '{}' is required considering the timeframe '{}' only", config.name.as_str(), timeframe.identifier.as_str());
-        } else {
-
-            // This is probably the first sync, so just do it
-            info!("This is probably the first sync run for '{}', interval check is skipped", config.name.as_str());
-        }
-
-        // Run additional check
-        if check_module.is_some() {
-            if check_helper::run(&check_module, &current_time, timeframe, &last_sync_opt)? {
-                // Do sync
-                debug!("Sync for '{}' is required considering the additional check", config.name.as_str());
-            } else {
-                // Do not run sync
-                debug!("");
-                return Ok(false);
-            }
-        } else {
-            debug!("There is no additional check for the sync of '{}', only using the interval check", config.name.as_str());
-        }
-
-        // If we did not leave the function by now sync is necessary
-        info!("Executing sync for '{}'", config.name.as_str());
-    } else {
-        // Run is forced
-        info!("Forcing sync for '{}'", config.name.as_str())
-    }
-
-    // Save path is still required after move, make a copy
-    let save_data_path = paths.save_data.clone();
-
-    // Initialize sync module
-    module.init(&config.name, &sync_config.config, paths, args)?;
-
-    // Set up controller (if configured)
-    let mut controller_module = controller_helper::init(&args, base_paths, &config, &sync_config.controller)?;
-
-    // Run controller (if there is one)
-    if controller_module.is_some() {
-        trace!("Invoking remote device controller");
-        if controller_helper::start(&controller_module)? {
-            // There is no controller or device is ready for sync
-            info!("Remote device is now available");
-        } else {
-            // Device did not start before timeout or is not available
-            warn!("Remote device is not available, aborting sync");
-            return Ok(false);
-        }
-    }
-
-    // Run sync
-    trace!("Invoking sync module");
-    let sync_result = module.sync();
-
-    // Check result of sync and act accordingly
-    if sync_result.is_ok() {
-        trace!("Sync module is done");
-
-        // Update internal state of check
-        trace!("Invoking state update for additional check in timeframe '{}'", timeframe.identifier.as_str());
-        if let Err(err) = check_helper::update(&check_module, &current_time, timeframe, &last_sync_opt) {
-            error!("State update for additional check in timeframe '{}' failed ({})", timeframe.identifier.as_str(), err);
-        }
-
-        // Update save data
-        savedata.lastsync.insert(timeframe.identifier.clone(), TimeEntry {
-            timestamp: current_time.timestamp(),
-            date: Some(time_format(&current_time))
-        });
-    } else {
-        trace!("Sync failed, cleaning up");
-    }
-
-    // Run controller end (result is irrelevant here)
-    if let Err(err) = controller_helper::end(&controller_module) {
-        error!("Stopping the remote device after use failed: {}", err);
-    }
-
-    // Write savedata update only if sync was successful
-    if sync_result.is_ok() {
-        if !args.dry_run {
-            trace!("Writing new savedata to '{}'", save_data_path.as_str());
-            if let Err(err) = write_savedata(save_data_path.as_str(), savedata) {
-                error!("Could not update savedata for '{}' sync ({})", config.name.as_str(), err);
-            }
-        } else {
-            dry_run!(format!("Updating savedata: {}", save_data_path.as_str()));
-        }
-    }
-
-    // Check can be freed as it is not required anymore
-    if let Err(err) = check_helper::clear(&mut check_module) {
-        error!("Could not clear the check module: {}", err);
-    }
-
-    // Controller can be freed as it is not required anymore
-    if let Err(err) = controller_helper::clear(&mut controller_module) {
-        error!("Could not clear the controller module: {}", err);
-    }
-
-    // Free sync module
-    if let Err(err) = module.clear() {
-        error!("Could no clear sync module: {}", err);
-    }
-
-    // Return Ok(true) for sync was executed or Err(error) for failed sync
-    return sync_result.map(|_| true);
 }
 
 pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
@@ -686,64 +364,6 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
     }
 
     return Ok(());
-}
-
-fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
-    // Get directory containing configurations
-    let volume_config_path = format!("{}/volumes", &paths.config_dir);
-
-    // Check if a specific one should be outputted
-    let files = if args.name.is_some() {
-
-        // Only run this one -> Let the list only contain this item
-        let path = format!("{}/{}.json", volume_config_path, args.name.as_ref().unwrap());
-        vec![Path::new(&path).to_path_buf()]
-    } else {
-
-        // Run all -> Return all the files in the configuration directory
-        file::list_in_dir(volume_config_path.as_str())?
-    };
-
-    // Load all the configuration files parsed as Configuration
-    // TODO: Only logs inaccessible files and then disregards the error
-    let configs = files.iter().filter_map(|file_path| {
-        let result = json::from_file::<Configuration>(file_path);
-        if result.is_ok() {
-            Some(result.unwrap())
-        } else {
-            error!("Could not parse configuration from '{}' ({})", "<filename?>", result.err().unwrap().to_string());
-            None
-        }
-    }).collect();
-
-    return Ok(configs);
-}
-
-fn get_savedata(path: &str) -> Result<SaveData, String> {
-    // Check if there is a file with savedata
-    let savedata = if file::exists(path) {
-
-        // File exists: Read savedata
-        json::from_file::<SaveData>(Path::new(path))?
-    } else {
-
-        // File does not exist: Create new savedata
-        SaveData {
-            lastsave: HashMap::new(),
-            nextsave: HashMap::new(),
-            lastsync: HashMap::new()
-        }
-    };
-
-    return Ok(savedata);
-}
-
-fn write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
-    json::to_file(Path::new(path), savedata)
-}
-
-fn time_format(date: &DateTime<Local>) -> String {
-    return date.format("%Y-%m-%d %H:%M:%S").to_string();
 }
 
 // Do maybe:

@@ -17,7 +17,7 @@ pub struct Arguments {
     pub no_reporting: bool
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize,Clone)]
 pub struct Configuration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
@@ -29,7 +29,7 @@ pub struct Configuration {
     pub sync: Option<SyncConfiguration>
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize,Clone)]
 pub struct BackupConfiguration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
@@ -40,7 +40,7 @@ pub struct BackupConfiguration {
     pub timeframes: Vec<TimeFrameReference>
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize,Clone)]
 pub struct SyncConfiguration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
@@ -52,7 +52,7 @@ pub struct SyncConfiguration {
     pub controller: Option<Value>
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize,Clone)]
 pub struct TimeFrameReference {
     pub frame: String,
     #[serde(default="default_usize_1")]

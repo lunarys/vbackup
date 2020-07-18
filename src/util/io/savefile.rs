@@ -1,11 +1,40 @@
-use crate::modules::object::TimeFrameReference;
+use crate::modules::object::{TimeFrameReference, SaveData};
+use crate::util::io::{file, json};
 
 use crate::try_result;
 
 use glob::{Paths};
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::fs::remove_file;
 use chrono::{DateTime, Local};
+use std::collections::HashMap;
+
+pub fn get_savedata(path: &str) -> Result<SaveData, String> {
+    // Check if there is a file with savedata
+    let savedata = if file::exists(path) {
+
+        // File exists: Read savedata
+        json::from_file::<SaveData>(Path::new(path))?
+    } else {
+
+        // File does not exist: Create new savedata
+        SaveData {
+            lastsave: HashMap::new(),
+            nextsave: HashMap::new(),
+            lastsync: HashMap::new()
+        }
+    };
+
+    return Ok(savedata);
+}
+
+pub fn write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
+    json::to_file(Path::new(path), savedata)
+}
+
+pub fn time_format(date: &DateTime<Local>) -> String {
+    return date.format("%Y-%m-%d %H:%M:%S").to_string();
+}
 
 pub fn format_filename(time: &DateTime<Local>, timeframe: &TimeFrameReference, name: &str, suffix_opt: Option<&str>, extension_opt: Option<&str>) -> String {
     // Output: Name for savefile

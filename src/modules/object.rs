@@ -2,6 +2,8 @@ use serde_json::Value;
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use crate::modules::check::Reference;
+use crate::util::objects::time::TimeFrameReference;
+use std::rc::Rc;
 
 #[derive(Deserialize)]
 pub struct Arguments {
@@ -52,38 +54,8 @@ pub struct SyncConfiguration {
     pub controller: Option<Value>
 }
 
-#[derive(Deserialize,Clone)]
-pub struct TimeFrameReference {
-    pub frame: String,
-    #[serde(default="default_usize_1")]
-    pub amount: usize
-}
-
-pub type TimeFrames = HashMap<String, TimeFrame>;
-
-#[derive(Deserialize)]
-pub struct TimeFrame {
-    pub identifier: String,
-    pub interval: i64,
-}
-
-fn default_usize_1() -> usize { 1 }
 fn default_bool_false() -> bool { false }
 fn default_bool_true() -> bool { true }
-
-#[derive(Deserialize,Serialize)]
-pub struct SaveData {
-    pub lastsave: HashMap<String,TimeEntry>,
-    pub nextsave: HashMap<String,TimeEntry>,
-    pub lastsync: HashMap<String,TimeEntry>
-}
-
-#[derive(Deserialize,Serialize)]
-pub struct TimeEntry {
-    // TODO: Maybe also add key here with flatten thingy or so
-    pub timestamp: i64,
-    pub date: Option<String> // TODO: Is there a better data type?
-}
 
 #[derive(Deserialize)]
 pub struct PathBase {
@@ -105,6 +77,7 @@ fn default_config_dir() -> String { String::from("/etc/vbackup") }
 fn default_save_dir() -> String { String::from("/var/vbackup") }
 fn default_tmp_dir() -> String { String::from("/tmp/vbackup ")}
 
+#[derive(Clone)]
 pub struct Paths {
     pub config_dir: String, // Here should be the configuration files
     pub save_dir: String, // Default base directory for saves
@@ -116,8 +89,9 @@ pub struct Paths {
     pub docker_images: String
 }
 
-pub struct ModulePaths<'a> {
-    pub base_paths: &'a Paths,
+#[derive(Clone)]
+pub struct ModulePaths {
+    pub base_paths: Rc<Paths>,
     pub save_data: String, // Savedata file
     pub source: String, // Path of the original directory to back up
     pub destination: String, // Path for a local backup (or just path that will be synced)
@@ -137,15 +111,17 @@ impl Paths {
             savedata_in_store: base.savedata_in_store
         }
     }
+}
 
-    pub fn for_check_module(&self, module_type: &str, config: &Configuration, reference: Reference) -> ModulePaths {
+impl ModulePaths {
+    pub fn for_check_module(paths: &Rc<Paths>, module_type: &str, config: &Configuration, reference: Reference) -> ModulePaths {
         return match reference {
-            Reference::Backup => self.for_backup_module(module_type, config),
-            Reference::Sync => self.for_sync_module(module_type, config)
+            Reference::Backup => ModulePaths::for_backup_module(paths, module_type, config),
+            Reference::Sync => ModulePaths::for_sync_module(paths, module_type, config)
         }
     }
 
-    pub fn for_sync_module(&self, module_type: &str, config: &Configuration) -> ModulePaths {
+    pub fn for_sync_module(paths: &Rc<Paths>, module_type: &str, config: &Configuration) -> ModulePaths {
         let name = config.name.as_str();
         let has_backup = config.backup.is_some();
         let backup_path = &config.backup_path;
@@ -158,42 +134,42 @@ impl Paths {
         let savedata_in_store = &config.savedata_in_store;
         let savedata_store = &source_opt;
 
-        return self.for_module(name, module_type, source_opt, None, savedata_in_store, savedata_store);
+        return ModulePaths::from_paths(paths, name, module_type, source_opt, None, savedata_in_store, savedata_store);
     }
 
-    pub fn for_backup_module(&self, module_type: &str, config: &Configuration) -> ModulePaths {
+    pub fn for_backup_module(paths: &Rc<Paths>, module_type: &str, config: &Configuration) -> ModulePaths {
         let name = config.name.as_str();
         let source = &config.source_path;
         let destination_opt = &config.backup_path;
         let savedata_in_store = &config.savedata_in_store;
         let savedata_store = &config.backup_path.as_ref();
 
-        return self.for_module(name, module_type, Some(source), destination_opt.as_ref(), savedata_in_store, savedata_store);
+        return ModulePaths::from_paths(paths, name, module_type, Some(source), destination_opt.as_ref(), savedata_in_store, savedata_store);
     }
 
-    fn for_module(&self, name: &str, module_type: &str, source_opt: Option<&String>, destination_opt: Option<&String>, savedata_in_store: &Option<bool>, savedata_store: &Option<&String>) -> ModulePaths {
+    fn from_paths(from: &Rc<Paths>, name: &str, module_type: &str, source_opt: Option<&String>, destination_opt: Option<&String>, savedata_in_store: &Option<bool>, savedata_store: &Option<&String>) -> ModulePaths {
         let source = if source_opt.is_some() {
             String::from(source_opt.unwrap().as_str())
         } else {
-            format!("{}/{}", self.save_dir.as_str(), name)
+            format!("{}/{}", from.save_dir.as_str(), name)
         };
         let destination = if destination_opt.is_some() {
             String::from(destination_opt.unwrap().as_str())
         } else {
-            format!("{}/{}", self.save_dir.as_str(), name)
+            format!("{}/{}", from.save_dir.as_str(), name)
         };
 
-        let module_data_base = format!("{}/.module_data/{}", self.save_dir.as_str(), name);
+        let module_data_base = format!("{}/.module_data/{}", from.save_dir.as_str(), name);
         let module_data_dir = format!("{}/{}", module_data_base.as_str(), module_type);
 
-        let save_data = if savedata_in_store.unwrap_or(self.savedata_in_store) {
+        let save_data = if savedata_in_store.unwrap_or(from.savedata_in_store) {
             format!("{}/.savedata.json", savedata_store.unwrap_or(&destination))
         } else {
             format!("{}/savedata.json", module_data_base.as_str())
         };
 
         return ModulePaths {
-            base_paths: self,
+            base_paths: from.clone(),
             save_data,
             source,
             destination,

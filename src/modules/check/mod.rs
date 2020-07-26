@@ -1,5 +1,6 @@
 use crate::modules::traits::Check;
-use crate::modules::object::{ModulePaths,TimeEntry,TimeFrame,Arguments};
+use crate::modules::object::{ModulePaths,Arguments};
+use crate::util::objects::time::{TimeEntry,TimeFrame};
 use serde_json::Value;
 
 mod file_age;
@@ -10,9 +11,9 @@ pub enum Reference {
     Sync
 }
 
-pub enum CheckModule<'a> {
-    FileAge(file_age::FileAge<'a>),
-    MinecraftServer(minecraft_server::MinecraftServer<'a>)
+pub enum CheckModule {
+    FileAge(file_age::FileAge),
+    MinecraftServer(minecraft_server::MinecraftServer)
 }
 
 use CheckModule::*;
@@ -30,8 +31,8 @@ pub fn get_module(name: &str) -> Result<CheckModule, String> {
     })
 }
 
-impl<'a> Check<'a> for CheckModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Check for CheckModule {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         match self {
             FileAge(check) => check.init(name, config_json, paths, args),
             MinecraftServer(check) => check.init(name, config_json, paths, args)
@@ -45,7 +46,7 @@ impl<'a> Check<'a> for CheckModule<'a> {
         }
     }
 
-    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&mut self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
         match self {
             FileAge(check) => check.update(time, frame, last),
             MinecraftServer(check) => check.update(time, frame, last)

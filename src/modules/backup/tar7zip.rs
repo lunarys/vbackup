@@ -9,15 +9,16 @@ use serde_json::Value;
 use serde::{Deserialize};
 use std::fs::{copy, remove_file};
 use chrono::{Local, DateTime};
+use crate::util::objects::time::TimeFrameReference;
 
-pub struct Tar7Zip<'a> {
-    bind: Option<Bind<'a>>
+pub struct Tar7Zip {
+    bind: Option<Bind>
 }
 
-struct Bind<'a> {
+struct Bind {
     name: String,
     config: Configuration,
-    paths: ModulePaths<'a>,
+    paths: ModulePaths,
     dry_run: bool,
     no_docker: bool,
     print_command: bool
@@ -28,14 +29,14 @@ struct Configuration {
     encryption_key: Option<String>
 }
 
-impl<'a> Tar7Zip<'a> {
+impl Tar7Zip {
     pub fn new_empty() -> Self {
         return Tar7Zip { bind: None }
     }
 }
 
-impl<'a> Backup<'a> for Tar7Zip<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Backup for Tar7Zip {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Backup module is already bound");
             error!("{}", msg);

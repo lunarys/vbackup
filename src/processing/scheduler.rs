@@ -12,9 +12,9 @@ pub enum ConfigurationBundle {
 }
 
 pub struct SyncControllerBundle {
-    name: String,
-    configurations: Vec<Configuration>,
-    controller: Value
+    pub name: String,
+    pub configurations: Vec<Configuration>,
+    pub controller: Value
 }
 
 pub fn get_exec_order(config_list: Vec<Configuration>,
@@ -26,13 +26,18 @@ pub fn get_exec_order(config_list: Vec<Configuration>,
 
     for configuration in config_list {
         if configuration.disabled {
+            info!("Configuration for '{}' is disabled", configuration.name.as_str());
             continue;
         }
 
         if let Some(backup) = &configuration.backup {
             if !backup.disabled && include_backup {
                 backup_list.push(ConfigurationBundle::Backup(configuration.clone()));
+            } else if backup.disabled {
+                info!("Backup for '{}' is disabled", configuration.name.as_str());
             }
+        } else {
+            debug!("No backup configured for '{}'", configuration.name.as_str());
         }
 
         // TODO: various clone statements
@@ -60,7 +65,11 @@ pub fn get_exec_order(config_list: Vec<Configuration>,
                         sync_list.push(ConfigurationBundle::Sync(configuration.clone()));
                     }
                 }
+            } else if sync.disabled {
+                info!("Sync for '{}' is disabled", configuration.name.as_str());
             }
+        } else {
+            debug!("No sync configured for '{}'", configuration.name.as_str());
         }
     };
 
@@ -72,7 +81,17 @@ pub fn get_exec_order(config_list: Vec<Configuration>,
         .map(|(_,v)| ConfigurationBundle::SyncControllerBundle(v))
         .collect()
     );
-
+    /*
+    let readable_list = configuration_list.iter().map(|c| {
+        match c {
+            ConfigurationBundle::Backup(b) => "backup " + b.name.as_str(),
+            ConfigurationBundle::Sync(s) => "sync " + s.name.as_str(),
+            ConfigurationBundle::SyncControllerBundle(b) => {
+                "sync (bundle)"
+            }
+        }
+    }).collect()
+*/
     return Ok(configuration_list);
 }
 

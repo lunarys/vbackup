@@ -5,25 +5,26 @@ use crate::util::command::CommandWrapper;
 
 use serde_json::Value;
 use chrono::{Local, DateTime};
+use crate::util::objects::time::{TimeFrame, TimeEntry};
 
-pub struct FileAge<'a> {
-    bind: Option<Bind<'a>>
+pub struct FileAge {
+    bind: Option<Bind>
 }
 
-struct Bind<'a> {
-    paths: ModulePaths<'a>,
+struct Bind {
+    paths: ModulePaths,
     no_docker: bool,
     dry_run: bool
 }
 
-impl<'a> FileAge<'a> {
+impl FileAge {
     pub fn new_empty() -> Self {
         return FileAge { bind: None };
     }
 }
 
-impl<'a> Check<'a> for FileAge<'a> {
-    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Check for FileAge {
+    fn init(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);
@@ -41,6 +42,7 @@ impl<'a> Check<'a> for FileAge<'a> {
         return Ok(());
     }
 
+    // TODO: cache result!
     fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
 
@@ -103,7 +105,7 @@ impl<'a> Check<'a> for FileAge<'a> {
         }
     }
 
-    fn update(&self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&mut self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
         let _bound = try_option!(self.bind.as_ref(), "Check module is not bound");
         // This check is stateless, so no update is required
         return Ok(())

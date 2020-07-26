@@ -1,5 +1,5 @@
-use crate::modules::traits::Controller;
-use crate::modules::object::{ModulePaths,Arguments};
+use crate::modules::traits::{Controller, Bundleable};
+use crate::modules::object::{ModulePaths, Arguments, Paths};
 use crate::util::io::{auth_data,json};
 
 use crate::{try_result,try_option,bool_result,dry_run};
@@ -9,6 +9,8 @@ use serde::{Deserialize};
 use paho_mqtt as mqtt;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
+use crate::modules::controller::ControllerModule;
+use std::rc::Rc;
 
 pub struct MqttController {
     bind: Option<Bind>
@@ -56,41 +58,12 @@ impl MqttController {
     }
 }
 
-impl<'a> Controller<'a> for MqttController {
-    fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Controller module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
-        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
-        let mqtt_config = auth_data::resolve::<MqttConfiguration>(&config.auth_reference, &config.auth, paths.base_paths)?;
-
-        let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
-            try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
-
-        let controller_topic = get_controller_state_topic(&config);
-        let is_controller_online = get_controller_state(&client, &receiver, controller_topic, mqtt_config.qos)?;
-        if is_controller_online {
-            debug!("MQTT controller for '{}' is available", config.device);
-        } else {
-            warn!("MQTT controller for '{}' is not available", config.device);
-        }
-
-        self.bind = Some( Bind {
-            config,
-            mqtt_config,
-            client,
-            receiver,
-            dry_run: args.dry_run,
-            is_controller_online
-        });
-
-        Ok(())
+impl Controller for MqttController {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
+        return Bundleable::init(self, name, config_json, &paths.base_paths, args);
     }
 
-    fn begin(&self) -> Result<bool, String> {
+    fn begin(&mut self) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "MQTT controller could not begin, as it is not bound");
 
         info!("MQTT controller start run for device '{}' (start={})", bound.config.device, bound.config.start);
@@ -113,7 +86,7 @@ impl<'a> Controller<'a> for MqttController {
         return Ok(result);
     }
 
-    fn end(&self) -> Result<bool, String> {
+    fn end(&mut self) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "MQTT controller could not end, as it is not bound");
 
         debug!("MQTT controller end run for device '{}'", bound.config.device);
@@ -143,6 +116,50 @@ impl<'a> Controller<'a> for MqttController {
 
         self.bind = None;
         return Ok(());
+    }
+}
+
+impl Bundleable for MqttController {
+    fn init(&mut self, name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(), String> {
+        if self.bind.is_some() {
+            let msg = String::from("Controller module is already bound");
+            error!("{}", msg);
+            return Err(msg);
+        }
+
+        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
+        let mqtt_config = auth_data::resolve::<MqttConfiguration>(&config.auth_reference, &config.auth, paths)?;
+
+        let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
+            try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
+
+        let controller_topic = get_controller_state_topic(&config);
+        let is_controller_online = get_controller_state(&client, &receiver, controller_topic, mqtt_config.qos)?;
+        if is_controller_online {
+            debug!("MQTT controller for '{}' is available", config.device);
+        } else {
+            warn!("MQTT controller for '{}' is not available", config.device);
+        }
+
+        self.bind = Some( Bind {
+            config,
+            mqtt_config,
+            client,
+            receiver,
+            dry_run: args.dry_run,
+            is_controller_online
+        });
+
+        Ok(())
+    }
+
+    fn update_module_paths(&mut self, _paths: ModulePaths) -> Result<(), String> {
+        // nothing to do
+        return Ok(());
+    }
+
+    fn can_bundle_with(&self, other: &ControllerModule) -> bool {
+        unimplemented!()
     }
 }
 

@@ -10,6 +10,7 @@ use crate::{try_option, dry_run,log_error};
 
 use chrono::{DateTime, Local};
 use std::borrow::Borrow;
+use crate::util::objects::time::{SaveData, TimeFrames, TimeFrame, TimeEntry};
 
 pub fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_config: SyncConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
     // Get the sync module that should be used
@@ -20,10 +21,10 @@ pub fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_c
     let last_sync_opt = savedata.lastsync.get(&sync_config.interval.frame);
     let timeframe: &TimeFrame = try_option!(timeframes.get(&sync_config.interval.frame), "Referenced timeframe for sync does not exist");
 
-    // Save base path for later as it will be moved
-    let base_paths = paths.base_paths.borrow();
+    // Module paths are moved, keep a reference to the base paths
+    let base_paths = paths.base_paths.clone();
     let mut check_module = if !args.force {
-        check_helper::init(&args, base_paths, &config, &sync_config.check, Reference::Sync)?
+        check_helper::init(&args, &base_paths, &config, &sync_config.check, Reference::Sync)?
     } else {
         // No additional check is required if forced run
         None
@@ -85,12 +86,12 @@ pub fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_c
     module.init(&config.name, &sync_config.config, paths, args)?;
 
     // Set up controller (if configured)
-    let mut controller_module = controller_helper::init(&args, base_paths, &config, &sync_config.controller)?;
+    let mut controller_module = controller_helper::init(&args, &base_paths, &config, &sync_config.controller.as_ref())?;
 
     // Run controller (if there is one)
     if controller_module.is_some() {
         trace!("Invoking remote device controller");
-        if controller_helper::start(&controller_module)? {
+        if controller_helper::start(&mut controller_module)? {
             // There is no controller or device is ready for sync
             info!("Remote device is now available");
         } else {
@@ -110,7 +111,7 @@ pub fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_c
 
         // Update internal state of check
         trace!("Invoking state update for additional check in timeframe '{}'", timeframe.identifier.as_str());
-        if let Err(err) = check_helper::update(&check_module, &current_time, timeframe, &last_sync_opt) {
+        if let Err(err) = check_helper::update(&mut check_module, &current_time, timeframe, &last_sync_opt) {
             error!("State update for additional check in timeframe '{}' failed ({})", timeframe.identifier.as_str(), err);
         }
 
@@ -124,7 +125,7 @@ pub fn sync(args: &Arguments, paths: ModulePaths, config: &Configuration, sync_c
     }
 
     // Run controller end (result is irrelevant here)
-    if let Err(err) = controller_helper::end(&controller_module) {
+    if let Err(err) = controller_helper::end(&mut controller_module) {
         error!("Stopping the remote device after use failed: {}", err);
     }
 

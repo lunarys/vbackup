@@ -9,15 +9,15 @@ use crate::{try_option};
 use serde_json::Value;
 use serde::{Deserialize};
 
-pub struct Rsync<'a> {
-    bind: Option<Bind<'a>>
+pub struct Rsync {
+    bind: Option<Bind>
 }
 
-struct Bind<'a> {
+struct Bind {
     _name: String,
     config: Configuration,
     ssh_config: SshConfig,
-    paths: ModulePaths<'a>,
+    paths: ModulePaths,
     sync_from: String,
     sync_to: String,
     dry_run: bool,
@@ -52,14 +52,14 @@ struct SshConfig {
     host_key: String // SSH public key of host
 }
 
-impl<'a> Rsync<'a> {
+impl Rsync {
     pub fn new_empty() -> Self {
         return Rsync { bind: None }
     }
 }
 
-impl<'a> Sync<'a> for Rsync<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Sync for Rsync {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Sync module is already bound");
             error!("{}", msg);
@@ -70,7 +70,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
         docker::build_image_if_missing(&paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
 
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
-        let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths)?;
+        let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths.as_ref())?;
 
         let default_path_prefix = format!("/home/{}", ssh_config.user);
         let path_prefix = config.path_prefix.as_ref().unwrap_or(&default_path_prefix);
@@ -141,7 +141,7 @@ impl<'a> Sync<'a> for Rsync<'a> {
     }
 }
 
-impl<'a> Rsync<'a> {
+impl Rsync {
     fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
         let bound = try_option!(self.bind.as_ref(), "Rsync is not bound");
 

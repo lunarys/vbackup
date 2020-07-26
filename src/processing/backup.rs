@@ -10,6 +10,7 @@ use crate::{try_option, dry_run,log_error};
 
 use chrono::{Local, DateTime, Duration};
 use std::ops::Add;
+use crate::util::objects::time::{SaveData, TimeFrames, TimeFrameReference, TimeFrame, TimeEntry};
 
 pub fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, backup_config: BackupConfiguration, savedata: &mut SaveData, timeframes: &TimeFrames) -> Result<bool,String> {
     // Get the backup module that should be used
@@ -74,7 +75,7 @@ pub fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, back
                     // do sync
                     debug!("Backup for '{}' is required in timeframe '{}' considering the interval only", config.name.as_str(), timeframe_ref.frame.as_str());
                 } else {
-                    // don not sync
+                    // do not sync
                     info!("Backup for '{}' is not executed in timeframe '{}' due to the interval", config.name.as_str(), timeframe_ref.frame.as_str());
                     do_backup = false;
                 }
@@ -143,7 +144,7 @@ pub fn backup(args: &Arguments, paths: ModulePaths, config: &Configuration, back
         for (frame, entry_opt) in queue_frame_entry {
             // Update check state
             trace!("Invoking state update for additional check in timeframe '{}'", frame.identifier.as_str());
-            if let Err(err) = check_helper::update(&check_module, &current_time, frame, &entry_opt.as_ref()) {
+            if let Err(err) = check_helper::update(&mut check_module, &current_time, frame, &entry_opt.as_ref()) {
                 error!("State update for additional check in timeframe '{}' failed ({})", frame.identifier.as_str(), err);
             }
 

@@ -6,9 +6,9 @@ use serde_json::Value;
 mod duplicati;
 mod rsync;
 
-pub enum SyncModule<'a> {
-    Duplicati(duplicati::Duplicati<'a>),
-    Rsync(rsync::Rsync<'a>)
+pub enum SyncModule {
+    Duplicati(duplicati::Duplicati),
+    Rsync(rsync::Rsync)
 }
 
 use SyncModule::*;
@@ -25,8 +25,8 @@ pub fn get_module(name: &str) -> Result<SyncModule,String> {
     })
 }
 
-impl<'a> Sync<'a> for SyncModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Sync for SyncModule {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         return match self {
             Duplicati(sync) => sync.init(name, config_json, paths, args),
             Rsync(sync) => sync.init(name, config_json, paths, args)

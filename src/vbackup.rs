@@ -19,10 +19,12 @@ use std::collections::HashMap;
 use std::ops::Add;
 use core::borrow::Borrow;
 use chrono::{DateTime, Local, Duration};
+use crate::util::objects::time::{TimeFrames, TimeFrameReference};
+use std::rc::Rc;
 
 pub fn main(args: Arguments) -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
-    let paths = Paths::from(base_paths);
+    let paths = Rc::new(Paths::from(base_paths));
 
     file::create_dir_if_missing(paths.save_dir.as_str(), true)?;
     file::create_dir_if_missing(paths.tmp_dir.as_str(), true)?;
@@ -89,7 +91,7 @@ pub fn main(args: Arguments) -> Result<(),String> {
     return result;
 }
 
-fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(u64,u64),String> {
+fn backup_wrapper(args: &Arguments, paths: &Rc<Paths>, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(u64,u64),String> {
     // Collect total sizes of the backup
     let mut original_size_acc = 0;
     let mut backup_size_acc = 0;
@@ -106,7 +108,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
         }
 
         // Get paths specifically for this module
-        let module_paths = paths.for_backup_module("backup", &config);
+        let module_paths = ModulePaths::for_backup_module(paths, "backup", &config);
 
         // Only do something else if a backup is present in this configuration
         if config.backup.is_some() {
@@ -117,7 +119,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
             // Check if this backup is disabled
             if backup_config.disabled {
                 info!("Backup for '{}' is disabled", config.name.as_str());
-                let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "success");
+                let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "disabled");
                 log_error!(report_result);
                 continue;
             }
@@ -187,7 +189,7 @@ fn backup_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, repo
 
 
 
-fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<u64,String> {
+fn sync_wrapper(args: &Arguments, paths: &Rc<Paths>, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<u64,String> {
     // Collect the total size of synchronized files
     let mut acc_size = 0;
 
@@ -203,7 +205,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
         }
 
         // Get paths specifically for this module
-        let module_paths = paths.for_sync_module("sync", &config);
+        let module_paths = ModulePaths::for_sync_module(paths, "sync", &config);
 
         // Get savedata for this sync
         let savedata_result = get_savedata(module_paths.save_data.as_str());
@@ -268,7 +270,7 @@ fn sync_wrapper(args: &Arguments, paths: &Paths, timeframes: &TimeFrames, report
     Ok(acc_size)
 }
 
-pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
+pub fn list(args: &Arguments, paths: &Rc<Paths>) -> Result<(), String> {
 
     // Helper to output an additional check nicely formatted
     fn print_check(config: &Option<Value>) {
@@ -320,8 +322,8 @@ pub fn list(args: &Arguments, paths: &Paths) -> Result<(), String> {
     for config in get_config_list(args, paths)? {
 
         // Get paths for both backup and sync module
-        let backup_paths = paths.for_backup_module("backup", &config);
-        let sync_paths = paths.for_sync_module("sync", &config);
+        let backup_paths = ModulePaths::for_backup_module(paths, "backup", &config);
+        let sync_paths = ModulePaths::for_sync_module(paths, "sync", &config);
 
         // Configuration header
         println!("- Configuration for: {} is {}", config.name.as_str(), if config.disabled {"disabled"} else {"enabled"});

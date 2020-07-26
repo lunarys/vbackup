@@ -8,15 +8,15 @@ use crate::{try_option,dry_run};
 use serde_json::Value;
 use serde::{Deserialize};
 
-pub struct Duplicati<'a> {
-    bind: Option<Bind<'a>>
+pub struct Duplicati {
+    bind: Option<Bind>
 }
 
-struct Bind<'a> {
+struct Bind {
     name: String,
     config: Configuration,
     auth: Authentication,
-    paths: ModulePaths<'a>,
+    paths: ModulePaths,
     dry_run: bool,
     no_docker: bool,
     print_command: bool
@@ -57,14 +57,14 @@ struct Authentication {
     fingerprint: String
 }
 
-impl<'a> Duplicati<'a> {
+impl Duplicati {
     pub fn new_empty() -> Self {
         return Duplicati { bind: None };
     }
 }
 
-impl<'a> Sync<'a> for Duplicati<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Sync for Duplicati {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Sync module is already bound");
             error!("{}", msg);
@@ -72,7 +72,7 @@ impl<'a> Sync<'a> for Duplicati<'a> {
         }
 
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: Remove clone
-        let auth = auth_data::resolve::<Authentication>(&config.auth_reference, &config.auth, paths.base_paths)?;
+        let auth = auth_data::resolve::<Authentication>(&config.auth_reference, &config.auth, paths.base_paths.as_ref())?;
 
         self.bind = Some(Bind {
             name: String::from(name),

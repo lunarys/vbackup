@@ -1,5 +1,5 @@
-use crate::modules::object::Paths;
 use crate::util::command::CommandWrapper;
+use crate::util::objects::paths::Paths;
 
 pub fn image_exists(image_name: &str) -> Result<bool,String> {
     let mut cmd = CommandWrapper::new("sh");

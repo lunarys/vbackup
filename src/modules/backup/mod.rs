@@ -1,7 +1,10 @@
 use crate::modules::traits::Backup;
-use crate::modules::object::{ModulePaths, Arguments};
 use crate::util::objects::time::TimeFrameReference;
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
+
 use serde_json::Value;
+use chrono::{DateTime, Local};
 
 mod tar7zip;
 
@@ -10,7 +13,6 @@ pub enum BackupModule {
 }
 
 use BackupModule::*;
-use chrono::{DateTime, Local};
 
 pub fn get_module(name: &str) -> Result<BackupModule, String> {
     return Ok(match name.to_lowercase().as_str() {

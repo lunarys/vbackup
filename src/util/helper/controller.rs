@@ -1,8 +1,10 @@
 use crate::modules::controller;
-use crate::modules::object::{Arguments, Paths, Configuration, ModulePaths};
 use crate::modules::controller::ControllerModule;
 use crate::modules::traits::Controller;
 use crate::try_option;
+use crate::Arguments;
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::configuration::Configuration;
 
 use serde_json::Value;
 use std::rc::Rc;

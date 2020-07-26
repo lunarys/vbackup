@@ -1,11 +1,12 @@
 use crate::modules::traits::Check;
-use crate::modules::object::*;
 use crate::{try_result,try_option,dry_run};
 use crate::util::command::CommandWrapper;
 
 use serde_json::Value;
 use chrono::{Local, DateTime};
 use crate::util::objects::time::{TimeFrame, TimeEntry};
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
 
 pub struct FileAge {
     bind: Option<Bind>

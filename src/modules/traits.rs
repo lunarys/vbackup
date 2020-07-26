@@ -1,6 +1,7 @@
-use crate::modules::object::{Paths, ModulePaths, Arguments};
 use crate::modules::controller::ControllerModule;
 use crate::util::objects::time::{TimeEntry, TimeFrameReference, TimeFrame};
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
 
 use serde_json::Value;
 use chrono::{DateTime, Local};

@@ -1,10 +1,12 @@
 use crate::modules::check;
-use crate::modules::object::{Arguments, Paths, Configuration, ModulePaths};
 use crate::modules::check::CheckModule;
 use crate::modules::traits::Check;
 use crate::modules::check::Reference;
 use crate::util::objects::time::{TimeEntry, TimeFrame};
+use crate::util::objects::paths::{Paths,ModulePaths};
+use crate::util::objects::configuration::Configuration;
 use crate::try_option;
+use crate::Arguments;
 
 use serde_json::Value;
 use chrono::{DateTime, Local};

@@ -19,9 +19,23 @@ use std::fs::OpenOptions;
 use fs2::FileExt;
 use std::os::unix::fs::OpenOptionsExt;
 
-use crate::modules::object::Arguments;
 use std::process::exit;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
+use serde::{Deserialize};
+
+#[derive(Deserialize)]
+pub struct Arguments {
+    pub operation: String,
+    pub dry_run: bool,
+    pub verbose: bool,
+    pub debug: bool,
+    pub quiet: bool,
+    pub force: bool,
+    pub name: Option<String>,
+    pub base_config: String,
+    pub no_docker: bool,
+    pub no_reporting: bool
+}
 
 fn main() {
     let mut args = Arguments {

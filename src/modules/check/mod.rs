@@ -1,7 +1,10 @@
 use crate::modules::traits::Check;
-use crate::modules::object::{ModulePaths,Arguments};
 use crate::util::objects::time::{TimeEntry,TimeFrame};
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
+
 use serde_json::Value;
+use chrono::{DateTime, Local};
 
 mod file_age;
 mod minecraft_server;
@@ -17,7 +20,6 @@ pub enum CheckModule {
 }
 
 use CheckModule::*;
-use chrono::{DateTime, Local};
 
 pub fn get_module(name: &str) -> Result<CheckModule, String> {
     return Ok(match name.to_lowercase().as_str() {

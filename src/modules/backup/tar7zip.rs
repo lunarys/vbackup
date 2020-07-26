@@ -1,5 +1,4 @@
 use crate::modules::traits::Backup;
-use crate::modules::object::*;
 use crate::{try_option,dry_run};
 use crate::util::io::{json,savefile,file};
 use crate::util::command::CommandWrapper;
@@ -10,6 +9,8 @@ use serde::{Deserialize};
 use std::fs::{copy, remove_file};
 use chrono::{Local, DateTime};
 use crate::util::objects::time::TimeFrameReference;
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
 
 pub struct Tar7Zip {
     bind: Option<Bind>

@@ -1,7 +1,7 @@
 use crate::modules::traits::{Controller, Bundleable};
-use crate::modules::object::{ModulePaths, Arguments, Paths};
 use crate::util::io::{auth_data,json};
-
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
 use crate::{try_result,try_option,bool_result,dry_run};
 
 use serde_json::Value;

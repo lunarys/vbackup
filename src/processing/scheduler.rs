@@ -1,4 +1,6 @@
-use crate::modules::object::{Configuration, Paths, Arguments};
+use crate::Arguments;
+use crate::util::objects::configuration::Configuration;
+use crate::util::objects::paths::Paths;
 use crate::util::io::{file, json};
 
 use serde_json::Value;

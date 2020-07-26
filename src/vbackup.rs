@@ -1,7 +1,6 @@
-use crate::modules::object::*;
 use crate::util::io::{file,json};
 use crate::modules;
-use crate::modules::traits::{Sync, Backup, Reporting};
+use crate::modules::traits::{Reporting};
 use crate::modules::sync::SyncModule;
 use crate::modules::backup::BackupModule;
 use crate::modules::check::Reference;
@@ -20,7 +19,9 @@ use std::ops::Add;
 use core::borrow::Borrow;
 use chrono::{DateTime, Local, Duration};
 use crate::util::objects::time::{TimeFrames, TimeFrameReference};
+use crate::util::objects::paths::{Paths,PathBase,ModulePaths};
 use std::rc::Rc;
+use crate::Arguments;
 
 pub fn main(args: Arguments) -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;

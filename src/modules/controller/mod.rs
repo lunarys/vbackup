@@ -1,6 +1,9 @@
 use crate::modules::traits::{Controller, Bundleable};
-use crate::modules::object::{ModulePaths, Arguments, Paths};
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
+
 use serde_json::Value;
+use std::rc::Rc;
 
 pub mod bundle;
 mod mqtt;
@@ -11,7 +14,6 @@ pub enum ControllerModule {
 }
 
 use ControllerModule::*;
-use std::rc::Rc;
 
 pub fn get_module(name: &str) -> Result<ControllerModule, String> {
     return Ok(match name.to_lowercase().as_str() {

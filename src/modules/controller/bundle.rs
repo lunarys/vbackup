@@ -1,8 +1,10 @@
 use crate::modules::traits::Controller;
-use crate::modules::object::{ModulePaths, Arguments, Paths, Configuration};
 use crate::modules::controller::ControllerModule;
 use crate::processing::scheduler::SyncControllerBundle;
+use crate::util::objects::configuration::Configuration;
 use crate::util::helper::{controller as controller_helper};
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
 
 use crate::{log_error};
 

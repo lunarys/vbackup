@@ -1,10 +1,12 @@
-use crate::modules::object::{Configuration, BackupConfiguration, SyncConfiguration, ModulePaths, Paths, Arguments};
+use crate::Arguments;
 use crate::modules::check::{CheckModule, Reference};
 use crate::modules::controller::ControllerModule;
 use crate::util::io::savefile::get_savedata;
 use crate::util::helper::{controller as controller_helper};
 use crate::util::helper::{check as check_helper};
 use crate::util::objects::time::{ExecutionTiming, SaveData, TimeFrames};
+use crate::util::objects::configuration::{Configuration, BackupConfiguration, SyncConfiguration};
+use crate::util::objects::paths::{ModulePaths, Paths};
 use crate::processing::timeframe_check;
 
 use std::rc::Rc;

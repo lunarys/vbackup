@@ -4,5 +4,4 @@ pub mod check;
 pub mod controller;
 pub mod reporting;
 
-pub mod object;
 pub mod traits;

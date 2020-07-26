@@ -1,7 +1,7 @@
 use crate::modules::traits::Reporting;
-use crate::modules::object::{Paths,Arguments};
-
 use crate::try_option;
+use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::Arguments;
 
 use serde_json::Value;
 

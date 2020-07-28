@@ -1,4 +1,4 @@
-use crate::modules::traits::Controller;
+use crate::modules::traits::{Controller, Bundleable};
 use crate::modules::controller::ControllerModule;
 use crate::processing::scheduler::SyncControllerBundle;
 use crate::util::objects::configuration::Configuration;
@@ -12,31 +12,20 @@ use serde_json::Value;
 use std::rc::Rc;
 
 pub struct ControllerBundle {
-    bind: Option<Box<ControllerModule>>,
+    bind: Box<ControllerModule>,
     init_result: Result<(),String>,
     begin_result: Option<Result<bool,String>>
 }
 
 impl ControllerBundle {
-    pub fn new(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, controller_bundle: &SyncControllerBundle) -> Result<ControllerBundle,String> {
-        let controller_result = controller_helper::init(args, paths, config, &Some(&controller_bundle.controller));
-        let (controller_option,init_result) = match controller_result {
-            Ok(result) => (result, Ok(())),
-            Err(err) => (None, Err(err))
-        };
+    pub fn new(mut main_controller: ControllerModule, other_controllers: Vec<ControllerModule>) -> Result<ControllerBundle,String> {
+        let init_result = main_controller.init_bundle(other_controllers);
 
-        if let Some(controller) = controller_option {
-            return Ok(ControllerBundle {
-                bind: Some(Box::new(controller)),
-                init_result,
-                begin_result: None
-            });
-        } else {
-            // log error and return
-            let result = Err(String::from("Received controller bundle without controller configuration"));
-            log_error!(result.as_ref());
-            return result;
-        }
+        return Ok(ControllerBundle {
+            bind: Box::new(main_controller),
+            init_result,
+            begin_result: None
+        });
     }
 
     pub fn wrap(self) -> ControllerModule {
@@ -45,13 +34,9 @@ impl ControllerBundle {
 
     pub fn done(&mut self) -> Result<(),String> {
         // TODO: Handle results
-        if let Some(bound) = self.bind.as_mut() {
-            let end_result = bound.end();
-            let clear_result = bound.clear();
-            return end_result.and(clear_result);
-        } else {
-            return Err(String::from("Called done unbound controller bundle"));
-        }
+        let end_result = self.bind.end();
+        let clear_result = self.bind.clear();
+        return end_result.and(clear_result);
     }
 }
 
@@ -61,11 +46,13 @@ impl Controller for ControllerBundle {
     }
 
     fn begin(&mut self) -> Result<bool, String> {
-        if let Some(begin_result) = self.begin_result.as_ref() {
-            return begin_result.clone();
+        if let Some(result) = self.begin_result.as_ref() {
+            return result.clone();
         } else {
-            // TODO: begin here
-            unimplemented!();
+            let result = self.bind.begin();
+            self.begin_result = Some(result.clone());
+            return result;
+
         }
     }
 

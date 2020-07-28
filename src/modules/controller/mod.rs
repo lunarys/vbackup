@@ -57,22 +57,42 @@ impl Controller for ControllerModule {
 }
 
 impl Bundleable for ControllerModule {
-    fn init(&mut self, name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(), String> {
-        unimplemented!()
+    fn pre_init(&mut self, name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(), String> {
+        return match self {
+            MQTT(controller) => controller.pre_init(name, config_json, paths, args),
+            _ => Err(String::from("pre_init called for ControllerModule that does not implement Bundleable"))
+        }
     }
 
-    fn update_module_paths(&mut self, paths: ModulePaths) -> Result<(), String> {
-        unimplemented!()
+    fn init_bundle(&mut self, modules: Vec<ControllerModule>) -> Result<(), String> {
+        return match self {
+            MQTT(controller) => controller.init_bundle(modules),
+            _ => Err(String::from("init_bundle called for ControllerModule that does not implement Bundleable"))
+        }
+    }
+
+    fn init_single(&mut self) -> Result<(), String> {
+        return match self {
+            MQTT(controller) => controller.init_single(),
+            _ => Err(String::from("init_single called for ControllerModule that does not implement Bundleable"))
+        }
     }
 
     fn can_bundle_with(&self, other: &ControllerModule) -> bool {
-        unimplemented!()
+        return match self {
+            MQTT(controller) => controller.can_bundle_with(other),
+            _ => false
+        }
     }
 }
 
 impl ControllerModule {
+    /**
+      * Returns wether bundling in general is available for this type of controller module
+      */
     pub fn can_bundle(&self) -> bool {
         return match self {
+            MQTT(_) => true,
             _ => false
         }
     }

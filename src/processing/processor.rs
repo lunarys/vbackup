@@ -11,22 +11,23 @@ use crate::modules::controller::ControllerModule;
 use crate::modules::controller::bundle::ControllerBundle;
 
 use crate::{log_error, try_option};
-use crate::processing::preprocessor::{ConfigurationUnit, SyncUnit, BackupUnit};
+use crate::processing::scheduler::{ConfigurationBundle};
+use crate::processing::preprocessor::{SyncUnit, BackupUnit};
 
 pub fn process_configurations(args: &Arguments,
                               reporter: &ReportingModule,
-                              configurations: Vec<ConfigurationUnit>) -> Result<(),String> {
+                              configurations: Vec<ConfigurationBundle>) -> Result<(),String> {
     for configuration in configurations {
         let result = match configuration {
-            ConfigurationUnit::Backup(backup) => {
+            ConfigurationBundle::Backup(backup) => {
                 process_backup(&backup, args, reporter)
             },
-            ConfigurationUnit::Sync(sync) => {
+            ConfigurationBundle::Sync(sync) => {
                 process_sync(&sync, args, reporter, None)
             },
-            /* TODO: ConfigurationUnit::SyncControllerBundle(sync_controller_bundle) => {
-                process_sync_controller_bundle(&sync_controller_bundle, args, paths, timeframes, savedata, reporter)
-            }*/
+            ConfigurationBundle::SyncControllerBundle(sync_controller_bundle) => {
+                process_sync_controller_bundle(&sync_controller_bundle, args, reporter)
+            }
         };
 
         // If there was any error log it and go ahead
@@ -45,8 +46,7 @@ fn process_backup(config: &BackupUnit,
 
     // TODO: Pass paths by reference
     // Run the backup and report the result
-    // TODO: let result = backup(args, config.module_paths.clone(), config.config.as_ref(), config.backup_config.clone(), config.savedata.as_mut(), config.timeframes);
-    let result = Err(String::from("Commented out"));
+    let result = backup(args, config.module_paths.clone(), config.config.as_ref(), config.backup_config.clone(), config.savedata, config.timeframes);
     result_reporter("backup", result, config.config.name.as_str(), reporter);
 
     // Calculate and report the size of the original files
@@ -79,9 +79,6 @@ fn process_sync(config: &SyncUnit,
 
 fn process_sync_controller_bundle(sync_controller_bundle: &SyncControllerBundle,
                                   args: &Arguments,
-                                  paths: &Paths,
-                                  timeframes: &TimeFrames,
-                                  savedata: &mut SaveData,
                                   reporter: &ReportingModule) -> Result<(), String> {
     // TODO: Create custom controller and then just process sync for every
     // let controller_bundle = ControllerBundle::new(args, paths, &sync_controller_bundle);

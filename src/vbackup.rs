@@ -6,9 +6,12 @@ use crate::modules::backup::BackupModule;
 use crate::modules::check::Reference;
 use crate::modules::reporting::ReportingModule;
 use crate::util::io::savefile::{get_savedata};
-
-use crate::processing::scheduler::get_config_list;
+use crate::util::objects::time::{TimeFrames, TimeFrameReference};
+use crate::util::objects::paths::{Paths,PathBase,ModulePaths};
+use crate::util::objects::configuration::Configuration;
+use crate::processing::{preprocessor,scheduler,processor};
 use crate::processing::{backup,sync};
+use crate::Arguments;
 
 use crate::{try_option, dry_run,log_error};
 
@@ -18,10 +21,7 @@ use std::collections::HashMap;
 use std::ops::Add;
 use core::borrow::Borrow;
 use chrono::{DateTime, Local, Duration};
-use crate::util::objects::time::{TimeFrames, TimeFrameReference};
-use crate::util::objects::paths::{Paths,PathBase,ModulePaths};
 use std::rc::Rc;
-use crate::Arguments;
 
 pub fn main(args: Arguments) -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
@@ -30,24 +30,32 @@ pub fn main(args: Arguments) -> Result<(),String> {
     file::create_dir_if_missing(paths.save_dir.as_str(), true)?;
     file::create_dir_if_missing(paths.tmp_dir.as_str(), true)?;
 
+    // List does not need anything else
+    if args.operation == "list" {
+        return list(&args, &paths);
+    }
+
+    // Load timeframes from file
     let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
-    let mut reporter = match args.operation.as_str() {
-        "run" | "backup" | "save" | "sync" if !args.no_reporting => {
-            let reporter_config_opt = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))?;
-            if let Some(reporter_config) = reporter_config_opt {
-                let mut r = ReportingModule::new_combined();
-                r.init(&reporter_config, &paths, &args)?;
-                r
-            } else {
-                ReportingModule::new_empty()
-            }
-        },
-        _ => ReportingModule::new_empty()
+
+    // Set up reporter (if existing)
+    let mut reporter = if let Some(reporter_config) = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))? {
+        let mut r = ReportingModule::new_combined();
+        r.init(&reporter_config, &paths, &args)?;
+        r
+    } else {
+        ReportingModule::new_empty()
     };
 
     // Only actually does something if run, backup or sync
     log_error!(reporter.report(None, args.operation.as_str()));
 
+    let config_list = get_config_list(&args, paths.as_ref())?;
+    let preprocessed = preprocessor::preprocess(config_list, &args, &paths)?;
+    let scheduled = scheduler::get_exec_order(preprocessed)?;
+    let result = processor::process_configurations(&args, &reporter, scheduled);
+
+    /*
     let result = match args.operation.as_str() {
         "run" => {
             let backup_result = backup_wrapper(&args, &paths, &timeframes, &reporter);
@@ -79,17 +87,48 @@ pub fn main(args: Arguments) -> Result<(),String> {
             }
             result.map(|_| ())
         },
-        "list" => list(&args, &paths),
         unknown => {
             let err = format!("Unknown operation: '{}'", unknown);
             //throw!(err);
             Err(err)
         }
     };
+    */
 
     log_error!(reporter.report(None, "done"));
     log_error!(reporter.clear());
     return result;
+}
+
+pub fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
+    // Get directory containing configurations
+    let volume_config_path = format!("{}/volumes", &paths.config_dir);
+
+    // Check if a specific one should be outputted
+    let files = if args.name.is_some() {
+
+        // Only run this one -> Let the list only contain this item
+        let path = format!("{}/{}.json", volume_config_path, args.name.as_ref().unwrap());
+        vec![Path::new(&path).to_path_buf()]
+    } else {
+
+        // Run all -> Return all the files in the configuration directory
+        file::list_in_dir(volume_config_path.as_str())?
+    };
+
+    // Load all the configuration files parsed as Configuration
+    // TODO: Only logs inaccessible files and then disregards the error
+    let configs = files.iter().filter_map(|file_path| {
+        let result = json::from_file::<Configuration>(file_path);
+        if result.is_ok() {
+            Some(result.unwrap())
+        } else {
+            error!("Could not parse configuration from '{}' ({})", "<filename?>", result.err().unwrap().to_string());
+            None
+        }
+    }).collect();
+
+    return Ok(configs);
 }
 
 fn backup_wrapper(args: &Arguments, paths: &Rc<Paths>, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(u64,u64),String> {

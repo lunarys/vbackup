@@ -70,7 +70,7 @@ pub fn get_exec_order(config_list: Vec<ConfigurationUnit>) -> Result<Vec<Configu
         if bundle_builder.additional_controllers.is_empty() {
             if let Some(mut sync) = bundle_builder.units.pop() {
                 let mut controller = bundle_builder.main_controller;
-                controller.init_single();
+                controller.init_single()?;
                 sync.controller = Some(controller);
                 sync_list.push(ConfigurationBundle::Sync(sync));
             } else {
@@ -104,35 +104,4 @@ pub fn get_exec_order(config_list: Vec<ConfigurationUnit>) -> Result<Vec<Configu
     }).collect()
 */
     return Ok(configuration_list);
-}
-
-pub fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
-    // Get directory containing configurations
-    let volume_config_path = format!("{}/volumes", &paths.config_dir);
-
-    // Check if a specific one should be outputted
-    let files = if args.name.is_some() {
-
-        // Only run this one -> Let the list only contain this item
-        let path = format!("{}/{}.json", volume_config_path, args.name.as_ref().unwrap());
-        vec![Path::new(&path).to_path_buf()]
-    } else {
-
-        // Run all -> Return all the files in the configuration directory
-        file::list_in_dir(volume_config_path.as_str())?
-    };
-
-    // Load all the configuration files parsed as Configuration
-    // TODO: Only logs inaccessible files and then disregards the error
-    let configs = files.iter().filter_map(|file_path| {
-        let result = json::from_file::<Configuration>(file_path);
-        if result.is_ok() {
-            Some(result.unwrap())
-        } else {
-            error!("Could not parse configuration from '{}' ({})", "<filename?>", result.err().unwrap().to_string());
-            None
-        }
-    }).collect();
-
-    return Ok(configs);
 }

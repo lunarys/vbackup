@@ -4,7 +4,7 @@ use crate::util::command::CommandWrapper;
 
 use serde_json::Value;
 use chrono::{Local, DateTime};
-use crate::util::objects::time::{TimeFrame, TimeEntry};
+use crate::util::objects::time::{TimeFrame, TimeEntry, ExecutionTiming};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::Arguments;
 
@@ -44,16 +44,16 @@ impl Check for FileAge {
     }
 
     // TODO: cache result!
-    fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, frame: &ExecutionTiming) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
 
-        let last_run = if last.is_none() {
+        let last_run = if frame.last_run.is_none() {
             // If there is no last run, just run it
             debug!("Check is not necessary as there was no run before");
             return Ok(true);
         } else {
             trace!("Checking the age of files before doing anything");
-            last.unwrap()
+            frame.last_run.as_ref().unwrap()
         };
 
         let check_path = &bound.paths.source;
@@ -106,7 +106,7 @@ impl Check for FileAge {
         }
     }
 
-    fn update(&mut self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&mut self, _frame: &ExecutionTiming) -> Result<(), String> {
         let _bound = try_option!(self.bind.as_ref(), "Check module is not bound");
         // This check is stateless, so no update is required
         return Ok(())

@@ -29,7 +29,7 @@ pub fn init(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, control
     }
 }
 
-pub fn start(module: &mut Option<ControllerModule>) -> Result<bool,String> {
+pub fn start(module: &mut Option<&ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
         let result = module.as_mut().unwrap().begin()?;
         /*if result {
@@ -44,7 +44,7 @@ pub fn start(module: &mut Option<ControllerModule>) -> Result<bool,String> {
     return Ok(true);
 }
 
-pub fn end(module: &mut Option<ControllerModule>) -> Result<bool,String> {
+pub fn end(module: &mut Option<&ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
         let result = module.as_mut().unwrap().end()?;
         /*if result {
@@ -58,7 +58,7 @@ pub fn end(module: &mut Option<ControllerModule>) -> Result<bool,String> {
     return Ok(true);
 }
 
-pub fn clear(module: &mut Option<ControllerModule>) -> Result<(),String> {
+pub fn clear(module: &mut Option<&ControllerModule>) -> Result<(),String> {
     if module.is_some() {
         module.as_mut().unwrap().clear()?;
     }

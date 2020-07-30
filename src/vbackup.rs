@@ -182,7 +182,8 @@ fn backup_wrapper(args: &Arguments, paths: &Rc<Paths>, timeframes: &TimeFrames, 
             let store_path = module_paths.destination.clone();
 
             // Run the backup and evaluate the result
-            let result = backup::backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
+            // let result = backup::backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
+            let result = Err(String::from("OLD VERSION"));
             match result {
                 Ok(true) => {
                     info!("Backup for '{}' was successfully executed", config.name.as_str());
@@ -276,7 +277,8 @@ fn sync_wrapper(args: &Arguments, paths: &Rc<Paths>, timeframes: &TimeFrames, re
             log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "starting"));
 
             // Run the backup and evaluate the result
-            let result = sync::sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
+            //let result = sync::sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
+            let result = Err(String::from("OLD VERSION"));
             match result {
                 Ok(true) => {
                     info!("Sync for '{}' was successfully executed", config.name.as_str());

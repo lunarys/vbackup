@@ -195,10 +195,10 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, ar
         .filter_map(|configuration| {
             let mut timeframes = match &configuration {
                 ConfigurationUnitBuilder::Backup(backup) => {
-                    timeframe_checker.check_timeframes(backup.backup_config.timeframes.clone(), backup.savedata.as_ref())
+                    timeframe_checker.check_backup_timeframes(backup.config.name.as_str(), backup.backup_config.timeframes.clone(), backup.savedata.as_ref())
                 },
                 ConfigurationUnitBuilder::Sync(sync) => {
-                    timeframe_checker.check_timeframes(vec![sync.sync_config.interval.clone()], sync.savedata.as_ref())
+                    timeframe_checker.check_sync_timeframes(sync.config.name.as_str(), vec![sync.sync_config.interval.clone()], sync.savedata.as_ref())
                 }
             };
 
@@ -235,6 +235,10 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Argumen
                     let check_result = check_helper::init(args, paths, &backup.config, &backup.backup_config.check, Reference::Backup);
                     match check_result {
                         Ok(result) => {
+                            if result.is_none() {
+                                debug!("There is no additional check for the backup of '{}', only using the interval checks", backup.config.name.as_str());
+                            }
+
                             backup.check = result;
                             return Some(ConfigurationUnitBuilder::Backup(backup));
                         },
@@ -249,6 +253,10 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Argumen
                     let check_result = check_helper::init(args, paths, &sync.config, &sync.sync_config.check, Reference::Sync);
                     match check_result {
                         Ok(result) => {
+                            if result.is_none() {
+                                debug!("There is no additional check for the sync of '{}', only using the interval checks", sync.config.name.as_str());
+                            }
+
                             sync.check = result;
                             return Some(ConfigurationUnitBuilder::Sync(sync));
                         },
@@ -281,9 +289,17 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
 
                 let filtered_timeframes = if let Some(mut timeframes) = timeframes {
                     timeframes.drain(..).filter(|timeframe| {
-                        let result = check_helper::run(check, &timeframe.execution_time, timeframe.time_frame.as_ref(), &timeframe.time_entry.as_ref());
+                        let result = check_helper::run(check, &timeframe);
                         match result {
-                            Ok(success) => success,
+                            Ok(success) => {
+                                if success {
+                                    info!("{} for '{}' is not executed in timeframe '{}' due to the additional check", run_type, name, timeframe.time_frame_reference.frame.as_str());
+                                } else {
+                                    debug!("{} for '{}' is required in timeframe '{}' considering the additional check", run_type, name, timeframe.time_frame_reference.frame.as_str());
+                                }
+
+                                return success;
+                            },
                             Err(err) => {
                                 error!("Additional check for '{}' {} failed... skipping run", name, run_type);
                                 return false;
@@ -294,6 +310,10 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                     error!("Timeframes not loaded for '{}' {}, even though they should be... skipping run", name, run_type);
                     vec![]
                 };
+
+                if filtered_timeframes.is_empty() {
+                    info!("{} for '{}' is not required in any timeframe due to additional check", run_type, name);
+                }
 
                 return Some(filtered_timeframes);
             }
@@ -320,16 +340,6 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                     }
                 }
             }
-
-            /* TODO
-            if filtered_timeframes.is_empty() {
-                info!("{} for '{}' is not executed in timeframe '{}' due to the additional check", run_type, name, timeframe_ref.frame.as_str());
-                return false;
-            } else {
-                debug!("{} for '{}' is required in timeframe '{}' considering the additional check", run_type, name, timeframe_ref.frame.as_str());
-                return true;
-            }
-            */
         })
         .collect();
 }

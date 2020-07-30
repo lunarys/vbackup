@@ -1,6 +1,7 @@
 use crate::modules::controller::ControllerModule;
 use crate::util::objects::time::{TimeEntry, TimeFrameReference, TimeFrame};
 use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::time::ExecutionTiming;
 use crate::Arguments;
 
 use serde_json::Value;
@@ -9,16 +10,15 @@ use std::rc::Rc;
 
 pub trait Backup {
     fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String>;
-    fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String>;
+    fn backup(&self, time_frames: &Vec<ExecutionTiming>) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
 }
 
 pub trait Check {
     fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String>;
-    // TODO: Refactor with ExecutionTiming
-    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String>;
-    fn update(&mut self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String>;
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String>;
+    fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
 }
 

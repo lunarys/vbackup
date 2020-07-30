@@ -8,7 +8,7 @@ use serde_json::Value;
 use serde::{Deserialize};
 use std::fs::{copy, remove_file};
 use chrono::{Local, DateTime};
-use crate::util::objects::time::TimeFrameReference;
+use crate::util::objects::time::{TimeFrameReference,ExecutionTiming};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::Arguments;
 
@@ -61,7 +61,7 @@ impl Backup for Tar7Zip {
         return Ok(());
     }
 
-    fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
+    fn backup(&self, timings: &Vec<ExecutionTiming>) -> Result<(), String> {
         let bound: &Bind = try_option!(self.bind.as_ref(), "Backup is not bound");
 
         let mut cmd = if bound.no_docker {
@@ -120,8 +120,8 @@ impl Backup for Tar7Zip {
 
         {
             let mut from: Option<String> = None;
-            for frame in time_frames {
-                let file_name = savefile::format_filename(time, *frame, bound.name.as_str(), None, Some("tar.7z"));
+            for timing in timings {
+                let file_name = savefile::format_filename(&timing.execution_time, &timing.time_frame_reference, bound.name.as_str(), None, Some("tar.7z"));
                 let backup_file = format!("{}/{}", bound.paths.destination.as_str(), file_name);
 
                 // TODO: (?) Change permission on persisted files (currently readable by group and other due to default)?
@@ -144,7 +144,7 @@ impl Backup for Tar7Zip {
                 }
 
                 if !bound.dry_run {
-                    if !savefile::prune(bound.paths.destination.as_str(), &frame.frame, &frame.amount)? {
+                    if !savefile::prune(bound.paths.destination.as_str(), &timing.time_frame_reference.frame, &timing.time_frame_reference.amount)? {
                         trace!("Amount of backups is below threshold, not removing anything");
                     }
                 } else {

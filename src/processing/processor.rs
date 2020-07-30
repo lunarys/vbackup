@@ -18,12 +18,15 @@ pub fn process_configurations(args: &Arguments,
                               reporter: &ReportingModule,
                               configurations: Vec<ConfigurationBundle>) -> Result<(),String> {
     for configuration in configurations {
+
+        // TODO: Maybe update execution time at this point?
+
         let result = match configuration {
-            ConfigurationBundle::Backup(backup) => {
-                process_backup(&backup, args, reporter)
+            ConfigurationBundle::Backup(mut backup) => {
+                process_backup(&mut backup, args, reporter)
             },
-            ConfigurationBundle::Sync(sync) => {
-                process_sync(&sync, args, reporter, None)
+            ConfigurationBundle::Sync(mut sync) => {
+                process_sync(&mut sync, args, reporter, None)
             },
             ConfigurationBundle::SyncControllerBundle(sync_controller_bundle) => {
                 process_sync_controller_bundle(&sync_controller_bundle, args, reporter)
@@ -37,7 +40,7 @@ pub fn process_configurations(args: &Arguments,
     return Ok(());
 }
 
-fn process_backup(config: &BackupUnit,
+fn process_backup(config: &mut BackupUnit,
                   args: &Arguments,
                   reporter: &ReportingModule) -> Result<(), String> {
     // Save those paths for later, as the ModulePaths will be moved
@@ -46,7 +49,7 @@ fn process_backup(config: &BackupUnit,
 
     // TODO: Pass paths by reference
     // Run the backup and report the result
-    let result = backup(args, config.module_paths.clone(), config.config.as_ref(), config.backup_config.clone(), config.savedata, config.timeframes);
+    let result = backup(args, config);
     result_reporter("backup", result, config.config.name.as_str(), reporter);
 
     // Calculate and report the size of the original files
@@ -58,7 +61,7 @@ fn process_backup(config: &BackupUnit,
     return Ok(());
 }
 
-fn process_sync(config: &SyncUnit,
+fn process_sync(config: &mut SyncUnit,
                 args: &Arguments,
                 reporter: &ReportingModule,
                 controller_overwrite: Option<&ControllerModule>) -> Result<(), String> {

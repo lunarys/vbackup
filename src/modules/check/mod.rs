@@ -1,5 +1,5 @@
 use crate::modules::traits::Check;
-use crate::util::objects::time::{TimeEntry,TimeFrame};
+use crate::util::objects::time::{TimeEntry,TimeFrame,ExecutionTiming};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::Arguments;
 
@@ -41,17 +41,17 @@ impl Check for CheckModule {
         }
     }
 
-    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
         match self {
-            FileAge(check) => check.check(time, frame, last),
-            Usetime(check) => check.check(time, frame, last)
+            FileAge(check) => check.check(timing),
+            Usetime(check) => check.check(timing)
         }
     }
 
-    fn update(&mut self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String> {
         match self {
-            FileAge(check) => check.update(time, frame, last),
-            Usetime(check) => check.update(time, frame, last)
+            FileAge(check) => check.update(timing),
+            Usetime(check) => check.update(timing)
         }
     }
 

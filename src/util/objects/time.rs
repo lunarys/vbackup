@@ -11,7 +11,7 @@ fn default_usize_1() -> usize { 1 }
 pub struct ExecutionTiming {
     pub time_frame_reference: TimeFrameReference,
     pub time_frame: Rc<TimeFrame>,
-    pub time_entry: Option<TimeEntry>,
+    pub last_run: Option<TimeEntry>,
     pub execution_time: DateTime<Local>
 }
 

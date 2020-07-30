@@ -6,7 +6,7 @@ use crate::{try_option,try_result,dry_run};
 use serde_json::Value;
 use serde::{Deserialize};
 use chrono::{Local, DateTime};
-use crate::util::objects::time::{TimeFrame, TimeEntry};
+use crate::util::objects::time::{TimeFrame, TimeEntry,ExecutionTiming};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::Arguments;
 
@@ -63,10 +63,10 @@ impl Check for Usetime {
         return Ok(());
     }
 
-    fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "Check is not bound");
 
-        if last.is_some() {
+        if timing.last_run.is_some() {
             let backup_info = read_backupinfo(bound)?;
             let test_result = bound.config.targeted_usetime < backup_info.usetime;
 
@@ -83,7 +83,7 @@ impl Check for Usetime {
         }
     }
 
-    fn update(&mut self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&mut self, _timing: &ExecutionTiming) -> Result<(), String> {
         let bound = try_option!(self.bind.as_ref(), "Check is not bound");
         let backup_info = read_backupinfo(bound)?;
 

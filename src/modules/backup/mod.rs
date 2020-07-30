@@ -1,5 +1,5 @@
 use crate::modules::traits::Backup;
-use crate::util::objects::time::TimeFrameReference;
+use crate::util::objects::time::{TimeFrameReference, ExecutionTiming};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::Arguments;
 
@@ -32,9 +32,9 @@ impl Backup for BackupModule {
         }
     }
 
-    fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
+    fn backup(&self, timings: &Vec<ExecutionTiming>) -> Result<(), String> {
         match self {
-            Tar7Zip(backup) => backup.backup(time, time_frames)
+            Tar7Zip(backup) => backup.backup(timings)
         }
     }
 

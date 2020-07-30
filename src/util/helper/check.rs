@@ -2,7 +2,7 @@ use crate::modules::check;
 use crate::modules::check::CheckModule;
 use crate::modules::traits::Check;
 use crate::modules::check::Reference;
-use crate::util::objects::time::{TimeEntry, TimeFrame};
+use crate::util::objects::time::{TimeEntry, TimeFrame, ExecutionTiming};
 use crate::util::objects::paths::{Paths,ModulePaths};
 use crate::util::objects::configuration::Configuration;
 use crate::try_option;
@@ -26,9 +26,9 @@ pub fn init(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, check_c
     }
 }
 
-pub fn run(module: &Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool,String> {
+pub fn run(module: &Option<CheckModule>, timing: &ExecutionTiming) -> Result<bool,String> {
     if module.is_some() {
-        let result = module.as_ref().unwrap().check(time, frame, last)?;
+        let result = module.as_ref().unwrap().check(timing)?;
         /*if result {
             debug!("TODO: check_helper debug");
         } else {
@@ -40,9 +40,9 @@ pub fn run(module: &Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFra
     return Ok(true);
 }
 
-pub fn update(module: &mut Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(),String> {
+pub fn update(module: &mut Option<CheckModule>, timing: &ExecutionTiming) -> Result<(),String> {
     if module.is_some() {
-        module.as_mut().unwrap().update(time, frame, last)?;
+        module.as_mut().unwrap().update(timing)?;
     }
 
     return Ok(());

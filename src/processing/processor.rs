@@ -2,7 +2,7 @@ use crate::Arguments;
 use crate::modules::reporting::ReportingModule;
 use crate::processing::scheduler::{SyncControllerBundle};
 use crate::util::io::file;
-use crate::util::objects::time::{TimeFrames,SaveData};
+use crate::util::objects::time::{TimeFrames,SaveData, SaveDataCollection};
 use crate::util::objects::paths::Paths;
 use crate::modules::traits::Reporting;
 use crate::processing::backup::backup;
@@ -16,20 +16,21 @@ use crate::processing::preprocessor::{SyncUnit, BackupUnit};
 
 pub fn process_configurations(args: &Arguments,
                               reporter: &ReportingModule,
-                              configurations: Vec<ConfigurationBundle>) -> Result<(),String> {
+                              configurations: Vec<ConfigurationBundle>,
+                              mut savedata_collection: SaveDataCollection) -> Result<(),String> {
     for configuration in configurations {
 
         // TODO: Maybe update execution time at this point?
 
         let result = match configuration {
             ConfigurationBundle::Backup(mut backup) => {
-                process_backup(&mut backup, args, reporter)
+                process_backup(&mut backup, &mut savedata_collection, args, reporter)
             },
             ConfigurationBundle::Sync(mut sync) => {
-                process_sync(&mut sync, args, reporter, None)
+                process_sync(&mut sync, &mut savedata_collection, args, reporter, None)
             },
             ConfigurationBundle::SyncControllerBundle(sync_controller_bundle) => {
-                process_sync_controller_bundle(&sync_controller_bundle, args, reporter)
+                process_sync_controller_bundle(&sync_controller_bundle, &mut savedata_collection, args, reporter)
             }
         };
 
@@ -41,15 +42,20 @@ pub fn process_configurations(args: &Arguments,
 }
 
 fn process_backup(config: &mut BackupUnit,
+                  savedata_collection: &mut SaveDataCollection,
                   args: &Arguments,
                   reporter: &ReportingModule) -> Result<(), String> {
     // Save those paths for later, as the ModulePaths will be moved
     let original_path = config.module_paths.source.clone();
     let store_path = config.module_paths.destination.clone();
 
+    let savedata = savedata_collection
+        .get_mut(config.config.name.as_str())
+        .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
+
     // TODO: Pass paths by reference
     // Run the backup and report the result
-    let result = backup(args, config);
+    let result = backup(args, config, savedata);
     result_reporter("backup", result, config.config.name.as_str(), reporter);
 
     // Calculate and report the size of the original files
@@ -62,15 +68,19 @@ fn process_backup(config: &mut BackupUnit,
 }
 
 fn process_sync(config: &mut SyncUnit,
+                savedata_collection: &mut SaveDataCollection,
                 args: &Arguments,
                 reporter: &ReportingModule,
-                controller_overwrite: Option<&ControllerModule>) -> Result<(), String> {
+                controller_override: Option<&mut ControllerModule>) -> Result<(), String> {
     // Save owned objects of configuration and path
     let store_path = config.module_paths.source.clone();
 
+    let savedata = savedata_collection
+        .get_mut(config.config.name.as_str())
+        .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
+
     // Run the sync and report the result
-    // TODO: let result = sync(args, config.module_paths.clone(), config.config.as_ref(), config.sync_config.clone(), config.savedata.as_mut(), config.timeframe);
-    let result = Err(String::from("Commented out"));
+    let result = sync(args, config, savedata, controller_override);
     result_reporter("sync", result, config.config.name.as_str(), reporter);
 
     // Calculate and report size of the synced files
@@ -81,6 +91,7 @@ fn process_sync(config: &mut SyncUnit,
 }
 
 fn process_sync_controller_bundle(sync_controller_bundle: &SyncControllerBundle,
+                                  savedata: &mut SaveDataCollection,
                                   args: &Arguments,
                                   reporter: &ReportingModule) -> Result<(), String> {
     // TODO: Create custom controller and then just process sync for every

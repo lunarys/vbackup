@@ -52,8 +52,8 @@ pub fn main(args: Arguments) -> Result<(),String> {
 
     let config_list = get_config_list(&args, paths.as_ref())?;
     let preprocessed = preprocessor::preprocess(config_list, &args, &paths)?;
-    let scheduled = scheduler::get_exec_order(preprocessed)?;
-    let result = processor::process_configurations(&args, &reporter, scheduled);
+    let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
+    let result = processor::process_configurations(&args, &reporter, scheduled, preprocessed.savedata);
 
     /*
     let result = match args.operation.as_str() {

@@ -4,7 +4,7 @@ use crate::modules::controller::ControllerModule;
 use crate::util::io::savefile::get_savedata;
 use crate::util::helper::{controller as controller_helper};
 use crate::util::helper::{check as check_helper};
-use crate::util::objects::time::{ExecutionTiming, SaveData, TimeFrames};
+use crate::util::objects::time::{ExecutionTiming, SaveData, TimeFrames, SaveDataCollection};
 use crate::util::objects::configuration::{Configuration, BackupConfiguration, SyncConfiguration};
 use crate::util::objects::paths::{ModulePaths, Paths};
 use crate::processing::timeframe_check;
@@ -28,8 +28,7 @@ struct ConfigurationSplit {
     backup_config: Option<BackupConfiguration>,
     backup_paths: Option<ModulePaths>,
     sync_config: Option<SyncConfiguration>,
-    sync_paths: Option<ModulePaths>,
-    savedata: Option<Rc<SaveData>>
+    sync_paths: Option<ModulePaths>
 }
 
 pub struct BackupUnit {
@@ -37,7 +36,6 @@ pub struct BackupUnit {
     pub backup_config: BackupConfiguration,
     pub check: Option<CheckModule>,
     pub module_paths: ModulePaths,
-    pub savedata: Rc<SaveData>,
     pub timeframes: Vec<ExecutionTiming>
 }
 
@@ -46,7 +44,6 @@ struct BackupUnitBuilder {
     backup_config: BackupConfiguration,
     check: Option<CheckModule>,
     module_paths: ModulePaths,
-    savedata: Rc<SaveData>,
     timeframes: Option<Vec<ExecutionTiming>>
 }
 
@@ -56,7 +53,6 @@ pub struct SyncUnit {
     pub check: Option<CheckModule>,
     pub controller: Option<ControllerModule>,
     pub module_paths: ModulePaths,
-    pub savedata: Rc<SaveData>,
     pub timeframe: ExecutionTiming
 }
 
@@ -66,21 +62,28 @@ struct SyncUnitBuilder {
     check: Option<CheckModule>,
     controller: Option<ControllerModule>,
     module_paths: ModulePaths,
-    savedata: Rc<SaveData>,
     timeframes: Option<Vec<ExecutionTiming>>
 }
 
-pub fn preprocess(configurations: Vec<Configuration>, args: &Arguments, paths: &Rc<Paths>) -> Result<Vec<ConfigurationUnit>,String> {
+pub struct PreprocessorResult {
+    pub configurations: Vec<ConfigurationUnit>,
+    pub savedata: SaveDataCollection
+}
+
+pub fn preprocess(configurations: Vec<Configuration>, args: &Arguments, paths: &Rc<Paths>) -> Result<PreprocessorResult,String> {
     let without_disabled = filter_disabled(configurations);
     let with_module_paths = load_module_paths(without_disabled, paths);
-    let with_savedata = load_savedata(with_module_paths);
-    let split = flatten_processing_list(with_savedata);
-    let with_time_constraints = filter_time_constraints(split, args, paths)?;
+    let savedata = load_savedata(&with_module_paths);
+    let split = flatten_processing_list(with_module_paths);
+    let with_time_constraints = filter_time_constraints(split, args, paths, &savedata)?;
     let with_checks = load_checks(with_time_constraints, args, paths);
     let with_additional_check = filter_additional_check(with_checks, args);
     let with_controllers = load_controllers(with_additional_check, args, paths);
 
-    return Ok(assemble_from_builders(with_controllers));
+    return Ok(PreprocessorResult {
+        configurations: assemble_from_builders(with_controllers),
+        savedata
+    });
 }
 
 fn filter_disabled(mut configurations: Vec<Configuration>) -> Vec<ConfigurationSplit> {
@@ -95,8 +98,7 @@ fn filter_disabled(mut configurations: Vec<Configuration>) -> Vec<ConfigurationS
                 sync_config: config.sync.clone().filter(|sync| !sync.disabled),
                 config,
                 backup_paths: None,
-                sync_paths: None,
-                savedata: None
+                sync_paths: None
             }
         })
         .collect();
@@ -113,12 +115,12 @@ fn load_module_paths(mut configurations: Vec<ConfigurationSplit>, paths: &Rc<Pat
     return configurations;
 }
 
-fn load_savedata(mut configurations: Vec<ConfigurationSplit>) -> Vec<ConfigurationSplit> {
+fn load_savedata(configurations: &Vec<ConfigurationSplit>) -> SaveDataCollection {
     // step 3
     //  load savedata for all
     return configurations
-        .drain(..)
-        .filter_map(|mut config| {
+        .iter()
+        .filter_map(|config| {
             if config.backup_paths.is_none() {
                 error!("Module paths for '{}' not loaded in preprocessor... skipping configuration", config.config.name.as_str());
                 return None;
@@ -134,8 +136,7 @@ fn load_savedata(mut configurations: Vec<ConfigurationSplit>) -> Vec<Configurati
                 }
             };
 
-            config.savedata = Some(Rc::new(savedata));
-            return Some(config);
+            return Some((config.config.name.clone(), savedata));
         })
         .collect();
 }
@@ -147,18 +148,11 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>) -> Vec<C
         .drain(..)
         .for_each(|mut config| {
             let config_rc = Rc::new(config.config);
-            if config.savedata.is_none() {
-                error!("Savedata for '{}' is missing... skipping potential runs", config_rc.name.as_str());
-                return;
-            }
-
-            let savedata_rc = config.savedata.unwrap();
 
             if let Some(backup_config) = config.backup_config.take() {
                 result.push(ConfigurationUnitBuilder::Backup(BackupUnitBuilder {
                     config: config_rc.clone(),
                     backup_config,
-                    savedata: savedata_rc.clone(),
                     check: None,
                     module_paths: config.backup_paths.unwrap(),
                     timeframes: None
@@ -169,7 +163,6 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>) -> Vec<C
                 result.push(ConfigurationUnitBuilder::Sync(SyncUnitBuilder {
                     config: config_rc.clone(),
                     sync_config,
-                    savedata: savedata_rc.clone(),
                     check: None,
                     controller: None,
                     module_paths: config.sync_paths.unwrap(),
@@ -181,7 +174,7 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>) -> Vec<C
     return result;
 }
 
-fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, paths: &Rc<Paths>) -> Result<Vec<ConfigurationUnitBuilder>,String> {
+fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, paths: &Rc<Paths>, savedata_collection: &SaveDataCollection) -> Result<Vec<ConfigurationUnitBuilder>,String> {
     // step 5
     if args.force {
         debug!("Skipping time constraints checks due to forced run");
@@ -193,12 +186,24 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     let result = configurations
         .drain(..)
         .filter_map(|configuration| {
+            let name = match &configuration {
+                ConfigurationUnitBuilder::Backup(backup) => backup.config.name.as_str(),
+                ConfigurationUnitBuilder::Sync(sync) => sync.config.name.as_str()
+            };
+
+            let savedata = if let Some(savedata) = savedata_collection.get(name) {
+                savedata
+            } else {
+                error!("Savedata not loaded for '{}' in time constraint filter", name);
+                return None;
+            };
+
             let mut timeframes = match &configuration {
                 ConfigurationUnitBuilder::Backup(backup) => {
-                    timeframe_checker.check_backup_timeframes(backup.config.name.as_str(), backup.backup_config.timeframes.clone(), backup.savedata.as_ref())
+                    timeframe_checker.check_backup_timeframes(backup.config.name.as_str(), backup.backup_config.timeframes.clone(), savedata)
                 },
                 ConfigurationUnitBuilder::Sync(sync) => {
-                    timeframe_checker.check_sync_timeframes(sync.config.name.as_str(), vec![sync.sync_config.interval.clone()], sync.savedata.as_ref())
+                    timeframe_checker.check_sync_timeframes(sync.config.name.as_str(), vec![sync.sync_config.interval.clone()], savedata)
                 }
             };
 
@@ -387,7 +392,6 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> 
                         backup_config: backup_builder.backup_config,
                         check: backup_builder.check,
                         module_paths: backup_builder.module_paths,
-                        savedata: backup_builder.savedata,
                         timeframes: timeframes_option.unwrap()
                     }))
                 },
@@ -407,7 +411,6 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> 
                         check: sync_builder.check,
                         controller: sync_builder.controller,
                         module_paths: sync_builder.module_paths,
-                        savedata: sync_builder.savedata,
                         timeframe: timeframe_option.unwrap()
                     }))
                 }

@@ -1,4 +1,4 @@
-use crate::util::objects::time::{TimeFrameReference,SaveData};
+use crate::util::objects::time::{TimeFrameReference,SaveData,SaveDataDeserialized};
 use crate::util::io::{file, json};
 
 use crate::try_result;
@@ -14,21 +14,22 @@ pub fn get_savedata(path: &str) -> Result<SaveData, String> {
     let savedata = if file::exists(path) {
 
         // File exists: Read savedata
-        json::from_file::<SaveData>(Path::new(path))?
+        json::from_file::<SaveDataDeserialized>(Path::new(path))?
     } else {
 
         // File does not exist: Create new savedata
-        SaveData {
+        SaveDataDeserialized {
             lastsave: HashMap::new(),
             nextsave: HashMap::new(),
             lastsync: HashMap::new()
         }
     };
 
-    return Ok(savedata);
+    return Ok(savedata.into_serializable(path));
 }
 
 pub fn write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
+    trace!("Writing new savedata to '{}'", savedata.path.as_str());
     json::to_file(Path::new(path), savedata)
 }
 

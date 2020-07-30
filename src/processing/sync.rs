@@ -4,7 +4,7 @@ use crate::modules;
 use crate::modules::traits::Sync;
 use crate::modules::controller::ControllerModule;
 use crate::util::helper::{controller as controller_helper,check as check_helper};
-use crate::util::io::savefile::{time_format, write_savedata};
+use crate::util::io::savefile::{time_format};
 use crate::util::objects::time::{SaveData, TimeFrames, TimeFrame, TimeEntry};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::util::objects::configuration::{Configuration,BackupConfiguration,SyncConfiguration};
@@ -16,18 +16,16 @@ use crate::{try_option, dry_run,log_error};
 use chrono::{DateTime, Local};
 use std::borrow::Borrow;
 
-pub fn sync(args: &Arguments, unit: &mut SyncUnit, controller_override: &Option<ControllerModule>) -> Result<bool,String> {
+pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, controller_override: Option<&mut ControllerModule>) -> Result<bool,String> {
     // Get the sync module that should be used
-    let mut controller_module = controller_override.as_ref().or(unit.controller.as_ref());
+    let mut controller_module = controller_override.or(unit.controller.as_mut());
     let mut module: SyncModule = modules::sync::get_module(unit.sync_config.sync_type.as_str())?;
 
     info!("Executing sync for '{}'", unit.config.name.as_str());
 
-    // Save path is still required after move, make a copy
-    let save_data_path = unit.module_paths.save_data.clone();
-
     // Initialize sync module
-    module.init(&unit.config.name, &unit.sync_config.config, unit.module_paths, args)?;
+    // TODO: clone
+    module.init(&unit.config.name, &unit.sync_config.config, unit.module_paths.clone(), args)?;
 
     // Run controller (if there is one)
     if controller_module.is_some() {
@@ -57,7 +55,7 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, controller_override: &Option<
         }
 
         // Update save data
-        unit.savedata.lastsync.insert(unit.timeframe.time_frame.identifier.clone(), TimeEntry {
+        savedata.lastsync.insert(unit.timeframe.time_frame.identifier.clone(), TimeEntry {
             timestamp: unit.timeframe.execution_time.timestamp(),
             date: Some(time_format(&unit.timeframe.execution_time))
         });
@@ -73,12 +71,11 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, controller_override: &Option<
     // Write savedata update only if sync was successful
     if sync_result.is_ok() {
         if !args.dry_run {
-            trace!("Writing new savedata to '{}'", save_data_path.as_str());
-            if let Err(err) = write_savedata(save_data_path.as_str(), unit.savedata.as_ref()) {
+            if let Err(err) = savedata.write() {
                 error!("Could not update savedata for '{}' sync ({})", unit.config.name.as_str(), err);
             }
         } else {
-            dry_run!(format!("Updating savedata: {}", save_data_path.as_str()));
+            dry_run!(format!("Updating savedata: {}", savedata.path.as_str()));
         }
     }
 

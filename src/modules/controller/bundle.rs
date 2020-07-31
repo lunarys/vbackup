@@ -41,7 +41,7 @@ impl ControllerBundle {
 }
 
 impl Controller for ControllerBundle {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
+    fn init(&mut self, _name: &str, _config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<(), String> {
         return self.init_result.clone();
     }
 

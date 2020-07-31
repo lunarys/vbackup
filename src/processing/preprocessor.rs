@@ -1,6 +1,8 @@
 use crate::Arguments;
+use crate::modules::traits::Reporting;
 use crate::modules::check::{CheckModule, Reference};
 use crate::modules::controller::ControllerModule;
+use crate::modules::reporting::ReportingModule;
 use crate::util::io::savefile::get_savedata;
 use crate::util::helper::{controller as controller_helper};
 use crate::util::helper::{check as check_helper};
@@ -8,6 +10,8 @@ use crate::util::objects::time::{ExecutionTiming, SaveData, TimeFrames, SaveData
 use crate::util::objects::configuration::{Configuration, BackupConfiguration, SyncConfiguration};
 use crate::util::objects::paths::{ModulePaths, Paths};
 use crate::processing::timeframe_check;
+
+use crate::{log_error};
 
 use std::rc::Rc;
 use chrono::{DateTime, Local};
@@ -70,11 +74,20 @@ pub struct PreprocessorResult {
     pub savedata: SaveDataCollection
 }
 
-pub fn preprocess(configurations: Vec<Configuration>, args: &Arguments, paths: &Rc<Paths>) -> Result<PreprocessorResult,String> {
-    let without_disabled = filter_disabled(configurations);
+pub fn preprocess(configurations: Vec<Configuration>,
+                  args: &Arguments,
+                  paths: &Rc<Paths>,
+                  reporter: &ReportingModule,
+                  do_backup: bool,
+                  do_sync: bool) -> Result<PreprocessorResult,String> {
+    if !do_backup && !do_sync {
+        return Err(String::from("Preprocessor called for neither backup nor sync"));
+    }
+
+    let without_disabled = filter_disabled(configurations, reporter);
     let with_module_paths = load_module_paths(without_disabled, paths);
     let savedata = load_savedata(&with_module_paths);
-    let split = flatten_processing_list(with_module_paths);
+    let split = flatten_processing_list(with_module_paths, do_backup, do_sync);
     let with_time_constraints = filter_time_constraints(split, args, paths, &savedata)?;
     let with_checks = load_checks(with_time_constraints, args, paths);
     let with_additional_check = filter_additional_check(with_checks, args);
@@ -86,20 +99,44 @@ pub fn preprocess(configurations: Vec<Configuration>, args: &Arguments, paths: &
     });
 }
 
-fn filter_disabled(mut configurations: Vec<Configuration>) -> Vec<ConfigurationSplit> {
+fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingModule) -> Vec<ConfigurationSplit> {
     // step 1
     //  filter disabled
     //  move to split
     return configurations.drain(..)
-        .filter(|config| !config.disabled)
-        .map(|mut config| {
+        .filter(|config| {
+            if config.disabled {
+                info!("Configuration for '{}' is disabled, skipping run", config.name.as_str());
+                log_error!(reporter.report(Some(&["run", config.name.as_str()]), "disabled"));
+            }
+
+            return !config.disabled;
+        })
+        .map(|config| {
             ConfigurationSplit {
-                backup_config: config.backup.clone().filter(|backup| !backup.disabled),
-                sync_config: config.sync.clone().filter(|sync| !sync.disabled),
+                backup_config: config.backup.clone().filter(|backup| {
+                    if backup.disabled {
+                        info!("Backup for '{}' is disabled, skipping run", config.name.as_str());
+                        log_error!(reporter.report(Some(&["backup", config.name.as_str()]), "disabled"));
+                    }
+
+                    return !backup.disabled;
+                }),
+                sync_config: config.sync.clone().filter(|sync| {
+                    if sync.disabled {
+                        info!("Sync for '{}' is disabled, skipping run", config.name.as_str());
+                        log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "disabled"));
+                    }
+
+                    return !sync.disabled;
+                }),
                 config,
                 backup_paths: None,
                 sync_paths: None
             }
+        })
+        .filter(|config| {
+            config.backup_config.is_some() || config.sync_config.is_some()
         })
         .collect();
 }
@@ -141,7 +178,7 @@ fn load_savedata(configurations: &Vec<ConfigurationSplit>) -> SaveDataCollection
         .collect();
 }
 
-fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>) -> Vec<ConfigurationUnitBuilder> {
+fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backup: bool, do_sync: bool) -> Vec<ConfigurationUnitBuilder> {
     // step 4
     let mut result = vec![];
     configurations
@@ -149,25 +186,29 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>) -> Vec<C
         .for_each(|mut config| {
             let config_rc = Rc::new(config.config);
 
-            if let Some(backup_config) = config.backup_config.take() {
-                result.push(ConfigurationUnitBuilder::Backup(BackupUnitBuilder {
-                    config: config_rc.clone(),
-                    backup_config,
-                    check: None,
-                    module_paths: config.backup_paths.unwrap(),
-                    timeframes: None
-                }))
+            if do_backup {
+                if let Some(backup_config) = config.backup_config.take() {
+                    result.push(ConfigurationUnitBuilder::Backup(BackupUnitBuilder {
+                        config: config_rc.clone(),
+                        backup_config,
+                        check: None,
+                        module_paths: config.backup_paths.unwrap(),
+                        timeframes: None
+                    }))
+                }
             }
 
-            if let Some(sync_config) = config.sync_config.take() {
-                result.push(ConfigurationUnitBuilder::Sync(SyncUnitBuilder {
-                    config: config_rc.clone(),
-                    sync_config,
-                    check: None,
-                    controller: None,
-                    module_paths: config.sync_paths.unwrap(),
-                    timeframes: None
-                }))
+            if do_sync {
+                if let Some(sync_config) = config.sync_config.take() {
+                    result.push(ConfigurationUnitBuilder::Sync(SyncUnitBuilder {
+                        config: config_rc.clone(),
+                        sync_config,
+                        check: None,
+                        controller: None,
+                        module_paths: config.sync_paths.unwrap(),
+                        timeframes: None
+                    }))
+                }
             }
         });
 
@@ -198,11 +239,12 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                 return None;
             };
 
-            let mut timeframes = match &configuration {
+            let timeframes = match &configuration {
                 ConfigurationUnitBuilder::Backup(backup) => {
                     timeframe_checker.check_backup_timeframes(backup.config.name.as_str(), backup.backup_config.timeframes.clone(), savedata)
                 },
                 ConfigurationUnitBuilder::Sync(sync) => {
+                    // TODO: Includes check for last save, but this has not happened yet
                     timeframe_checker.check_sync_timeframes(sync.config.name.as_str(), vec![sync.sync_config.interval.clone()], savedata)
                 }
             };
@@ -306,7 +348,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                                 return success;
                             },
                             Err(err) => {
-                                error!("Additional check for '{}' {} failed... skipping run", name, run_type);
+                                error!("Additional check for '{}' {} failed... skipping run ({})", name, run_type, err);
                                 return false;
                             }
                         }

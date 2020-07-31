@@ -35,9 +35,6 @@ pub fn main(args: Arguments) -> Result<(),String> {
         return list(&args, &paths);
     }
 
-    // Load timeframes from file
-    let timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
-
     // Set up reporter (if existing)
     let mut reporter = if let Some(reporter_config) = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))? {
         let mut r = ReportingModule::new_combined();
@@ -50,50 +47,19 @@ pub fn main(args: Arguments) -> Result<(),String> {
     // Only actually does something if run, backup or sync
     log_error!(reporter.report(None, args.operation.as_str()));
 
+    let (do_backup, do_sync) = match args.operation.as_str() {
+        "run" => Ok((true, true)),
+        "backup" | "save" => Ok((true, false)),
+        "sync" => Ok((false, true)),
+        unknown => {
+            Err(format!("Unknown operation: '{}'", unknown))
+        }
+    }?;
+
     let config_list = get_config_list(&args, paths.as_ref())?;
-    let preprocessed = preprocessor::preprocess(config_list, &args, &paths)?;
+    let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &reporter, do_backup, do_sync)?;
     let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
     let result = processor::process_configurations(&args, &reporter, scheduled, preprocessed.savedata);
-
-    /*
-    let result = match args.operation.as_str() {
-        "run" => {
-            let backup_result = backup_wrapper(&args, &paths, &timeframes, &reporter);
-            if let Ok((original_size, backup_size)) = backup_result.as_ref() {
-                log_error!(reporter.report(Some(&["size", "original"]), original_size.to_string().as_str()));
-                log_error!(reporter.report(Some(&["size", "backup"]), backup_size.to_string().as_str()));
-            }
-
-            // If backup failed do not try to sync, there is probably nothing to sync
-            let sync_result = backup_result.and(sync_wrapper(&args, &paths, &timeframes, &reporter));
-            if let Ok(sync_size) = sync_result.as_ref() {
-                log_error!(reporter.report(Some(&["size", "sync"]), sync_size.to_string().as_str()));
-            }
-
-            sync_result.map(|_| ())
-        },
-        "backup" | "save" => {
-            let result = backup_wrapper(&args, &paths, &timeframes, &reporter);
-            if let Ok((original_size, backup_size)) = result.as_ref() {
-                log_error!(reporter.report(Some(&["size", "original"]), original_size.to_string().as_str()));
-                log_error!(reporter.report(Some(&["size", "backup"]), backup_size.to_string().as_str()));
-            }
-            result.map(|_| ())
-        },
-        "sync" => {
-            let result = sync_wrapper(&args, &paths, &timeframes, &reporter);
-            if let Ok(sync_size) = result.as_ref() {
-                log_error!(reporter.report(Some(&["size", "sync"]), sync_size.to_string().as_str()));
-            }
-            result.map(|_| ())
-        },
-        unknown => {
-            let err = format!("Unknown operation: '{}'", unknown);
-            //throw!(err);
-            Err(err)
-        }
-    };
-    */
 
     log_error!(reporter.report(None, "done"));
     log_error!(reporter.clear());
@@ -129,187 +95,6 @@ pub fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configurat
     }).collect();
 
     return Ok(configs);
-}
-
-fn backup_wrapper(args: &Arguments, paths: &Rc<Paths>, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<(u64,u64),String> {
-    // Collect total sizes of the backup
-    let mut original_size_acc = 0;
-    let mut backup_size_acc = 0;
-
-    // Go through all configurations in the config directory
-    for mut config in get_config_list(args, paths)? {
-
-        // Check if the while configuration is disabled
-        if config.disabled {
-            info!("Configuration for '{}' is disabled, skipping backup", config.name.as_str());
-            let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "disabled");
-            log_error!(report_result);
-            continue;
-        }
-
-        // Get paths specifically for this module
-        let module_paths = ModulePaths::for_backup_module(paths, "backup", &config);
-
-        // Only do something else if a backup is present in this configuration
-        if config.backup.is_some() {
-
-            // Take ownership of config
-            let backup_config = config.backup.take().unwrap();
-
-            // Check if this backup is disabled
-            if backup_config.disabled {
-                info!("Backup for '{}' is disabled", config.name.as_str());
-                let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "disabled");
-                log_error!(report_result);
-                continue;
-            }
-
-            // Get savedata for this backup
-            let savedata_result = get_savedata(module_paths.save_data.as_str());
-            let mut savedata = match savedata_result {
-                Ok(savedata) => savedata,
-                Err(err) => {
-                    error!("Could not read savedata for '{}': {}", config.name, err);
-                    continue;
-                }
-            };
-
-            // Announcing the start of this backup
-            log_error!(reporter.report(Some(&["backup", config.name.as_str()]), "starting"));
-
-            // Save those paths for later, as the ModulePaths will be moved
-            let original_path = module_paths.source.clone();
-            let store_path = module_paths.destination.clone();
-
-            // Run the backup and evaluate the result
-            // let result = backup::backup(args, module_paths, &config, backup_config, &mut savedata, timeframes);
-            let result = Err(String::from("OLD VERSION"));
-            match result {
-                Ok(true) => {
-                    info!("Backup for '{}' was successfully executed", config.name.as_str());
-                    let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "success");
-                    log_error!(report_result);
-                },
-                Ok(false) => {
-                    info!("Backup for '{}' was not executed due to constraints", config.name.as_str());
-                    let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "skipped");
-                    log_error!(report_result);
-                },
-                Err(err) => {
-                    error!("Backup for '{}' failed: {}", config.name.as_str(), err);
-                    let report_result = reporter.report(Some(&["backup", config.name.as_str()]), "failed");
-                    log_error!(report_result);
-                }
-            }
-
-            // Calculate and report the size of the original files
-            match file::size(original_path.as_str(), args.no_docker) {
-                Ok(curr_size) => {
-                    log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "original"]), curr_size.to_string().as_str()));
-                    original_size_acc += curr_size;
-                },
-                Err(err) => error!("Could not read size of the original files: {}", err)
-            }
-
-            // Calculate and report the size of the backup files
-            match file::size(store_path.as_str(), args.no_docker) {
-                Ok(curr_size) => {
-                    log_error!(reporter.report(Some(&["backup", config.name.as_str(), "size", "backup"]), curr_size.to_string().as_str()));
-                    backup_size_acc += curr_size;
-                },
-                Err(err) => error!("Could not read size of the backup up files: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
-            }
-        } else {
-            info!("No backup is configured for '{}'", config.name.as_str());
-        }
-    }
-
-    // Only fails if some general configuration is not available, failure in single backups is only logged
-    Ok((original_size_acc, backup_size_acc))
-}
-
-
-
-fn sync_wrapper(args: &Arguments, paths: &Rc<Paths>, timeframes: &TimeFrames, reporter: &ReportingModule) -> Result<u64,String> {
-    // Collect the total size of synchronized files
-    let mut acc_size = 0;
-
-    // Go through all configurations in the config directory
-    for mut config in get_config_list(args, paths)? {
-
-        // Check if the while configuration is disabled
-        if config.disabled {
-            info!("Configuration for '{}' is disabled, skipping sync", config.name.as_str());
-            let report_result = reporter.report(Some(&["sync", config.name.as_str()]), "disabled");
-            log_error!(report_result);
-            continue;
-        }
-
-        // Get paths specifically for this module
-        let module_paths = ModulePaths::for_sync_module(paths, "sync", &config);
-
-        // Get savedata for this sync
-        let savedata_result = get_savedata(module_paths.save_data.as_str());
-        let mut savedata = match savedata_result {
-            Ok(savedata) => savedata,
-            Err(err) => {
-                error!("Could not read savedata for '{}': {}", config.name, err);
-                continue;
-            }
-        };
-
-        // Only do something else if a sync is present in this configuration
-        if config.sync.is_some() {
-
-            // Save owned objects of configuration and path
-            let sync_config = config.sync.take().unwrap();
-            let store_path = module_paths.source.clone();
-
-            // Check if the while configuration is disabled
-            if sync_config.disabled {
-                info!("Sync for '{}' is disabled", config.name.as_str());
-                let report_result = reporter.report(Some(&["sync", config.name.as_str()]), "disabled");
-                log_error!(report_result);
-                continue;
-            }
-
-            // Announce that this sync is starting
-            log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "starting"));
-
-            // Run the backup and evaluate the result
-            //let result = sync::sync(args, module_paths, &config, sync_config, &mut savedata, timeframes);
-            let result = Err(String::from("OLD VERSION"));
-            match result {
-                Ok(true) => {
-                    info!("Sync for '{}' was successfully executed", config.name.as_str());
-                    log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "success"));
-                },
-                Ok(false) => {
-                    info!("Sync for '{}' was not executed due to constraints", config.name.as_str());
-                    log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "skipped"));
-                },
-                Err(err) => {
-                    error!("Sync for '{}' failed: {}", config.name.as_str(), err);
-                    log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "failed"));
-                }
-            }
-
-            // Calculate and report size of the synced files
-            // TODO: Current implementation just takes the size of the local files...
-            match file::size(store_path.as_str(), args.no_docker) {
-                Ok(curr_size) => {
-                    log_error!(reporter.report(Some(&["sync", config.name.as_str(), "size", "sync"]), curr_size.to_string().as_str()));
-                    acc_size += curr_size;
-                },
-                Err(err) => error!("Could not read size of sync: {}", if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() })
-            }
-        } else {
-            info!("No sync is configured for '{}'", config.name.as_str());
-        }
-    }
-
-    // Only fails if some general configuration is not available, failure in single syncs is only logged
-    Ok(acc_size)
 }
 
 pub fn list(args: &Arguments, paths: &Rc<Paths>) -> Result<(), String> {

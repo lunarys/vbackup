@@ -4,7 +4,7 @@ use crate::processing::scheduler::{SyncControllerBundle};
 use crate::util::io::file;
 use crate::util::objects::time::{TimeFrames,SaveData, SaveDataCollection};
 use crate::util::objects::paths::Paths;
-use crate::modules::traits::Reporting;
+use crate::modules::traits::{Reporting, Controller};
 use crate::processing::backup::backup;
 use crate::processing::sync::sync;
 use crate::modules::controller::ControllerModule;
@@ -13,6 +13,7 @@ use crate::modules::controller::bundle::ControllerBundle;
 use crate::{log_error, try_option};
 use crate::processing::scheduler::{ConfigurationBundle};
 use crate::processing::preprocessor::{SyncUnit, BackupUnit};
+use core::borrow::BorrowMut;
 
 pub fn process_configurations(args: &Arguments,
                               reporter: &ReportingModule,
@@ -29,8 +30,8 @@ pub fn process_configurations(args: &Arguments,
             ConfigurationBundle::Sync(mut sync) => {
                 process_sync(&mut sync, &mut savedata_collection, args, reporter, None)
             },
-            ConfigurationBundle::SyncControllerBundle(sync_controller_bundle) => {
-                process_sync_controller_bundle(&sync_controller_bundle, &mut savedata_collection, args, reporter)
+            ConfigurationBundle::SyncControllerBundle(mut sync_controller_bundle) => {
+                process_sync_controller_bundle(&mut sync_controller_bundle, &mut savedata_collection, args, reporter)
             }
         };
 
@@ -52,6 +53,9 @@ fn process_backup(config: &mut BackupUnit,
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
+
+    // Announce that this backup is starting
+    log_error!(reporter.report(Some(&["backup", config.config.name.as_str()]), "starting"));
 
     // TODO: Pass paths by reference
     // Run the backup and report the result
@@ -79,6 +83,9 @@ fn process_sync(config: &mut SyncUnit,
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
 
+    // Announce that this sync is starting
+    log_error!(reporter.report(Some(&["sync", config.config.name.as_str()]), "starting"));
+
     // Run the sync and report the result
     let result = sync(args, config, savedata, controller_override);
     result_reporter("sync", result, config.config.name.as_str(), reporter);
@@ -90,21 +97,24 @@ fn process_sync(config: &mut SyncUnit,
     return Ok(());
 }
 
-fn process_sync_controller_bundle(sync_controller_bundle: &SyncControllerBundle,
+fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBundle,
                                   savedata: &mut SaveDataCollection,
                                   args: &Arguments,
                                   reporter: &ReportingModule) -> Result<(), String> {
-    // TODO: Create custom controller and then just process sync for every
-    // let controller_bundle = ControllerBundle::new(args, paths, &sync_controller_bundle);
-    // let controller = controller_bundle.wrap();
 
-    //for configuration in sync_controller_bundle.configurations {
-        // TODO: let result = process_sync(&configuration, args, paths, timeframes, savedata, reporter, Some(&controller));
-        //log_error!(result);
-    //}
+    for configuration in &mut sync_controller_bundle.units {
+        let result = process_sync(configuration, savedata, args, reporter, Some(sync_controller_bundle.controller.borrow_mut()));
+        log_error!(result);
+    }
 
-    // TODO: Handle result
-    // controller_bundle.done();
+    let result = match &mut sync_controller_bundle.controller {
+        ControllerModule::Bundle(bundle) => bundle.done(),
+        _ => {
+            // Just constraint this for now
+            Err(String::from("Expected controller bundle for bundled sync modules, got something else... Controller might not stop properly"))
+        }
+    };
+    log_error!(result);
 
     return Ok(());
 }

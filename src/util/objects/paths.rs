@@ -1,7 +1,6 @@
-use serde_json::Value;
-use serde::{Deserialize,Serialize};
 use crate::modules::check::Reference;
 use crate::util::objects::configuration::Configuration;
+use serde::{Deserialize};
 use std::rc::Rc;
 
 fn default_bool_true() -> bool { true }

@@ -248,7 +248,6 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                     timeframe_checker.check_backup_timeframes(backup.config.name.as_str(), backup.backup_config.timeframes.clone(), savedata)
                 },
                 ConfigurationUnitBuilder::Sync(sync) => {
-                    // TODO: Includes check for last save, but this has not happened yet
                     timeframe_checker.check_sync_timeframes(sync.config.name.as_str(), vec![sync.sync_config.interval.clone()], savedata)
                 }
             };
@@ -294,7 +293,6 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Argumen
                             return Some(ConfigurationUnitBuilder::Backup(backup));
                         },
                         Err(err) => {
-                            // TODO: Might want to remove sync also if this fails
                             error!("Could not load check for '{}', skipping this backup configuration: {}", backup.config.name.as_str(), err);
                             return None;
                         }
@@ -344,9 +342,9 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                         match result {
                             Ok(success) => {
                                 if success {
-                                    info!("{} for '{}' is not executed in timeframe '{}' due to the additional check", run_type, name, timeframe.time_frame_reference.frame.as_str());
-                                } else {
                                     debug!("{} for '{}' is required in timeframe '{}' considering the additional check", run_type, name, timeframe.time_frame_reference.frame.as_str());
+                                } else {
+                                    info!("{} for '{}' is not executed in timeframe '{}' due to the additional check", run_type, name, timeframe.time_frame_reference.frame.as_str());
                                 }
 
                                 return success;

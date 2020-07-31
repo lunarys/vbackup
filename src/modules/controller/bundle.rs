@@ -1,15 +1,9 @@
 use crate::modules::traits::{Controller, Bundleable};
 use crate::modules::controller::ControllerModule;
-use crate::processing::scheduler::SyncControllerBundle;
-use crate::util::objects::configuration::Configuration;
-use crate::util::helper::{controller as controller_helper};
-use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
 
-use crate::{log_error};
-
 use serde_json::Value;
-use std::rc::Rc;
 
 pub struct ControllerBundle {
     bind: Box<ControllerModule>,

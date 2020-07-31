@@ -1,26 +1,16 @@
 use crate::util::io::{file,json};
-use crate::modules;
 use crate::modules::traits::{Reporting};
-use crate::modules::sync::SyncModule;
-use crate::modules::backup::BackupModule;
-use crate::modules::check::Reference;
 use crate::modules::reporting::ReportingModule;
-use crate::util::io::savefile::{get_savedata};
-use crate::util::objects::time::{TimeFrames, TimeFrameReference};
+use crate::util::objects::time::{TimeFrameReference};
 use crate::util::objects::paths::{Paths,PathBase,ModulePaths};
 use crate::util::objects::configuration::Configuration;
 use crate::processing::{preprocessor,scheduler,processor};
-use crate::processing::{backup,sync};
 use crate::Arguments;
 
-use crate::{try_option, dry_run,log_error};
+use crate::{log_error};
 
 use std::path::Path;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::ops::Add;
-use core::borrow::Borrow;
-use chrono::{DateTime, Local, Duration};
 use std::rc::Rc;
 
 pub fn main(args: Arguments) -> Result<(),String> {

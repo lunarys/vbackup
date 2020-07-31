@@ -28,7 +28,7 @@ pub fn get_savedata(path: &str) -> Result<SaveData, String> {
     return Ok(savedata.into_serializable(path));
 }
 
-pub fn write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
+pub fn _write_savedata(path: &str, savedata: &SaveData) -> Result<(), String> {
     trace!("Writing new savedata to '{}'", savedata.path.as_str());
     json::to_file(Path::new(path), savedata)
 }

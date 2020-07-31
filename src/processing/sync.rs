@@ -1,20 +1,14 @@
 use crate::modules::sync::SyncModule;
-use crate::modules::check::Reference;
 use crate::modules;
 use crate::modules::traits::Sync;
 use crate::modules::controller::ControllerModule;
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::util::io::savefile::{time_format};
-use crate::util::objects::time::{SaveData, TimeFrames, TimeFrame, TimeEntry};
-use crate::util::objects::paths::{Paths, ModulePaths};
-use crate::util::objects::configuration::{Configuration,BackupConfiguration,SyncConfiguration};
+use crate::util::objects::time::{SaveData, TimeEntry};
 use crate::processing::preprocessor::SyncUnit;
 use crate::Arguments;
 
-use crate::{try_option, dry_run,log_error};
-
-use chrono::{DateTime, Local};
-use std::borrow::Borrow;
+use crate::{dry_run};
 
 pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, controller_override: Option<&mut ControllerModule>) -> Result<bool,String> {
     // Get the sync module that should be used

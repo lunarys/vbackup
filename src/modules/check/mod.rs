@@ -1,10 +1,9 @@
 use crate::modules::traits::Check;
-use crate::util::objects::time::{TimeEntry,TimeFrame,ExecutionTiming};
-use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
 
 use serde_json::Value;
-use chrono::{DateTime, Local};
 
 mod file_age;
 mod usetime;

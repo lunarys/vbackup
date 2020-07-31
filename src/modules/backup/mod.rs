@@ -1,10 +1,9 @@
 use crate::modules::traits::Backup;
-use crate::util::objects::time::{TimeFrameReference, ExecutionTiming};
-use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
 
 use serde_json::Value;
-use chrono::{DateTime, Local};
 
 mod tar7zip;
 

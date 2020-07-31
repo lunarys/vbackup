@@ -2,17 +2,16 @@ use crate::Arguments;
 use crate::modules::reporting::ReportingModule;
 use crate::processing::scheduler::{SyncControllerBundle};
 use crate::util::io::file;
-use crate::util::objects::time::{TimeFrames,SaveData, SaveDataCollection};
-use crate::util::objects::paths::Paths;
-use crate::modules::traits::{Reporting, Controller};
+use crate::util::objects::time::{SaveDataCollection};
+use crate::modules::traits::{Reporting};
 use crate::processing::backup::backup;
 use crate::processing::sync::sync;
-use crate::modules::controller::ControllerModule;
-use crate::modules::controller::bundle::ControllerBundle;
-
-use crate::{log_error, try_option};
 use crate::processing::scheduler::{ConfigurationBundle};
 use crate::processing::preprocessor::{SyncUnit, BackupUnit};
+use crate::modules::controller::ControllerModule;
+
+use crate::{log_error};
+
 use core::borrow::BorrowMut;
 
 pub fn process_configurations(args: &Arguments,

@@ -2,7 +2,7 @@ use crate::modules::traits::Sync;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
-use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
 
 use crate::{try_option};

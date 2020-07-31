@@ -6,7 +6,7 @@ use crate::modules::reporting::ReportingModule;
 use crate::util::io::savefile::get_savedata;
 use crate::util::helper::{controller as controller_helper};
 use crate::util::helper::{check as check_helper};
-use crate::util::objects::time::{ExecutionTiming, SaveData, TimeFrames, SaveDataCollection};
+use crate::util::objects::time::{ExecutionTiming, SaveDataCollection};
 use crate::util::objects::configuration::{Configuration, BackupConfiguration, SyncConfiguration};
 use crate::util::objects::paths::{ModulePaths, Paths};
 use crate::processing::timeframe_check;
@@ -14,8 +14,6 @@ use crate::processing::timeframe_check;
 use crate::{log_error};
 
 use std::rc::Rc;
-use chrono::{DateTime, Local};
-use std::borrow::Borrow;
 
 pub enum ConfigurationUnit {
     Backup(BackupUnit),

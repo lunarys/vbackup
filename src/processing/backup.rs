@@ -1,20 +1,16 @@
 use crate::modules::backup::BackupModule;
 use crate::modules;
-use crate::modules::check::Reference;
 use crate::modules::traits::Backup;
-use crate::util::helper::{controller as controller_helper,check as check_helper};
-use crate::util::io::savefile::{time_format,write_savedata};
-use crate::util::objects::time::{SaveData, TimeFrames, TimeFrameReference, TimeFrame, TimeEntry};
-use crate::util::objects::paths::{Paths, ModulePaths};
-use crate::util::objects::configuration::{Configuration,BackupConfiguration,SyncConfiguration};
+use crate::util::helper::{check as check_helper};
+use crate::util::io::savefile::{time_format};
+use crate::util::objects::time::{SaveData, TimeEntry};
 use crate::processing::preprocessor::BackupUnit;
 use crate::Arguments;
 
-use crate::{try_option, dry_run,log_error};
+use crate::{dry_run};
 
-use chrono::{Local, DateTime, Duration};
+use chrono::{Duration};
 use std::ops::Add;
-use std::rc::Rc;
 
 pub fn backup(args: &Arguments, unit: &mut BackupUnit, savedata: &mut SaveData) -> Result<bool,String> {
     // Get the backup module that should be used

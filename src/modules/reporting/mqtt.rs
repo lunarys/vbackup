@@ -1,6 +1,6 @@
 use crate::modules::traits::Reporting;
 use crate::util::io::{auth_data,json};
-use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::paths::{Paths};
 use crate::Arguments;
 use crate::{try_result,try_option};
 

@@ -38,7 +38,8 @@ pub struct BackupUnit {
     pub backup_config: BackupConfiguration,
     pub check: Option<CheckModule>,
     pub module_paths: ModulePaths,
-    pub timeframes: Vec<ExecutionTiming>
+    pub timeframes: Vec<ExecutionTiming>,
+    pub has_sync: bool
 }
 
 struct BackupUnitBuilder {
@@ -46,7 +47,8 @@ struct BackupUnitBuilder {
     backup_config: BackupConfiguration,
     check: Option<CheckModule>,
     module_paths: ModulePaths,
-    timeframes: Option<Vec<ExecutionTiming>>
+    timeframes: Option<Vec<ExecutionTiming>>,
+    has_sync: bool
 }
 
 pub struct SyncUnit {
@@ -55,7 +57,8 @@ pub struct SyncUnit {
     pub check: Option<CheckModule>,
     pub controller: Option<ControllerModule>,
     pub module_paths: ModulePaths,
-    pub timeframe: ExecutionTiming
+    pub timeframe: ExecutionTiming,
+    pub has_backup: bool
 }
 
 struct SyncUnitBuilder {
@@ -64,7 +67,8 @@ struct SyncUnitBuilder {
     check: Option<CheckModule>,
     controller: Option<ControllerModule>,
     module_paths: ModulePaths,
-    timeframes: Option<Vec<ExecutionTiming>>
+    timeframes: Option<Vec<ExecutionTiming>>,
+    has_backup: bool
 }
 
 pub struct PreprocessorResult {
@@ -191,7 +195,8 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
                         backup_config,
                         check: None,
                         module_paths: config.backup_paths.unwrap(),
-                        timeframes: None
+                        timeframes: None,
+                        has_sync: config.sync_config.is_some()
                     }))
                 }
             }
@@ -204,7 +209,8 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
                         check: None,
                         controller: None,
                         module_paths: config.sync_paths.unwrap(),
-                        timeframes: None
+                        timeframes: None,
+                        has_backup: config.backup_config.is_some()
                     }))
                 }
             }
@@ -432,7 +438,8 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> 
                         backup_config: backup_builder.backup_config,
                         check: backup_builder.check,
                         module_paths: backup_builder.module_paths,
-                        timeframes: timeframes_option.unwrap()
+                        timeframes: timeframes_option.unwrap(),
+                        has_sync: backup_builder.has_sync
                     }))
                 },
                 ConfigurationUnitBuilder::Sync(sync_builder) => {
@@ -451,7 +458,8 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> 
                         check: sync_builder.check,
                         controller: sync_builder.controller,
                         module_paths: sync_builder.module_paths,
-                        timeframe: timeframe_option.unwrap()
+                        timeframe: timeframe_option.unwrap(),
+                        has_backup: sync_builder.has_backup
                     }))
                 }
             }

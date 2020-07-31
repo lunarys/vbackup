@@ -8,11 +8,13 @@ use crate::processing::backup::backup;
 use crate::processing::sync::sync;
 use crate::processing::scheduler::{ConfigurationBundle};
 use crate::processing::preprocessor::{SyncUnit, BackupUnit};
+use crate::processing::timeframe_check;
 use crate::modules::controller::ControllerModule;
 
 use crate::{log_error};
 
 use core::borrow::BorrowMut;
+use chrono::{DateTime, Local};
 
 pub fn process_configurations(args: &Arguments,
                               reporter: &ReportingModule,
@@ -20,16 +22,24 @@ pub fn process_configurations(args: &Arguments,
                               mut savedata_collection: SaveDataCollection) -> Result<(),String> {
     for configuration in configurations {
 
-        // TODO: Maybe update execution time at this point?
+        // TODO: Maybe execution time update should be improved
+        let current_time : DateTime<Local> = chrono::Local::now();
 
         let result = match configuration {
             ConfigurationBundle::Backup(mut backup) => {
+                backup.timeframes.iter_mut().for_each(|timeframe| {
+                    timeframe.execution_time = current_time.clone();
+                });
                 process_backup(&mut backup, &mut savedata_collection, args, reporter)
             },
             ConfigurationBundle::Sync(mut sync) => {
+                sync.timeframe.execution_time = current_time;
                 process_sync(&mut sync, &mut savedata_collection, args, reporter, None)
             },
             ConfigurationBundle::SyncControllerBundle(mut sync_controller_bundle) => {
+                sync_controller_bundle.units.iter_mut().for_each(|sync| {
+                    sync.timeframe.execution_time = current_time.clone()
+                });
                 process_sync_controller_bundle(&mut sync_controller_bundle, &mut savedata_collection, args, reporter)
             }
         };
@@ -81,6 +91,11 @@ fn process_sync(config: &mut SyncUnit,
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
+
+    if !timeframe_check::check_sync_after_backup(&config.timeframe, savedata, config.has_backup) {
+        info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.config.name.as_str());
+        return Ok(());
+    }
 
     // Announce that this sync is starting
     log_error!(reporter.report(Some(&["sync", config.config.name.as_str()]), "starting"));

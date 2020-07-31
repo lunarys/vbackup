@@ -19,6 +19,19 @@ pub struct TimeframeChecker {
 #[derive(PartialEq, Eq)]
 enum Type { Backup, Sync }
 
+pub fn check_sync_after_backup(timing: &ExecutionTiming, savedata: &SaveData, has_backup: bool) -> bool {
+    if has_backup {
+        // run sync only after backup
+        if let Some(last_sync) = timing.last_run.as_ref() {
+            return savedata.lastsave.values().any(|backup| backup.timestamp > last_sync.timestamp);
+        } else {
+            return !savedata.lastsave.is_empty();
+        }
+    } else {
+        return true;
+    }
+}
+
 impl TimeframeChecker {
     pub fn new(paths: &Paths, args: &Arguments) -> Result<Self, String> {
         let mut timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
@@ -99,15 +112,6 @@ impl TimeframeChecker {
                         // do not sync
                         info!("{} for '{}' is not executed in timeframe '{}' due to time constraints", run_type_str, config_name, timeframe_ref.frame.as_str());
                         do_run = false;
-                    }
-
-                    // run sync only after backup
-                    if run_type == Type::Sync {
-                        let backup_after_sync = savedata.lastsave.is_empty() || savedata.lastsave.values().any(|backup| backup.timestamp > last.timestamp );
-                        if !backup_after_sync {
-                            info!("Sync for '{}' is not executed as there is no new backup since the last sync", config_name);
-                            do_run = false;
-                        }
                     }
                 } else {
                     // Probably the first backup in this timeframe, just do it

@@ -133,7 +133,7 @@ pub fn list(args: &Arguments, paths: &Rc<Paths>) -> Result<(), String> {
     }
 
     // Description
-    println!("vBackup configurations:");
+    println!("vbackup configurations:");
 
     // Go through all configurations
     for config in get_config_list(args, paths)? {

@@ -88,15 +88,15 @@ pub fn preprocess(configurations: Vec<Configuration>,
 
     let without_disabled = filter_disabled(configurations, reporter);
     let with_module_paths = load_module_paths(without_disabled, paths);
-    let savedata = load_savedata(&with_module_paths);
+    let savedata = load_savedata(&with_module_paths, reporter);
     let split = flatten_processing_list(with_module_paths, do_backup, do_sync);
-    let with_time_constraints = filter_time_constraints(split, args, paths, &savedata)?;
-    let with_checks = load_checks(with_time_constraints, args, paths);
-    let with_additional_check = filter_additional_check(with_checks, args);
-    let with_controllers = load_controllers(with_additional_check, args, paths);
+    let with_time_constraints = filter_time_constraints(split, args, paths, &savedata, reporter)?;
+    let with_checks = load_checks(with_time_constraints, args, paths, reporter);
+    let with_additional_check = filter_additional_check(with_checks, args, reporter);
+    let with_controllers = load_controllers(with_additional_check, args, paths, reporter);
 
     return Ok(PreprocessorResult {
-        configurations: assemble_from_builders(with_controllers),
+        configurations: assemble_from_builders(with_controllers, reporter),
         savedata
     });
 }
@@ -154,7 +154,7 @@ fn load_module_paths(mut configurations: Vec<ConfigurationSplit>, paths: &Rc<Pat
     return configurations;
 }
 
-fn load_savedata(configurations: &Vec<ConfigurationSplit>) -> SaveDataCollection {
+fn load_savedata(configurations: &Vec<ConfigurationSplit>, reporter: &ReportingModule) -> SaveDataCollection {
     // step 3
     //  load savedata for all
     return configurations
@@ -162,6 +162,7 @@ fn load_savedata(configurations: &Vec<ConfigurationSplit>) -> SaveDataCollection
         .filter_map(|config| {
             if config.backup_paths.is_none() {
                 error!("Module paths for '{}' not loaded in preprocessor... skipping configuration", config.config.name.as_str());
+                report_error(reporter, "run", config.config.name.as_str());
                 return None;
             }
 
@@ -171,6 +172,7 @@ fn load_savedata(configurations: &Vec<ConfigurationSplit>) -> SaveDataCollection
                 Ok(savedata) => savedata,
                 Err(err) => {
                     error!("Could not read savedata for '{}': {}", config.config.name.as_str(), err);
+                    report_error(reporter, "run", config.config.name.as_str());
                     return None;
                 }
             };
@@ -219,7 +221,11 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
     return result;
 }
 
-fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, paths: &Rc<Paths>, savedata_collection: &SaveDataCollection) -> Result<Vec<ConfigurationUnitBuilder>,String> {
+fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
+                           args: &Arguments,
+                           paths: &Rc<Paths>,
+                           savedata_collection: &SaveDataCollection,
+                           reporter: &ReportingModule) -> Result<Vec<ConfigurationUnitBuilder>,String> {
     // step 5
     if args.force {
         debug!("Skipping time constraints checks due to forced run");
@@ -231,15 +237,16 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     let result = configurations
         .drain(..)
         .filter_map(|configuration| {
-            let name = match &configuration {
-                ConfigurationUnitBuilder::Backup(backup) => backup.config.name.as_str(),
-                ConfigurationUnitBuilder::Sync(sync) => sync.config.name.as_str()
+            let (name,run_type) = match &configuration {
+                ConfigurationUnitBuilder::Backup(backup) => (backup.config.name.as_str(),"backup"),
+                ConfigurationUnitBuilder::Sync(sync) => (sync.config.name.as_str(), "sync")
             };
 
             let savedata = if let Some(savedata) = savedata_collection.get(name) {
                 savedata
             } else {
                 error!("Savedata not loaded for '{}' in time constraint filter", name);
+                report_error(reporter, run_type, name);
                 return None;
             };
 
@@ -253,6 +260,8 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, ar
             };
 
             if timeframes.is_empty() {
+                debug!("{} for '{}' is not executed due to time constraints", run_type, name);
+                report_skip(reporter, run_type, name);
                 return None;
             }
 
@@ -275,7 +284,10 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     return Ok(result);
 }
 
-fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, paths: &Rc<Paths>) -> Vec<ConfigurationUnitBuilder> {
+fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
+               args: &Arguments,
+               paths: &Rc<Paths>,
+               reporter: &ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 6
     return configurations
         .drain(..)
@@ -294,6 +306,7 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Argumen
                         },
                         Err(err) => {
                             error!("Could not load check for '{}', skipping this backup configuration: {}", backup.config.name.as_str(), err);
+                            report_error(reporter, "backup", backup.config.name.as_str());
                             return None;
                         }
                     }
@@ -311,6 +324,7 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Argumen
                         },
                         Err(err) => {
                             error!("Could not load check for '{}', skipping this sync configuration: {}", sync.config.name.as_str(), err);
+                            report_error(reporter, "sync", sync.config.name.as_str());
                             return None;
                         }
                     }
@@ -320,7 +334,7 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Argumen
         .collect();
 }
 
-fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments) -> Vec<ConfigurationUnitBuilder> {
+fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, reporter: &ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 7
     if args.force {
         debug!("Skipping additional checks due to forced run");
@@ -330,7 +344,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     return configurations
         .drain(..)
         .filter_map(|configuration| {
-            fn filter_timeframes(run_type: &str, name: &str, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>) -> Option<Vec<ExecutionTiming>> {
+            fn filter_timeframes(run_type: &str, name: &str, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &ReportingModule) -> Option<Vec<ExecutionTiming>> {
                 if check.is_none() {
                     debug!("There is no additional check for '{}' {}, only using the interval checks", name, run_type);
                     return timeframes;
@@ -351,26 +365,29 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                             },
                             Err(err) => {
                                 error!("Additional check for '{}' {} failed... skipping run ({})", name, run_type, err);
+                                report_error(reporter, run_type, name);
                                 return false;
                             }
                         }
                     }).collect()
                 } else {
                     error!("Timeframes not loaded for '{}' {}, even though they should be... skipping run", name, run_type);
+                    report_error(reporter, run_type, name);
                     vec![]
                 };
 
                 if filtered_timeframes.is_empty() {
                     info!("{} for '{}' is not required in any timeframe due to additional check", run_type, name);
+                    report_skip(reporter, run_type, name);
+                    return None;
+                } else {
+                    return Some(filtered_timeframes);
                 }
-
-                return Some(filtered_timeframes);
             }
 
             match configuration {
                 ConfigurationUnitBuilder::Backup(mut backup) => {
-                    backup.timeframes = filter_timeframes("backup", backup.config.name.as_str(), &backup.check, backup.timeframes)
-                        .filter(|some| !some.is_empty());
+                    backup.timeframes = filter_timeframes("backup", backup.config.name.as_str(), &backup.check, backup.timeframes, reporter);
 
                     if backup.timeframes.is_none() {
                         return None;
@@ -379,8 +396,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                     }
                 },
                 ConfigurationUnitBuilder::Sync(mut sync) => {
-                    sync.timeframes = filter_timeframes("sync", sync.config.name.as_str(), &sync.check, sync.timeframes)
-                        .filter(|some| !some.is_empty());
+                    sync.timeframes = filter_timeframes("sync", sync.config.name.as_str(), &sync.check, sync.timeframes, reporter);
 
                     if sync.timeframes.is_none() {
                         return None;
@@ -393,7 +409,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
         .collect();
 }
 
-fn load_controllers(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, paths: &Rc<Paths>) -> Vec<ConfigurationUnitBuilder> {
+fn load_controllers(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, paths: &Rc<Paths>, reporter: &ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 8
     return configurations
         .drain(..)
@@ -407,6 +423,7 @@ fn load_controllers(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Ar
                     },
                     Err(err) => {
                         error!("Could not load controller for '{}', skipping this sync configuration: {}", sync.config.name.as_str(), err);
+                        report_error(reporter, "sync", sync.config.name.as_str());
                         return None;
                     }
                 }
@@ -417,7 +434,7 @@ fn load_controllers(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Ar
         .collect();
 }
 
-fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> Vec<ConfigurationUnit> {
+fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, reporter: &ReportingModule) -> Vec<ConfigurationUnit> {
     return configurations
         .drain(..)
         .filter_map(|configuration| {
@@ -428,6 +445,7 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> 
 
                     if timeframes_option.is_none() {
                         error!("Backup for '{}' does not have any timeframes, skipping run", backup_builder.config.name.as_str());
+                        report_error(reporter, "backup", backup_builder.config.name.as_str());
                         return None;
                     }
 
@@ -447,6 +465,7 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> 
 
                     if timeframe_option.is_none() {
                         error!("Sync for '{}' does not have exactly one timeframe, skipping run", sync_builder.config.name.as_str());
+                        report_error(reporter, "sync", sync_builder.config.name.as_str());
                         return None;
                     }
 
@@ -463,4 +482,14 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>) -> 
             }
         })
         .collect();
+}
+
+fn report_skip(reporter: &ReportingModule, run_type: &str, name: &str) {
+    let report_result = reporter.report(Some(&[run_type, name]), "skipped");
+    log_error!(report_result);
+}
+
+fn report_error(reporter: &ReportingModule, run_type: &str, name: &str) {
+    let report_result = reporter.report(Some(&[run_type, name]), "failed");
+    log_error!(report_result);
 }

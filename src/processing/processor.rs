@@ -94,6 +94,7 @@ fn process_sync(config: &mut SyncUnit,
 
     if !timeframe_check::check_sync_after_backup(&config.timeframe, savedata, config.has_backup) {
         info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.config.name.as_str());
+        log_error!(reporter.report(Some(&["sync", config.config.name.as_str()]), "skipped"));
         return Ok(());
     }
 

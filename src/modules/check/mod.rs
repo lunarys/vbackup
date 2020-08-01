@@ -1,5 +1,8 @@
 use crate::modules::traits::Check;
-use crate::modules::object::{ModulePaths,TimeEntry,TimeFrame,Arguments};
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths};
+use crate::Arguments;
+
 use serde_json::Value;
 
 mod file_age;
@@ -10,13 +13,12 @@ pub enum Reference {
     Sync
 }
 
-pub enum CheckModule<'a> {
-    FileAge(file_age::FileAge<'a>),
-    Usetime(usetime::Usetime<'a>)
+pub enum CheckModule {
+    FileAge(file_age::FileAge),
+    Usetime(usetime::Usetime)
 }
 
 use CheckModule::*;
-use chrono::{DateTime, Local};
 
 pub fn get_module(name: &str) -> Result<CheckModule, String> {
     return Ok(match name.to_lowercase().as_str() {
@@ -30,25 +32,25 @@ pub fn get_module(name: &str) -> Result<CheckModule, String> {
     })
 }
 
-impl<'a> Check<'a> for CheckModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Check for CheckModule {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         match self {
             FileAge(check) => check.init(name, config_json, paths, args),
             Usetime(check) => check.init(name, config_json, paths, args)
         }
     }
 
-    fn check(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
         match self {
-            FileAge(check) => check.check(time, frame, last),
-            Usetime(check) => check.check(time, frame, last)
+            FileAge(check) => check.check(timing),
+            Usetime(check) => check.check(timing)
         }
     }
 
-    fn update(&self, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String> {
         match self {
-            FileAge(check) => check.update(time, frame, last),
-            Usetime(check) => check.update(time, frame, last)
+            FileAge(check) => check.update(timing),
+            Usetime(check) => check.update(timing)
         }
     }
 

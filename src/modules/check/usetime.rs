@@ -1,20 +1,21 @@
 use crate::modules::traits::Check;
-use crate::modules::object::*;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{json,file};
 use crate::{try_option,try_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use chrono::{Local, DateTime};
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths};
+use crate::Arguments;
 
-pub struct Usetime<'a> {
-    bind: Option<Bind<'a>>
+pub struct Usetime {
+    bind: Option<Bind>
 }
 
-struct Bind<'a> {
+struct Bind {
     config: Configuration,
-    paths: ModulePaths<'a>,
+    paths: ModulePaths,
     dry_run: bool,
     no_docker: bool
 }
@@ -35,14 +36,14 @@ fn relative_backup_info() -> String {
     return String::from("backupinfo/props.info");
 }
 
-impl<'a> Usetime<'a> {
+impl Usetime {
     pub fn new_empty() -> Self {
         return Self { bind: None };
     }
 }
 
-impl<'a> Check<'a> for Usetime<'a> {
-    fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Check for Usetime {
+    fn init(&mut self, _name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Check module is already bound");
             error!("{}", msg);
@@ -61,10 +62,10 @@ impl<'a> Check<'a> for Usetime<'a> {
         return Ok(());
     }
 
-    fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
         let bound = try_option!(self.bind.as_ref(), "Check is not bound");
 
-        if last.is_some() {
+        if timing.last_run.is_some() {
             let backup_info = read_backupinfo(bound)?;
             let test_result = bound.config.targeted_usetime < backup_info.usetime;
 
@@ -81,7 +82,7 @@ impl<'a> Check<'a> for Usetime<'a> {
         }
     }
 
-    fn update(&self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
+    fn update(&mut self, _timing: &ExecutionTiming) -> Result<(), String> {
         let bound = try_option!(self.bind.as_ref(), "Check is not bound");
         let backup_info = read_backupinfo(bound)?;
 

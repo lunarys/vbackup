@@ -1,15 +1,17 @@
 use crate::modules::traits::Backup;
-use crate::modules::object::{ModulePaths, TimeFrameReference, Arguments};
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths};
+use crate::Arguments;
+
 use serde_json::Value;
 
 mod tar7zip;
 
-pub enum BackupModule<'a> {
-    Tar7Zip(tar7zip::Tar7Zip<'a>)
+pub enum BackupModule {
+    Tar7Zip(tar7zip::Tar7Zip)
 }
 
 use BackupModule::*;
-use chrono::{DateTime, Local};
 
 pub fn get_module(name: &str) -> Result<BackupModule, String> {
     return Ok(match name.to_lowercase().as_str() {
@@ -22,16 +24,16 @@ pub fn get_module(name: &str) -> Result<BackupModule, String> {
     })
 }
 
-impl<'a> Backup<'a> for BackupModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Backup for BackupModule {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         match self {
             Tar7Zip(backup) => backup.init(name, config_json, paths, args)
         }
     }
 
-    fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
+    fn backup(&self, timings: &Vec<ExecutionTiming>) -> Result<(), String> {
         match self {
-            Tar7Zip(backup) => backup.backup(time, time_frames)
+            Tar7Zip(backup) => backup.backup(timings)
         }
     }
 

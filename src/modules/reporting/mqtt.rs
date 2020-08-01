@@ -1,13 +1,14 @@
 use crate::modules::traits::Reporting;
 use crate::util::io::{auth_data,json};
-use crate::modules::object::{Paths,Arguments};
-
+use crate::util::objects::paths::{Paths};
+use crate::Arguments;
 use crate::{try_result,try_option};
 
 use serde_json::Value;
 use serde::{Deserialize};
 use paho_mqtt as mqtt;
 use std::ops::AddAssign;
+use std::rc::Rc;
 
 pub struct Reporter {
     bind: Option<Bind>
@@ -47,7 +48,7 @@ impl Reporter {
 }
 
 impl Reporting for Reporter {
-    fn init(&mut self, config_json: &Value, paths: &Paths, _args: &Arguments) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Rc<Paths>, _args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Reporting module is already bound");
             error!("{}", msg);

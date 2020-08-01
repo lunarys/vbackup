@@ -1,7 +1,6 @@
 // Local modules
 use crate::util::io::json;
-use crate::modules::object::Paths;
-
+use crate::util::objects::paths::{Paths};
 use crate::try_option;
 
 // Other modules

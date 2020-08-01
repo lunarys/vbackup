@@ -1,23 +1,24 @@
 use crate::modules::traits::Backup;
-use crate::modules::object::*;
 use crate::{try_option,dry_run};
 use crate::util::io::{json,savefile,file};
 use crate::util::command::CommandWrapper;
 use crate::util::docker;
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths};
+use crate::Arguments;
 
 use serde_json::Value;
 use serde::{Deserialize};
 use std::fs::{copy, remove_file};
-use chrono::{Local, DateTime};
 
-pub struct Tar7Zip<'a> {
-    bind: Option<Bind<'a>>
+pub struct Tar7Zip {
+    bind: Option<Bind>
 }
 
-struct Bind<'a> {
+struct Bind {
     name: String,
     config: Configuration,
-    paths: ModulePaths<'a>,
+    paths: ModulePaths,
     dry_run: bool,
     no_docker: bool,
     print_command: bool
@@ -28,14 +29,14 @@ struct Configuration {
     encryption_key: Option<String>
 }
 
-impl<'a> Tar7Zip<'a> {
+impl Tar7Zip {
     pub fn new_empty() -> Self {
         return Tar7Zip { bind: None }
     }
 }
 
-impl<'a> Backup<'a> for Tar7Zip<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
+impl Backup for Tar7Zip {
+    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Backup module is already bound");
             error!("{}", msg);
@@ -59,7 +60,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
         return Ok(());
     }
 
-    fn backup(&self, time: &DateTime<Local>, time_frames: &Vec<&TimeFrameReference>) -> Result<(), String> {
+    fn backup(&self, timings: &Vec<ExecutionTiming>) -> Result<(), String> {
         let bound: &Bind = try_option!(self.bind.as_ref(), "Backup is not bound");
 
         let mut cmd = if bound.no_docker {
@@ -118,8 +119,8 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
 
         {
             let mut from: Option<String> = None;
-            for frame in time_frames {
-                let file_name = savefile::format_filename(time, *frame, bound.name.as_str(), None, Some("tar.7z"));
+            for timing in timings {
+                let file_name = savefile::format_filename(&timing.execution_time, &timing.time_frame_reference, bound.name.as_str(), None, Some("tar.7z"));
                 let backup_file = format!("{}/{}", bound.paths.destination.as_str(), file_name);
 
                 // TODO: (?) Change permission on persisted files (currently readable by group and other due to default)?
@@ -142,7 +143,7 @@ impl<'a> Backup<'a> for Tar7Zip<'a> {
                 }
 
                 if !bound.dry_run {
-                    if !savefile::prune(bound.paths.destination.as_str(), &frame.frame, &frame.amount)? {
+                    if !savefile::prune(bound.paths.destination.as_str(), &timing.time_frame_reference.frame, &timing.time_frame_reference.amount)? {
                         trace!("Amount of backups is below threshold, not removing anything");
                     }
                 } else {

@@ -1,7 +1,7 @@
 use crate::modules::traits::Reporting;
-use crate::modules::object::{Paths,Arguments};
-
 use crate::try_option;
+use crate::util::objects::paths::{Paths};
+use crate::Arguments;
 
 use serde_json::Value;
 
@@ -15,6 +15,7 @@ pub enum ReportingModule {
 
 use ReportingModule::*;
 use std::ops::Add;
+use std::rc::Rc;
 
 fn get_module(name: &str) -> Result<ReportingModule, String> {
     return Ok(match name.to_lowercase().as_str() {
@@ -38,7 +39,7 @@ impl ReportingModule {
 }
 
 impl Reporting for ReportingModule {
-    fn init(&mut self, config_json: &Value, paths: &Paths, args: &Arguments) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(), String> {
         return match self {
             Combined(reporter) => reporter.init(config_json, paths, args),
             Mqtt(reporter) => reporter.init(config_json, paths, args),
@@ -78,7 +79,7 @@ impl Reporter {
 }
 
 impl Reporting for Reporter {
-    fn init(&mut self, config_json: &Value, paths: &Paths, args: &Arguments) -> Result<(), String> {
+    fn init(&mut self, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(), String> {
         if self.bind.is_some() {
             let msg = String::from("Reporting module is already bound");
             error!("{}", msg);

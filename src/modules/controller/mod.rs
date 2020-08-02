@@ -7,10 +7,12 @@ use std::rc::Rc;
 
 pub mod bundle;
 mod mqtt;
+mod ping;
 
 pub enum ControllerModule {
     MQTT(mqtt::MqttController),
-    Bundle(bundle::ControllerBundle)
+    Bundle(bundle::ControllerBundle),
+    Ping(ping::Ping)
 }
 
 use ControllerModule::*;
@@ -18,6 +20,7 @@ use ControllerModule::*;
 pub fn get_module(name: &str) -> Result<ControllerModule, String> {
     return Ok(match name.to_lowercase().as_str() {
         "mqtt" => MQTT(mqtt::MqttController::new_empty()),
+        "ping" => Ping(ping::Ping::new_empty()),
         unknown => {
             let msg = format!("Unknown controller module: '{}'", unknown);
             error!("{}", msg);
@@ -30,6 +33,7 @@ impl Controller for ControllerModule {
     fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
         return match self {
             MQTT(controller) => Controller::init(controller, name, config_json, paths, args),
+            Ping(controller) => Controller::init(controller, name, config_json, paths, args),
             Bundle(controller) => controller.init(name, config_json, paths, args)
         }
     }
@@ -37,6 +41,7 @@ impl Controller for ControllerModule {
     fn begin(&mut self) -> Result<bool, String> {
         return match self {
             MQTT(controller) => controller.begin(),
+            Ping(controller) => controller.begin(),
             Bundle(controller) => controller.begin()
         }
     }
@@ -44,6 +49,7 @@ impl Controller for ControllerModule {
     fn end(&mut self) -> Result<bool, String> {
         return match self {
             MQTT(controller) => controller.end(),
+            Ping(controller) => controller.end(),
             Bundle(controller) => controller.end()
         }
     }
@@ -51,6 +57,7 @@ impl Controller for ControllerModule {
     fn clear(&mut self) -> Result<(), String> {
         return match self {
             MQTT(controller) => controller.clear(),
+            Ping(controller) => controller.clear(),
             Bundle(controller) => controller.clear()
         }
     }

@@ -350,6 +350,8 @@ updated by an external program, like a server plugin.
 Controller for starting remote devices for syncs and stopping them afterwards.
 
 #### mqtt
+Use the [MQTT device controller](https://github.com/lunarys/mqtt-device-controller) to start and stop devices for the sync.
+
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | start | no | true | Wether to start the remote device or not. |
@@ -380,6 +382,15 @@ Controller for starting remote devices for syncs and stopping them afterwards.
   }
 }
 ```
+
+#### ping
+Ping the specified host before attempting to sync in order to determine whether it is online.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| address | yes | | The IP address to ping, currently does not work with domain names. |
+| timeout  | no | 10 | A timeout for the ping request in seconds. |
+
 ### Reporting
 Send information about backup and sync runs to additional destinations.
 

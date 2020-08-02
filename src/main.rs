@@ -7,6 +7,7 @@ extern crate serde_derive;
 extern crate chrono;
 extern crate glob;
 extern crate fs2;
+extern crate ping;
 
 mod processing;
 mod vbackup;

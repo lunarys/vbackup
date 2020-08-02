@@ -1,5 +1,4 @@
 use crate::modules::sync::SyncModule;
-use crate::modules;
 use crate::modules::traits::Sync;
 use crate::modules::controller::ControllerModule;
 use crate::util::helper::{controller as controller_helper,check as check_helper};
@@ -13,13 +12,13 @@ use crate::{dry_run};
 pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, controller_override: Option<&mut ControllerModule>) -> Result<bool,String> {
     // Get the sync module that should be used
     let mut controller_module = controller_override.or(unit.controller.as_mut());
-    let mut module: SyncModule = modules::sync::get_module(unit.sync_config.sync_type.as_str())?;
+    let mut module = SyncModule::new(unit.sync_config.sync_type.as_str(), &unit.config.name, &unit.sync_config.config, unit.module_paths.clone(), args)?;
 
     info!("Executing sync for '{}'", unit.config.name.as_str());
 
     // Initialize sync module
     // TODO: clone
-    module.init(&unit.config.name, &unit.sync_config.config, unit.module_paths.clone(), args)?;
+    module.init()?;
 
     // Run controller (if there is one)
     if controller_module.is_some() {

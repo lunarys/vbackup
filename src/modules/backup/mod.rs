@@ -13,7 +13,7 @@ pub struct BackupModule {
 
 impl BackupModule {
     pub fn new(backup_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self, String> {
-        let module: Box<dyn BackupRelay>= match backup_type.to_lowercase().as_str() {
+        let module: Box<dyn BackupRelay> = match backup_type.to_lowercase().as_str() {
             "tar7zip" => tar7zip::Tar7Zip::new(name, config_json, paths, args)?,
             unknown => {
                 let msg = format!("Unknown backup module: '{}'", unknown);

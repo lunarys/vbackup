@@ -1,4 +1,3 @@
-use crate::modules::check;
 use crate::modules::check::CheckModule;
 use crate::modules::traits::Check;
 use crate::modules::check::Reference;
@@ -16,8 +15,14 @@ pub fn init(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, check_c
         let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
         let module_paths = ModulePaths::for_check_module(paths, "check", &config, reference);
 
-        let mut module = check::get_module(try_option!(check_type.as_str(), "Expected check type as string"))?;
-        module.init(config.name.as_str(), check_config.as_ref().unwrap(), module_paths, args)?;
+        let mut module = CheckModule::new(
+            try_option!(check_type.as_str(), "Expected check type as string"),
+            config.name.as_str(),
+            check_config.as_ref().unwrap(),
+            module_paths,
+            args
+        )?;
+        module.init()?;
 
         return Ok(Some(module));
     } else {

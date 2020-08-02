@@ -15,7 +15,8 @@ pub trait Backup {
 }
 
 pub trait Check {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String>;
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
+    fn init(&mut self) -> Result<(), String>;
     fn check(&self, timing: &ExecutionTiming) -> Result<bool, String>;
     fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
@@ -39,7 +40,8 @@ pub trait Bundleable {
 }
 
 pub trait Sync {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String>;
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
+    fn init(&mut self) -> Result<(), String>;
     fn sync(&self) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;

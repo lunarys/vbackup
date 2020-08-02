@@ -13,51 +13,69 @@ pub enum Reference {
     Sync
 }
 
-pub enum CheckModule {
-    FileAge(file_age::FileAge),
-    Usetime(usetime::Usetime)
+pub struct CheckModule {
+    module: Box<dyn CheckRelay>
 }
 
-use CheckModule::*;
+impl CheckModule {
+    pub fn new(check_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
+        let module: Box<dyn CheckRelay> = match check_type.to_lowercase().as_str() {
+            "file-age" => file_age::FileAge::new(name, config_json, paths, args)?,
+            "usetime" => usetime::Usetime::new(name, config_json, paths, args)?,
+            unknown => {
+                let msg = format!("Unknown check module: '{}'", unknown);
+                error!("{}", msg);
+                return Err(msg)
+            }
+        };
 
-pub fn get_module(name: &str) -> Result<CheckModule, String> {
-    return Ok(match name.to_lowercase().as_str() {
-        "file-age" => FileAge(file_age::FileAge::new_empty()),
-        "usetime" => Usetime(usetime::Usetime::new_empty()),
-        unknown => {
-            let msg = format!("Unknown check module: '{}'", unknown);
-            error!("{}", msg);
-            return Err(msg)
-        }
-    })
+        return Ok(CheckModule { module });
+    }
 }
 
 impl Check for CheckModule {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
-        match self {
-            FileAge(check) => check.init(name, config_json, paths, args),
-            Usetime(check) => check.init(name, config_json, paths, args)
-        }
+    fn new(_name: &str, _config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<Box<Self>, String> {
+        return Err(String::from("Can not create anonymous check module using the default trait method"));
+    }
+
+    fn init(&mut self) -> Result<(), String> {
+        self.module.init()
     }
 
     fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
-        match self {
-            FileAge(check) => check.check(timing),
-            Usetime(check) => check.check(timing)
-        }
+        self.module.check(timing)
     }
 
     fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String> {
-        match self {
-            FileAge(check) => check.update(timing),
-            Usetime(check) => check.update(timing)
-        }
+        self.module.update(timing)
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        match self {
-            FileAge(check) => check.clear(),
-            Usetime(check) => check.clear()
-        }
+        self.module.clear()
+    }
+}
+
+trait CheckRelay {
+    fn init(&mut self) -> Result<(), String>;
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String>;
+    fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String>;
+    fn clear(&mut self) -> Result<(), String>;
+}
+
+impl<T: Check> CheckRelay for T {
+    fn init(&mut self) -> Result<(), String> {
+        Check::init(self)
+    }
+
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
+        Check::check(self, timing)
+    }
+
+    fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String> {
+        Check::update(self, timing)
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        Check::clear(self)
     }
 }

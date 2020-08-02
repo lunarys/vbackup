@@ -8,44 +8,28 @@ use crate::Arguments;
 use serde_json::Value;
 
 pub struct FileAge {
-    bind: Option<Bind>
-}
-
-struct Bind {
     paths: ModulePaths,
     no_docker: bool,
     dry_run: bool
 }
 
-impl FileAge {
-    pub fn new_empty() -> Self {
-        return FileAge { bind: None };
-    }
-}
-
 impl Check for FileAge {
-    fn init(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Check module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
+    fn new(_name: &str, _config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         // TODO: Could include an ignore list in _config_json
 
-        self.bind = Some(Bind {
+        return Ok(Box::new(Self {
             paths,
             no_docker: args.no_docker,
             dry_run: args.dry_run
-        });
+        }))
+    }
 
+    fn init(&mut self) -> Result<(), String> {
         return Ok(());
     }
 
-    // TODO: cache result!
+    // TODO: cache result to not run the whole check for every timeframe
     fn check(&self, frame: &ExecutionTiming) -> Result<bool, String> {
-        let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
-
         let last_run = if frame.last_run.is_none() {
             // If there is no last run, just run it
             debug!("Check is not necessary as there was no run before");
@@ -55,9 +39,9 @@ impl Check for FileAge {
             frame.last_run.as_ref().unwrap()
         };
 
-        let check_path = &bound.paths.source;
+        let check_path = &self.paths.source;
 
-        let mut command_base = if bound.no_docker {
+        let mut command_base = if self.no_docker {
             let mut command = CommandWrapper::new("sh");
             command.arg_str("-c");
             command
@@ -73,7 +57,7 @@ impl Check for FileAge {
             command
         };
 
-        let search_path = if bound.no_docker {
+        let search_path = if self.no_docker {
             check_path.as_str()
         } else {
             "/volume"
@@ -82,7 +66,7 @@ impl Check for FileAge {
         let command_actual = format!("[[ -d '{s}' ]] && [[ ! -z \"$(ls -A '{s}')\" ]] && find {s} -type f -print0 | xargs -0 stat -c '%Y;%n' | grep -v -e .savedata.json | sort -nr | head -n 1", s = search_path);
         command_base.arg_string(command_actual);
 
-        if bound.dry_run {
+        if self.dry_run {
             dry_run!(command_base.to_string());
         }
 
@@ -106,14 +90,11 @@ impl Check for FileAge {
     }
 
     fn update(&mut self, _frame: &ExecutionTiming) -> Result<(), String> {
-        let _bound = try_option!(self.bind.as_ref(), "Check module is not bound");
         // This check is stateless, so no update is required
         return Ok(())
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        try_option!(self.bind.as_ref(), "Check module is not bound, thus it can not be cleared");
-        self.bind = None;
         return Ok(());
     }
 }

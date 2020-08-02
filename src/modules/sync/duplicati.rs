@@ -4,16 +4,12 @@ use crate::util::io::{file,json,auth_data};
 use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
 
-use crate::{try_option,dry_run};
+use crate::{dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
 
 pub struct Duplicati {
-    bind: Option<Bind>
-}
-
-struct Bind {
     name: String,
     config: Configuration,
     auth: Authentication,
@@ -58,24 +54,12 @@ struct Authentication {
     fingerprint: String
 }
 
-impl Duplicati {
-    pub fn new_empty() -> Self {
-        return Duplicati { bind: None };
-    }
-}
-
 impl Sync for Duplicati {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Sync module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: Remove clone
         let auth = auth_data::resolve::<Authentication>(&config.auth_reference, &config.auth, paths.base_paths.as_ref())?;
 
-        self.bind = Some(Bind {
+        return Ok(Box::new(Self {
             name: String::from(name),
             config,
             auth,
@@ -83,46 +67,46 @@ impl Sync for Duplicati {
             dry_run: args.dry_run,
             no_docker: args.no_docker,
             print_command: args.debug || args.verbose
-        });
+        }));
+    }
 
-        Ok(())
+    fn init(&mut self) -> Result<(), String> {
+        return Ok(());
     }
 
     fn sync(&self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Could not start duplicati sync, as it is not bound");
-
-        debug!("Starting duplicati sync for {}", bound.name);
+        debug!("Starting duplicati sync for {}", self.name);
 
         // Base command
-        let mut command = get_base_cmd(bound.no_docker, &bound.paths);
+        let mut command = get_base_cmd(self.no_docker, &self.paths);
 
         // Add source and destination
         command.arg_str("backup");
-        command.arg_string(format!("{}", get_connection_uri(&bound.config, &bound.auth)));
-        if bound.no_docker {
-            command.arg_string(format!("{}", &bound.paths.source));
+        command.arg_string(format!("{}", get_connection_uri(&self.config, &self.auth)));
+        if self.no_docker {
+            command.arg_string(format!("{}", &self.paths.source));
         } else {
             command.arg_str("/volume");
         }
 
         // Add options that are always required
-        add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
+        add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.no_docker)?;
 
         // Add retention options
-        if bound.config.smart_retention {
-            command.arg_string(format!("--retention-policy={}", bound.config.retention_policy));
+        if self.config.smart_retention {
+            command.arg_string(format!("--retention-policy={}", self.config.retention_policy));
         } else {
-            command.arg_string(format!("--keep-versions={}", bound.config.keep_versions));
+            command.arg_string(format!("--keep-versions={}", self.config.keep_versions));
         }
 
         // Additional options for backup (just for explicit declaration)
         command.arg_str("--compression-module=zip");
         command.arg_str("--encryption-module=aes");
 
-        if bound.dry_run {
+        if self.dry_run {
             dry_run!(command.to_string());
         } else {
-            let status = if bound.print_command {
+            let status = if self.print_command {
                 println!("-> {}", command.to_string());
                 command.run_get_status()?
             } else {
@@ -145,55 +129,50 @@ impl Sync for Duplicati {
             }
         }
 
-        debug!("Duplicati sync for {} is done", bound.name);
+        debug!("Duplicati sync for {} is done", self.name);
         Ok(())
     }
 
     fn restore(&self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Could not start duplicati restore, as it is not bound");
-
-        debug!("Starting duplicati restore for {}", bound.name);
+        debug!("Starting duplicati restore for {}", self.name);
 
         // Restore / repair the local database
         {
-            let mut command = get_base_cmd(bound.no_docker, &bound.paths);
+            let mut command = get_base_cmd(self.no_docker, &self.paths);
 
             command.arg_str("repair");
-            command.arg_string(format!("{}", get_connection_uri(&bound.config, &bound.auth)));
+            command.arg_string(format!("{}", get_connection_uri(&self.config, &self.auth)));
 
-            add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
+            add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.no_docker)?;
 
-            command.run_configuration(bound.print_command, bound.dry_run)?;
+            command.run_configuration(self.print_command, self.dry_run)?;
         }
 
         // Restore the data
         {
-            let mut command = get_base_cmd(bound.no_docker, &bound.paths);
+            let mut command = get_base_cmd(self.no_docker, &self.paths);
 
             command.arg_str("restore");
-            command.arg_string(format!("{}", get_connection_uri(&bound.config, &bound.auth)));
+            command.arg_string(format!("{}", get_connection_uri(&self.config, &self.auth)));
             command.arg_str("*");
 
-            add_default_options(&mut command, &bound.name, &bound.config, &bound.auth, &bound.paths, bound.no_docker)?;
+            add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.no_docker)?;
 
             command.arg_str("--restore-permission=true");
-            if bound.no_docker {
-                command.arg_string(format!("--restore-path={}", &bound.paths.source));
+            if self.no_docker {
+                command.arg_string(format!("--restore-path={}", &self.paths.source));
             } else {
                 command.arg_str("--restore-path=/volume");
             }
 
-            command.run_configuration(bound.print_command, bound.dry_run)?;
+            command.run_configuration(self.print_command, self.dry_run)?;
         }
 
-        debug!("Duplicati restore for {} is done", bound.name);
+        debug!("Duplicati restore for {} is done", self.name);
         Ok(())
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let _bound = try_option!(self.bind.as_ref(), " Duplicati sync is not bound and thus can not be cleared");
-
-        self.bind = None;
         return Ok(());
     }
 }

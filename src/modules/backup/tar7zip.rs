@@ -1,5 +1,4 @@
 use crate::modules::traits::Backup;
-use crate::{try_option,dry_run};
 use crate::util::io::{json,savefile,file};
 use crate::util::command::CommandWrapper;
 use crate::util::docker;
@@ -7,15 +6,13 @@ use crate::util::objects::time::{ExecutionTiming};
 use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
 
+use crate::{dry_run};
+
 use serde_json::Value;
 use serde::{Deserialize};
 use std::fs::{copy, remove_file};
 
 pub struct Tar7Zip {
-    bind: Option<Bind>
-}
-
-struct Bind {
     name: String,
     config: Configuration,
     paths: ModulePaths,
@@ -29,41 +26,29 @@ struct Configuration {
     encryption_key: Option<String>
 }
 
-impl Tar7Zip {
-    pub fn new_empty() -> Self {
-        return Tar7Zip { bind: None }
-    }
-}
-
 impl Backup for Tar7Zip {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Backup module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
-        // Build local docker image
-        docker::build_image_if_missing(&paths.base_paths, "p7zip.Dockerfile", "vbackup-p7zip")?;
-
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value(config_json.clone())?; // TODO: - clone
-
-        self.bind = Some(Bind {
+        let module = Self {
             name: String::from(name),
             config,
             paths,
             dry_run: args.dry_run,
             no_docker: args.no_docker,
             print_command: args.debug || args.verbose
-        });
+        };
 
+        return Ok(Box::new(module));
+    }
+
+    fn init(&mut self) -> Result<(), String> {
+        // Build local docker image
+        docker::build_image_if_missing(&self.paths.base_paths, "p7zip.Dockerfile", "vbackup-p7zip")?;
         return Ok(());
     }
 
     fn backup(&self, timings: &Vec<ExecutionTiming>) -> Result<(), String> {
-        let bound: &Bind = try_option!(self.bind.as_ref(), "Backup is not bound");
-
-        let mut cmd = if bound.no_docker {
+        let mut cmd = if self.no_docker {
             let mut tmp = CommandWrapper::new("sh");
             tmp.arg_str("-c");
             tmp
@@ -71,8 +56,8 @@ impl Backup for Tar7Zip {
             let mut tmp = CommandWrapper::new("docker");
             tmp.arg_str("run")
                 .arg_str("--rm")
-                .arg_string(format!("--volume={}:/volume", bound.paths.source))
-                .arg_string(format!("--volume={}:/savedir", bound.paths.module_data_dir))
+                .arg_string(format!("--volume={}:/volume", self.paths.source))
+                .arg_string(format!("--volume={}:/savedir", self.paths.module_data_dir))
                 .arg_str("--env=ENCRYPTION_KEY")
                 .arg_str("--name=vbackup-tmp")
                 .arg_str("vbackup-p7zip")
@@ -82,8 +67,8 @@ impl Backup for Tar7Zip {
         };
 
         // Relative path to backup (if docker is used)
-        let save_path = if bound.no_docker {
-            bound.paths.source.as_str()
+        let save_path = if self.no_docker {
+            self.paths.source.as_str()
         } else {
             "/volume"
         };
@@ -91,16 +76,16 @@ impl Backup for Tar7Zip {
         // File name for the temporary backup file
         let tmp_file_name = "vbackup-tar7zip-backup.tar.7z";
         // Path to the temporary backup file on the disk
-        let tmp_backup_file_actual = format!("{}/{}", bound.paths.module_data_dir, tmp_file_name);
+        let tmp_backup_file_actual = format!("{}/{}", self.paths.module_data_dir, tmp_file_name);
         // Relative path to the temporary backup file (if docker is used)
-        let tmp_backup_file = if bound.no_docker {
+        let tmp_backup_file = if self.no_docker {
             tmp_backup_file_actual.clone()
         } else {
             format!("/savedir/{}", tmp_file_name)
         };
 
         // Store the password option for 7zip, if there is no password set it to an empty String
-        let password_option = if let Some(encryption_key) = bound.config.encryption_key.as_ref() {
+        let password_option = if let Some(encryption_key) = self.config.encryption_key.as_ref() {
             cmd.env("ENCRYPTION_KEY", encryption_key);
             String::from("-p\"$ENCRYPTION_KEY\" ")
         } else {
@@ -112,27 +97,27 @@ impl Backup for Tar7Zip {
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file
-        cmd.run_configuration(bound.print_command, bound.dry_run)?;
+        cmd.run_configuration(self.print_command, self.dry_run)?;
 
         // Create directory for backups
-        file::create_dir_if_missing(bound.paths.destination.as_str(), true)?;
+        file::create_dir_if_missing(self.paths.destination.as_str(), true)?;
 
         {
             let mut from: Option<String> = None;
             for timing in timings {
-                let file_name = savefile::format_filename(&timing.execution_time, &timing.time_frame_reference, bound.name.as_str(), None, Some("tar.7z"));
-                let backup_file = format!("{}/{}", bound.paths.destination.as_str(), file_name);
+                let file_name = savefile::format_filename(&timing.execution_time, &timing.time_frame_reference, self.name.as_str(), None, Some("tar.7z"));
+                let backup_file = format!("{}/{}", self.paths.destination.as_str(), file_name);
 
                 // TODO: (?) Change permission on persisted files (currently readable by group and other due to default)?
                 if from.is_none() {
-                    if !bound.dry_run {
+                    if !self.dry_run {
                         file::move_file(tmp_backup_file_actual.as_str(), backup_file.as_str())?;
                     } else {
                         dry_run!(format!("Moving file '{}' to '{}'", &tmp_backup_file_actual, &backup_file));
                     }
                     from = Some(backup_file);
                 } else {
-                    if !bound.dry_run {
+                    if !self.dry_run {
                         if copy(from.as_ref().unwrap(), backup_file).is_err() {
                             error!("Could not copy temporary backup to persistent file");
                             continue;
@@ -142,8 +127,8 @@ impl Backup for Tar7Zip {
                     }
                 }
 
-                if !bound.dry_run {
-                    if !savefile::prune(bound.paths.destination.as_str(), &timing.time_frame_reference.frame, &timing.time_frame_reference.amount)? {
+                if !self.dry_run {
+                    if !savefile::prune(self.paths.destination.as_str(), &timing.time_frame_reference.frame, &timing.time_frame_reference.amount)? {
                         trace!("Amount of backups is below threshold, not removing anything");
                     }
                 } else {
@@ -159,7 +144,7 @@ impl Backup for Tar7Zip {
             }
         }
 
-        Ok(())
+        return Ok(());
     }
 
     fn restore(&self) -> Result<(), String> {
@@ -168,8 +153,6 @@ impl Backup for Tar7Zip {
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        try_option!(self.bind.as_ref(), "Backup is not bound, thus it can not be cleared");
-        self.bind = None;
         return Ok(());
     }
 }

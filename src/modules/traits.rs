@@ -7,7 +7,8 @@ use serde_json::Value;
 use std::rc::Rc;
 
 pub trait Backup {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String>;
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
+    fn init(&mut self) -> Result<(), String>;
     fn backup(&self, time_frames: &Vec<ExecutionTiming>) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;

@@ -1,5 +1,4 @@
 use crate::modules::backup::BackupModule;
-use crate::modules;
 use crate::modules::traits::Backup;
 use crate::util::helper::{check as check_helper};
 use crate::util::io::savefile::{time_format};
@@ -14,7 +13,8 @@ use std::ops::Add;
 
 pub fn backup(args: &Arguments, unit: &mut BackupUnit, savedata: &mut SaveData) -> Result<bool,String> {
     // Get the backup module that should be used
-    let mut module: BackupModule = modules::backup::get_module(unit.backup_config.backup_type.as_str())?;
+    // TODO: clone
+    let mut module = BackupModule::new(unit.backup_config.backup_type.as_str(), &unit.config.name, &unit.backup_config.config, unit.module_paths.clone(), args)?;
 
     // Is any backup required?
     if unit.timeframes.is_empty() {
@@ -27,8 +27,7 @@ pub fn backup(args: &Arguments, unit: &mut BackupUnit, savedata: &mut SaveData) 
 
     // Set up backup module now
     trace!("Invoking backup module");
-    // TODO: clone
-    module.init(&unit.config.name, &unit.backup_config.config, unit.module_paths.clone(), args)?;
+    module.init()?;
 
     // Do backups (all timeframes at once to enable optimizations)
     let backup_result = module.backup(&unit.timeframes);

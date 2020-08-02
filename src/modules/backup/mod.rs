@@ -7,45 +7,69 @@ use serde_json::Value;
 
 mod tar7zip;
 
-pub enum BackupModule {
-    Tar7Zip(tar7zip::Tar7Zip)
+pub struct BackupModule {
+    module: Box<dyn BackupRelay>
 }
 
-use BackupModule::*;
+impl BackupModule {
+    pub fn new(backup_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self, String> {
+        let module: Box<dyn BackupRelay>= match backup_type.to_lowercase().as_str() {
+            "tar7zip" => tar7zip::Tar7Zip::new(name, config_json, paths, args)?,
+            unknown => {
+                let msg = format!("Unknown backup module: '{}'", unknown);
+                error!("{}", msg);
+                return Err(msg)
+            }
+        };
 
-pub fn get_module(name: &str) -> Result<BackupModule, String> {
-    return Ok(match name.to_lowercase().as_str() {
-        "tar7zip" => Tar7Zip(tar7zip::Tar7Zip::new_empty()),
-        unknown => {
-            let msg = format!("Unknown backup module: '{}'", unknown);
-            error!("{}", msg);
-            return Err(msg)
-        }
-    })
+        return Ok(BackupModule { module });
+    }
 }
 
 impl Backup for BackupModule {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
-        match self {
-            Tar7Zip(backup) => backup.init(name, config_json, paths, args)
-        }
+    fn new(_name: &str, _config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<Box<Self>, String> {
+        // TODO: Not very elegant
+        return Err(String::from("Can not create anonymous backup module using the default trait method"));
+    }
+
+    fn init(&mut self) -> Result<(), String> {
+        self.module.init()
     }
 
     fn backup(&self, timings: &Vec<ExecutionTiming>) -> Result<(), String> {
-        match self {
-            Tar7Zip(backup) => backup.backup(timings)
-        }
+        self.module.backup(timings)
     }
 
     fn restore(&self) -> Result<(), String> {
-        match self {
-            Tar7Zip(backup) => backup.restore()
-        }
+        self.module.restore()
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        match self {
-            Tar7Zip(backup) => backup.clear()
-        }
+        self.module.clear()
+    }
+}
+
+trait BackupRelay {
+    fn init(&mut self) -> Result<(), String>;
+    fn backup(&self, time_frames: &Vec<ExecutionTiming>) -> Result<(), String>;
+    fn restore(&self) -> Result<(), String>;
+    fn clear(&mut self) -> Result<(), String>;
+}
+
+impl<T: Backup> BackupRelay for T {
+    fn init(&mut self) -> Result<(), String> {
+        Backup::init(self)
+    }
+
+    fn backup(&self, time_frames: &Vec<ExecutionTiming>) -> Result<(), String> {
+        Backup::backup(self, time_frames)
+    }
+
+    fn restore(&self) -> Result<(), String> {
+        Backup::restore(self)
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        Backup::clear(self)
     }
 }

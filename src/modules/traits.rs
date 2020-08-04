@@ -1,4 +1,3 @@
-use crate::modules::controller::ControllerModule;
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::util::objects::time::ExecutionTiming;
 use crate::Arguments;
@@ -23,20 +22,20 @@ pub trait Check {
 }
 
 pub trait Controller {
+    const MODULE_NAME: &'static str;
+
     // This controller init is only called when the controller is used on its own (not a bundle)
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String>;
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
+    fn init(&mut self) -> Result<(), String>;
     fn begin(&mut self) -> Result<bool, String>;
     fn end(&mut self) -> Result<bool, String>;
     fn clear(&mut self) -> Result<(), String>;
+    fn get_module_name(&self) -> &str { Self::MODULE_NAME }
 }
 
 pub trait Bundleable {
-    // This controller init is only called when the controller is used as a bundle (before bundling)
-    fn pre_init(&mut self, name: &str, config: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(),String>;
-    // In this step the bundleable controller receives all configurations for the bundle
-    fn init_bundle(&mut self, modules: Vec<ControllerModule>) -> Result<(),String>;
-    fn init_single(&mut self) -> Result<(),String>;
-    fn can_bundle_with(&self, other: &ControllerModule) -> bool;
+    fn new_bundle(name: &str, config: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<Box<Self>,String>;
+    fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool,String>;
 }
 
 pub trait Sync {

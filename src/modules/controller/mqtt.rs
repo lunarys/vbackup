@@ -9,28 +9,21 @@ use serde::{Deserialize};
 use paho_mqtt as mqtt;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
-use crate::modules::controller::ControllerModule;
 use std::rc::Rc;
 use std::cmp::max;
 
 pub struct MqttController {
-    pre_init: Option<PreInit>,
-    bind: Option<Init>
-}
-
-struct PreInit {
     config: Configuration,
     mqtt_config: MqttConfiguration,
     dry_run: bool,
-    name: String
+    name: String,
+    paths: Rc<Paths>,
+    connected: Option<Connection>
 }
 
-struct Init {
-    config: Configuration,
-    mqtt_config: MqttConfiguration,
+struct Connection {
     client: mqtt::Client,
     receiver: Receiver<Option<mqtt::Message>>,
-    dry_run: bool,
     is_controller_online: bool
 }
 
@@ -61,31 +54,48 @@ struct MqttConfiguration {
 fn default_qos() -> i32 { 1 }
 fn default_port() -> i32 { 1883 }
 
-impl MqttController {
-    pub fn new_empty() -> Self {
-        return MqttController { pre_init: None, bind: None };
-    }
-}
-
 impl Controller for MqttController {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
-        return Bundleable::pre_init(self, name, config_json, &paths.base_paths, args).and(Bundleable::init_single(self));
+    const MODULE_NAME: &'static str = "mqtt";
+
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+        return Bundleable::new_bundle(name, config_json, &paths.base_paths, args);
+    }
+
+    fn init(&mut self) -> Result<(), String> {
+        let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
+            try_result!(get_client(&self.config, &self.mqtt_config), "Could not create mqtt client and receiver");
+
+        let controller_topic = get_controller_state_topic(&self.config);
+        let is_controller_online = get_controller_state(&client, &receiver, controller_topic, self.mqtt_config.qos)?;
+        if is_controller_online {
+            debug!("MQTT controller for '{}' is available", self.config.device);
+        } else {
+            warn!("MQTT controller for '{}' is not available", self.config.device);
+        }
+
+        self.connected = Some(Connection {
+            client,
+            receiver,
+            is_controller_online
+        });
+
+        return Ok(());
     }
 
     fn begin(&mut self) -> Result<bool, String> {
-        let bound = try_option!(self.bind.as_ref(), "MQTT controller could not begin, as it is not bound");
+        let connection = try_option!(self.connected.as_ref(), "MQTT controller could not begin, as it is not connected... was the init step skipped?");
 
-        info!("MQTT controller start run for device '{}' (start={})", bound.config.device, bound.config.start);
+        info!("MQTT controller start run for device '{}' (start={})", self.config.device, self.config.start);
 
-        if !bound.is_controller_online {
+        if !connection.is_controller_online {
             return Ok(false);
         }
 
-        let qos = bound.mqtt_config.qos;
-        let topic_pub = get_topic_pub(&bound.config, &bound.mqtt_config);
+        let qos = self.mqtt_config.qos;
+        let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
-        let result = if !bound.dry_run {
-            start(&bound.client, &bound.receiver, bound.config.start, topic_pub, qos)?
+        let result = if !self.dry_run {
+            start(&connection.client, &connection.receiver, self.config.start, topic_pub, qos)?
         } else {
             dry_run!(format!("Sending start command on MQTT topic '{}'", &topic_pub));
             true
@@ -96,19 +106,19 @@ impl Controller for MqttController {
     }
 
     fn end(&mut self) -> Result<bool, String> {
-        let bound = try_option!(self.bind.as_ref(), "MQTT controller could not end, as it is not bound");
+        let connection = try_option!(self.connected.as_ref(), "MQTT controller could not end, as it is not connected... was the init step skipped?");
 
-        debug!("MQTT controller end run for device '{}'", bound.config.device);
+        debug!("MQTT controller end run for device '{}'", self.config.device);
 
-        if !bound.is_controller_online {
+        if !connection.is_controller_online {
             return Ok(false);
         }
 
-        let qos = bound.mqtt_config.qos;
-        let topic_pub = get_topic_pub(&bound.config, &bound.mqtt_config);
+        let qos = self.mqtt_config.qos;
+        let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
-        let result = if !bound.dry_run {
-            end(&bound.client, topic_pub, qos)?
+        let result = if !self.dry_run {
+            end(&connection.client, topic_pub, qos)?
         } else {
             dry_run!(format!("Sending end command on MQTT topic '{}'", &topic_pub));
             true
@@ -119,119 +129,59 @@ impl Controller for MqttController {
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "MQTT controller is not bound and thus can not be cleared");
+        let connection = try_option!(self.connected.as_ref(), "MQTT controller could not terminate, as it is not connected... was the init step skipped?");
 
-        try_result!(bound.client.disconnect(None), "Disconnect from broker failed");
+        try_result!(connection.client.disconnect(None), "Disconnect from broker failed");
 
-        self.bind = None;
+        self.connected = None;
         return Ok(());
     }
 }
 
 impl Bundleable for MqttController {
-    fn pre_init(&mut self, name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Controller module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
+    fn new_bundle(name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let mqtt_config = auth_data::resolve::<MqttConfiguration>(&config.auth_reference, &config.auth, paths)?;
 
-        self.pre_init = Some( PreInit {
+        return Ok(Box::new(Self {
             config,
             mqtt_config,
             dry_run: args.dry_run,
-            name: String::from(name)
-        });
-
-        Ok(())
+            name: String::from(name),
+            paths: paths.clone(),
+            connected: None
+        }));
     }
 
-    fn init_bundle(&mut self, modules: Vec<ControllerModule>) -> Result<(), String> {
-        if let Some(self_pre_init) = self.pre_init.as_mut() {
-            // Start device only if any of the scheduled syncs has the start option
-            let start_settings: Vec<(bool,i32)> = modules.iter().map(|module| {
-                match module {
-                    ControllerModule::MQTT(other) => {
-                        if let Some(other_pre_init) = other.pre_init.as_ref() {
-                            Ok((other_pre_init.config.start, other_pre_init.mqtt_config.qos))
-                        } else {
-                            Err(String::from("init_bundle called with uninitialized other controller"))
-                        }
-                    },
-                    _ => Err(String::from("init_bundle called for MQTT controller with incompatible other controller"))
-                }
-            }).collect::<Result<Vec<(bool,i32)>,String>>()?;
-
-            self_pre_init.config.start = start_settings.iter().copied().any(|(x,_)| x);
-            self_pre_init.mqtt_config.qos = start_settings.iter().copied().fold(default_qos(), |x,(_,y)| max(x,y));
+    fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
+        if self.connected.is_some() {
+            error!("Can not bundle with a MQTT controller that is already connected");
+            return Ok(false);
         }
 
-        return self.init_single();
-    }
+        let other_config = json::from_value::<Configuration>(other.clone())?; // TODO: - clone
+        let other_mqtt_config = auth_data::resolve::<MqttConfiguration>(&other_config.auth_reference, &other_config.auth, self.paths.as_ref())?;
 
-    fn init_single(&mut self) -> Result<(), String> {
-        let self_pre_init: PreInit = try_option!(self.pre_init.take(), "Reached init step for MQTT controller before pre_init");
+        let result = self.config.device == other_config.device
+            && self.config.topic_pub == other_config.topic_pub
+            && self.config.topic_sub == other_config.topic_sub
+            && self.mqtt_config.host == other_mqtt_config.host
+            && self.mqtt_config.port == other_mqtt_config.port
+            && self.mqtt_config.user == other_mqtt_config.user;
 
-        let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
-            try_result!(get_client(&self_pre_init.config, &self_pre_init.mqtt_config), "Could not create mqtt client and receiver");
-
-        let controller_topic = get_controller_state_topic(&self_pre_init.config);
-        let is_controller_online = get_controller_state(&client, &receiver, controller_topic, self_pre_init.mqtt_config.qos)?;
-        if is_controller_online {
-            debug!("MQTT controller for '{}' is available", self_pre_init.config.device);
-        } else {
-            warn!("MQTT controller for '{}' is not available", self_pre_init.config.device);
+        if result && self.mqtt_config.password != other_mqtt_config.password {
+            warn!("Password mismatch in otherwise bundleable MQTT controller configurations for '{}' and '{}'", self.name, other_name);
+            return Ok(false);
         }
 
-        self.bind = Some( Init {
-            config: self_pre_init.config,
-            mqtt_config: self_pre_init.mqtt_config,
-            client,
-            receiver,
-            dry_run: self_pre_init.dry_run,
-            is_controller_online
-        });
-
-        return Ok(());
-    }
-
-    fn can_bundle_with(&self, other: &ControllerModule) -> bool {
-        match other {
-            ControllerModule::MQTT(other_mqtt) => {
-                if self.bind.is_some() || other_mqtt.bind.is_some() {
-                    error!("Can not bundle with MQTT controller past init");
-                    return false;
-                }
-
-                if self.pre_init.is_none() || other_mqtt.pre_init.is_none() {
-                    error!("Can not bundle with MQTT controller before pre_init");
-                    return false;
-                }
-
-                let self_pre_init = self.pre_init.as_ref().unwrap();
-                let other_pre_init = other_mqtt.pre_init.as_ref().unwrap();
-
-                let result = self_pre_init.config.device == other_pre_init.config.device
-                    && self_pre_init.config.topic_pub == other_pre_init.config.topic_pub
-                    && self_pre_init.config.topic_sub == other_pre_init.config.topic_sub
-                    && self_pre_init.mqtt_config.host == other_pre_init.mqtt_config.host
-                    && self_pre_init.mqtt_config.port == other_pre_init.mqtt_config.port
-                    && self_pre_init.mqtt_config.user == other_pre_init.mqtt_config.user;
-
-                if result && self_pre_init.mqtt_config.password != other_pre_init.mqtt_config.password {
-                    warn!("Password mismatch in otherwise bundleable MQTT controller configurations for '{}' and '{}'", self_pre_init.name, other_pre_init.name);
-                    return false;
-                }
-
-                return result;
-            },
-            _ => {
-                return false;
-            }
+        if !result {
+            return Ok(false);
         }
+
+        self.config.start = self.config.start || other_config.start;
+        self.mqtt_config.qos = max(self.mqtt_config.qos, other_mqtt_config.qos);
+
+        return Ok(true);
     }
 }
 

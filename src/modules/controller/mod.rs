@@ -1,106 +1,122 @@
 use crate::modules::traits::{Controller, Bundleable};
-use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
+use bundle::BundleableControllerRelay;
 
 use serde_json::Value;
-use std::rc::Rc;
 
 pub mod bundle;
 mod mqtt;
 mod ping;
 
 pub enum ControllerModule {
-    MQTT(mqtt::MqttController),
-    Bundle(bundle::ControllerBundle),
-    Ping(ping::Ping)
+    Simple(Box<dyn ControllerRelay>),
+    Bundle(Box<bundle::ControllerBundle>)
 }
 
-use ControllerModule::*;
-
-pub fn get_module(name: &str) -> Result<ControllerModule, String> {
-    return Ok(match name.to_lowercase().as_str() {
-        "mqtt" => MQTT(mqtt::MqttController::new_empty()),
-        "ping" => Ping(ping::Ping::new_empty()),
-        unknown => {
-            let msg = format!("Unknown controller module: '{}'", unknown);
-            error!("{}", msg);
-            return Err(msg)
-        }
-    })
-}
-
-impl Controller for ControllerModule {
-    fn init(&mut self, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<(), String> {
-        return match self {
-            MQTT(controller) => Controller::init(controller, name, config_json, paths, args),
-            Ping(controller) => Controller::init(controller, name, config_json, paths, args),
-            Bundle(controller) => controller.init(name, config_json, paths, args)
+impl ControllerModule {
+    fn as_mut_controller(&mut self) -> &mut dyn ControllerRelay {
+        match self {
+            ControllerModule::Simple(relay) => relay.as_mut(),
+            ControllerModule::Bundle(relay) => relay.as_mut_controller()
         }
     }
 
-    fn begin(&mut self) -> Result<bool, String> {
-        return match self {
-            MQTT(controller) => controller.begin(),
-            Ping(controller) => controller.begin(),
-            Bundle(controller) => controller.begin()
+    fn as_controller(&self) -> &dyn ControllerRelay {
+        match self {
+            ControllerModule::Simple(relay) => relay.as_ref(),
+            ControllerModule::Bundle(relay) => relay.as_ref_controller()
         }
     }
 
-    fn end(&mut self) -> Result<bool, String> {
-        return match self {
-            MQTT(controller) => controller.end(),
-            Ping(controller) => controller.end(),
-            Bundle(controller) => controller.end()
-        }
-    }
-
-    fn clear(&mut self) -> Result<(), String> {
-        return match self {
-            MQTT(controller) => controller.clear(),
-            Ping(controller) => controller.clear(),
-            Bundle(controller) => controller.clear()
-        }
-    }
-}
-
-impl Bundleable for ControllerModule {
-    fn pre_init(&mut self, name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(), String> {
-        return match self {
-            MQTT(controller) => controller.pre_init(name, config_json, paths, args),
-            _ => Err(String::from("pre_init called for ControllerModule that does not implement Bundleable"))
-        }
-    }
-
-    fn init_bundle(&mut self, modules: Vec<ControllerModule>) -> Result<(), String> {
-        return match self {
-            MQTT(controller) => controller.init_bundle(modules),
-            _ => Err(String::from("init_bundle called for ControllerModule that does not implement Bundleable"))
-        }
-    }
-
-    fn init_single(&mut self) -> Result<(), String> {
-        return match self {
-            MQTT(controller) => controller.init_single(),
-            _ => Err(String::from("init_single called for ControllerModule that does not implement Bundleable"))
-        }
-    }
-
-    fn can_bundle_with(&self, other: &ControllerModule) -> bool {
-        return match self {
-            MQTT(controller) => controller.can_bundle_with(other),
-            _ => false
+    fn as_mut_bundleable(&mut self) -> Result<&mut dyn BundleableRelay, String> {
+        match self {
+            ControllerModule::Simple(_) => Err(String::from("Controller module does not support bundle operations")),
+            ControllerModule::Bundle(relay) => Ok(relay.as_mut_bundleable())
         }
     }
 }
 
 impl ControllerModule {
-    /**
-      * Returns wether bundling in general is available for this type of controller module
-      */
-    pub fn can_bundle(&self) -> bool {
-        return match self {
-            MQTT(_) => true,
-            _ => false
-        }
+    pub fn new(controller_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
+        let module: Box<dyn ControllerRelay> = match controller_type.to_lowercase().as_str() {
+            mqtt::MqttController::MODULE_NAME => mqtt::MqttController::new(name, config_json, paths, args)?,
+            ping::Ping::MODULE_NAME => ping::Ping::new(name, config_json, paths, args)?,
+            unknown => {
+                let msg = format!("Unknown controller module: '{}'", unknown);
+                error!("{}", msg);
+                return Err(msg)
+            }
+        };
+
+        return Ok(ControllerModule::Simple(module))
+    }
+}
+
+pub trait ControllerRelay {
+    fn init(&mut self) -> Result<(), String>;
+    fn begin(&mut self) -> Result<bool, String>;
+    fn end(&mut self) -> Result<bool, String>;
+    fn clear(&mut self) -> Result<(), String>;
+    fn get_module_name(&self) -> &str;
+}
+
+impl<T: Controller> ControllerRelay for T {
+    fn init(&mut self) -> Result<(), String> {
+        Controller::init(self)
+    }
+
+    fn begin(&mut self) -> Result<bool, String> {
+        Controller::begin(self)
+    }
+
+    fn end(&mut self) -> Result<bool, String> {
+        Controller::end(self)
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        Controller::clear(self)
+    }
+
+    fn get_module_name(&self) -> &str {
+        Controller::get_module_name(self)
+    }
+}
+
+impl ControllerRelay for ControllerModule {
+    fn init(&mut self) -> Result<(), String> {
+        self.as_mut_controller().init()
+    }
+
+    fn begin(&mut self) -> Result<bool, String> {
+        self.as_mut_controller().begin()
+    }
+
+    fn end(&mut self) -> Result<bool, String> {
+        self.as_mut_controller().end()
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        self.as_mut_controller().clear()
+    }
+
+    fn get_module_name(&self) -> &str {
+        self.as_controller().get_module_name()
+    }
+}
+
+pub trait BundleableRelay {
+    fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool,String>;
+}
+
+impl<T: Bundleable> BundleableRelay for T {
+    fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
+        self.try_bundle(other_name, other)
+    }
+}
+
+impl BundleableRelay for ControllerModule {
+    fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
+        self.as_mut_bundleable()?.try_bundle(other_name, other)
     }
 }

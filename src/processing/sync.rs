@@ -16,6 +16,9 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
 
     info!("Executing sync for '{}'", unit.config.name.as_str());
 
+    // init controller module
+    controller_helper::init(&mut controller_module)?;
+
     // Initialize sync module
     // TODO: clone
     module.init()?;

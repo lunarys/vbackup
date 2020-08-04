@@ -1,13 +1,11 @@
 use crate::Arguments;
 use crate::modules::reporting::ReportingModule;
-use crate::processing::scheduler::{SyncControllerBundle};
 use crate::util::io::file;
 use crate::util::objects::time::{SaveDataCollection};
 use crate::modules::traits::{Reporting};
 use crate::processing::backup::backup;
 use crate::processing::sync::sync;
-use crate::processing::scheduler::{ConfigurationBundle};
-use crate::processing::preprocessor::{SyncUnit, BackupUnit};
+use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, SyncUnit, BackupUnit};
 use crate::processing::timeframe_check;
 use crate::modules::controller::ControllerModule;
 
@@ -18,7 +16,7 @@ use chrono::{DateTime, Local};
 
 pub fn process_configurations(args: &Arguments,
                               reporter: &ReportingModule,
-                              configurations: Vec<ConfigurationBundle>,
+                              configurations: Vec<ConfigurationUnit>,
                               mut savedata_collection: SaveDataCollection) -> Result<(),String> {
     for configuration in configurations {
 
@@ -26,17 +24,17 @@ pub fn process_configurations(args: &Arguments,
         let current_time : DateTime<Local> = chrono::Local::now();
 
         let result = match configuration {
-            ConfigurationBundle::Backup(mut backup) => {
+            ConfigurationUnit::Backup(mut backup) => {
                 backup.timeframes.iter_mut().for_each(|timeframe| {
                     timeframe.execution_time = current_time.clone();
                 });
                 process_backup(&mut backup, &mut savedata_collection, args, reporter)
             },
-            ConfigurationBundle::Sync(mut sync) => {
+            ConfigurationUnit::Sync(mut sync) => {
                 sync.timeframe.execution_time = current_time;
                 process_sync(&mut sync, &mut savedata_collection, args, reporter, None)
             },
-            ConfigurationBundle::SyncControllerBundle(mut sync_controller_bundle) => {
+            ConfigurationUnit::SyncControllerBundle(mut sync_controller_bundle) => {
                 sync_controller_bundle.units.iter_mut().for_each(|sync| {
                     sync.timeframe.execution_time = current_time.clone()
                 });
@@ -125,7 +123,7 @@ fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBun
     let result = match &mut sync_controller_bundle.controller {
         ControllerModule::Bundle(bundle) => bundle.done(),
         _ => {
-            // Just constraint this for now
+            // Just constrain this for now
             Err(String::from("Expected controller bundle for bundled sync modules, got something else... Controller might not stop properly"))
         }
     };
@@ -146,7 +144,7 @@ fn result_reporter(run_type: &str,
             log_error!(report_result);
         },
         Ok(false) => {
-            info!("{} for '{}' was not executed due to constraints", run_type, config_name);
+            info!("{} for '{}' was not executed", run_type, config_name);
             let report_result = reporter.report(Some(&[run_type, config_name]), "skipped");
             log_error!(report_result);
         },

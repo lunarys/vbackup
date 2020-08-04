@@ -15,7 +15,7 @@ impl SyncModule {
     pub fn new(sync_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
         let module: Box<dyn SyncRelay> = match sync_type.to_lowercase().as_str() {
             "duplicati" => duplicati::Duplicati::new(name, config_json, paths, args)?,
-            "rsync-ssh" => rsync::Rsync::new(name, config_json, paths, args)?,
+            "rsync-ssh" | "rsync" => rsync::Rsync::new(name, config_json, paths, args)?,
             unknown => {
                 let msg = format!("Unknown sync module: '{}'", unknown);
                 error!("{}", msg);

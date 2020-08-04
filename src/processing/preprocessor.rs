@@ -4,12 +4,11 @@ use crate::modules::check::{CheckModule, Reference};
 use crate::modules::controller::ControllerModule;
 use crate::modules::reporting::ReportingModule;
 use crate::util::io::savefile::get_savedata;
-use crate::util::helper::{controller as controller_helper};
 use crate::util::helper::{check as check_helper};
 use crate::util::objects::time::{ExecutionTiming, SaveDataCollection};
 use crate::util::objects::configuration::{Configuration, BackupConfiguration, SyncConfiguration};
 use crate::util::objects::paths::{ModulePaths, Paths};
-use crate::processing::timeframe_check;
+use crate::processing::{timeframe_check,controller_bundler};
 
 use crate::{log_error};
 
@@ -17,7 +16,13 @@ use std::rc::Rc;
 
 pub enum ConfigurationUnit {
     Backup(BackupUnit),
-    Sync(SyncUnit)
+    Sync(SyncUnit),
+    SyncControllerBundle(SyncControllerBundle)
+}
+
+pub struct SyncControllerBundle {
+    pub units: Vec<SyncUnit>,
+    pub controller: ControllerModule
 }
 
 enum ConfigurationUnitBuilder {
@@ -65,7 +70,6 @@ struct SyncUnitBuilder {
     config: Rc<Configuration>,
     sync_config: SyncConfiguration,
     check: Option<CheckModule>,
-    controller: Option<ControllerModule>,
     module_paths: ModulePaths,
     timeframes: Option<Vec<ExecutionTiming>>,
     has_backup: bool
@@ -93,10 +97,12 @@ pub fn preprocess(configurations: Vec<Configuration>,
     let with_time_constraints = filter_time_constraints(split, args, paths, &savedata, reporter)?;
     let with_checks = load_checks(with_time_constraints, args, paths, reporter);
     let with_additional_check = filter_additional_check(with_checks, args, reporter);
-    let with_controllers = load_controllers(with_additional_check, args, paths, reporter);
+
+    let assembled = assemble_from_builders(with_additional_check, reporter);
+    let with_controllers = controller_bundler::load_controllers(assembled, args, paths, reporter);
 
     return Ok(PreprocessorResult {
-        configurations: assemble_from_builders(with_controllers, reporter),
+        configurations: with_controllers,
         savedata
     });
 }
@@ -209,7 +215,6 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
                         config: config_rc.clone(),
                         sync_config,
                         check: None,
-                        controller: None,
                         module_paths: config.sync_paths.unwrap(),
                         timeframes: None,
                         has_backup: config.backup_config.is_some()
@@ -409,32 +414,8 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
         .collect();
 }
 
-fn load_controllers(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, paths: &Rc<Paths>, reporter: &ReportingModule) -> Vec<ConfigurationUnitBuilder> {
-    // step 8
-    return configurations
-        .drain(..)
-        .filter_map(|configuration| {
-            if let ConfigurationUnitBuilder::Sync(mut sync) = configuration {
-                let controller_result = controller_helper::init(args, paths, sync.config.as_ref(), &sync.sync_config.controller.as_ref());
-                match controller_result {
-                    Ok(result) => {
-                        sync.controller = result;
-                        return Some(ConfigurationUnitBuilder::Sync(sync));
-                    },
-                    Err(err) => {
-                        error!("Could not load controller for '{}', skipping this sync configuration: {}", sync.config.name.as_str(), err);
-                        report_error(reporter, "sync", sync.config.name.as_str());
-                        return None;
-                    }
-                }
-            } else {
-                return Some(configuration);
-            }
-        })
-        .collect();
-}
-
 fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, reporter: &ReportingModule) -> Vec<ConfigurationUnit> {
+    // step 8
     return configurations
         .drain(..)
         .filter_map(|configuration| {
@@ -473,7 +454,7 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, rep
                         config: sync_builder.config,
                         sync_config: sync_builder.sync_config,
                         check: sync_builder.check,
-                        controller: sync_builder.controller,
+                        controller: None,
                         module_paths: sync_builder.module_paths,
                         timeframe: timeframe_option.unwrap(),
                         has_backup: sync_builder.has_backup

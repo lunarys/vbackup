@@ -233,8 +233,8 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
                            reporter: &ReportingModule) -> Result<Vec<ConfigurationUnitBuilder>,String> {
     // step 5
     if args.force {
-        debug!("Skipping time constraints checks due to forced run");
-        return Ok(configurations);
+        info!("Skipping time constraints checks due to forced run");
+        // still needs to run to load the timeframes
     }
 
     let timeframe_checker = timeframe_check::TimeframeChecker::new(paths, args)?;

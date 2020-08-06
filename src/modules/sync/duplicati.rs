@@ -55,6 +55,8 @@ struct Authentication {
 }
 
 impl Sync for Duplicati {
+    const MODULE_NAME: &'static str = "duplicati";
+
     fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: Remove clone
         let auth = auth_data::resolve::<Authentication>(&config.auth_reference, &config.auth, paths.base_paths.as_ref())?;

@@ -14,7 +14,7 @@ pub struct BackupModule {
 impl BackupModule {
     pub fn new(backup_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self, String> {
         let module: Box<dyn BackupRelay> = match backup_type.to_lowercase().as_str() {
-            "tar7zip" => tar7zip::Tar7Zip::new(name, config_json, paths, args)?,
+            tar7zip::Tar7Zip::MODULE_NAME => tar7zip::Tar7Zip::new(name, config_json, paths, args)?,
             unknown => {
                 let msg = format!("Unknown backup module: '{}'", unknown);
                 error!("{}", msg);
@@ -26,12 +26,7 @@ impl BackupModule {
     }
 }
 
-impl Backup for BackupModule {
-    fn new(_name: &str, _config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<Box<Self>, String> {
-        // TODO: Not very elegant
-        return Err(String::from("Can not create anonymous backup module using the default trait method"));
-    }
-
+impl BackupRelay for BackupModule {
     fn init(&mut self) -> Result<(), String> {
         self.module.init()
     }
@@ -47,13 +42,18 @@ impl Backup for BackupModule {
     fn clear(&mut self) -> Result<(), String> {
         self.module.clear()
     }
+
+    fn get_module_name(&self) -> &str {
+        self.module.get_module_name()
+    }
 }
 
-trait BackupRelay {
+pub trait BackupRelay {
     fn init(&mut self) -> Result<(), String>;
     fn backup(&self, time_frames: &Vec<ExecutionTiming>) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
+    fn get_module_name(&self) -> &str;
 }
 
 impl<T: Backup> BackupRelay for T {
@@ -71,5 +71,9 @@ impl<T: Backup> BackupRelay for T {
 
     fn clear(&mut self) -> Result<(), String> {
         Backup::clear(self)
+    }
+
+    fn get_module_name(&self) -> &str {
+        Backup::get_module_name(self)
     }
 }

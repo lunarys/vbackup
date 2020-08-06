@@ -14,8 +14,8 @@ pub struct SyncModule {
 impl SyncModule {
     pub fn new(sync_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
         let module: Box<dyn SyncRelay> = match sync_type.to_lowercase().as_str() {
-            "duplicati" => duplicati::Duplicati::new(name, config_json, paths, args)?,
-            "rsync-ssh" | "rsync" => rsync::Rsync::new(name, config_json, paths, args)?,
+            duplicati::Duplicati::MODULE_NAME => duplicati::Duplicati::new(name, config_json, paths, args)?,
+            rsync::Rsync::MODULE_NAME => rsync::Rsync::new(name, config_json, paths, args)?,
             unknown => {
                 let msg = format!("Unknown sync module: '{}'", unknown);
                 error!("{}", msg);
@@ -27,11 +27,7 @@ impl SyncModule {
     }
 }
 
-impl Sync for SyncModule {
-    fn new(_name: &str, _config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<Box<Self>, String> {
-        return Err(String::from("Can not create anonymous sync module using the default trait method"));
-    }
-
+impl SyncRelay for SyncModule {
     fn init(&mut self) -> Result<(), String> {
         self.module.init()
     }
@@ -47,13 +43,18 @@ impl Sync for SyncModule {
     fn clear(&mut self) -> Result<(), String> {
         self.module.clear()
     }
+
+    fn get_module_name(&self) -> &str {
+        self.module.get_module_name()
+    }
 }
 
-trait SyncRelay {
+pub trait SyncRelay {
     fn init(&mut self) -> Result<(), String>;
     fn sync(&self) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
+    fn get_module_name(&self) -> &str;
 }
 
 impl<T: Sync> SyncRelay for T {
@@ -71,5 +72,9 @@ impl<T: Sync> SyncRelay for T {
 
     fn clear(&mut self) -> Result<(), String> {
         Sync::clear(self)
+    }
+
+    fn get_module_name(&self) -> &str {
+        Sync::get_module_name(self)
     }
 }

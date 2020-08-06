@@ -20,8 +20,8 @@ pub struct CheckModule {
 impl CheckModule {
     pub fn new(check_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
         let module: Box<dyn CheckRelay> = match check_type.to_lowercase().as_str() {
-            "file-age" => file_age::FileAge::new(name, config_json, paths, args)?,
-            "usetime" => usetime::Usetime::new(name, config_json, paths, args)?,
+            file_age::FileAge::MODULE_NAME => file_age::FileAge::new(name, config_json, paths, args)?,
+            usetime::Usetime::MODULE_NAME => usetime::Usetime::new(name, config_json, paths, args)?,
             unknown => {
                 let msg = format!("Unknown check module: '{}'", unknown);
                 error!("{}", msg);
@@ -33,11 +33,7 @@ impl CheckModule {
     }
 }
 
-impl Check for CheckModule {
-    fn new(_name: &str, _config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<Box<Self>, String> {
-        return Err(String::from("Can not create anonymous check module using the default trait method"));
-    }
-
+impl CheckRelay for CheckModule {
     fn init(&mut self) -> Result<(), String> {
         self.module.init()
     }
@@ -53,13 +49,18 @@ impl Check for CheckModule {
     fn clear(&mut self) -> Result<(), String> {
         self.module.clear()
     }
+
+    fn get_module_name(&self) -> &str {
+        self.module.get_module_name()
+    }
 }
 
-trait CheckRelay {
+pub trait CheckRelay {
     fn init(&mut self) -> Result<(), String>;
     fn check(&self, timing: &ExecutionTiming) -> Result<bool, String>;
     fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
+    fn get_module_name(&self) -> &str;
 }
 
 impl<T: Check> CheckRelay for T {
@@ -77,5 +78,9 @@ impl<T: Check> CheckRelay for T {
 
     fn clear(&mut self) -> Result<(), String> {
         Check::clear(self)
+    }
+
+    fn get_module_name(&self) -> &str {
+        Check::get_module_name(self)
     }
 }

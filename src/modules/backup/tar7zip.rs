@@ -27,6 +27,8 @@ struct Configuration {
 }
 
 impl Backup for Tar7Zip {
+    const MODULE_NAME: &'static str = "tar7zip";
+
     fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value(config_json.clone())?; // TODO: - clone
         let module = Self {

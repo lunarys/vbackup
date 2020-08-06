@@ -14,6 +14,8 @@ pub struct FileAge {
 }
 
 impl Check for FileAge {
+    const MODULE_NAME: &'static str = "file-age";
+
     fn new(_name: &str, _config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         // TODO: Could include an ignore list in _config_json
 

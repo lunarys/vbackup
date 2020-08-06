@@ -1,5 +1,4 @@
-use crate::modules::check::CheckModule;
-use crate::modules::traits::Check;
+use crate::modules::check::{CheckModule,CheckRelay};
 use crate::modules::check::Reference;
 use crate::util::objects::time::{ExecutionTiming};
 use crate::util::objects::paths::{Paths,ModulePaths};

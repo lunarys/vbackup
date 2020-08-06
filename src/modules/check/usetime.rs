@@ -33,6 +33,8 @@ fn relative_backup_info() -> String {
 }
 
 impl Check for Usetime {
+    const MODULE_NAME: &'static str = "usetime";
+
     fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
 

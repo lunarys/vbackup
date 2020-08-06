@@ -1,5 +1,4 @@
-use crate::modules::sync::SyncModule;
-use crate::modules::traits::Sync;
+use crate::modules::sync::{SyncModule,SyncRelay};
 use crate::modules::controller::ControllerModule;
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::util::io::savefile::{time_format};

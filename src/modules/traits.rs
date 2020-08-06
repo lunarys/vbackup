@@ -6,6 +6,9 @@ use serde_json::Value;
 use std::rc::Rc;
 
 pub trait Backup {
+    const MODULE_NAME: &'static str;
+    fn get_module_name(&self) -> &str { Self::MODULE_NAME }
+
     fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
     fn init(&mut self) -> Result<(), String>;
     fn backup(&self, time_frames: &Vec<ExecutionTiming>) -> Result<(), String>;
@@ -14,6 +17,9 @@ pub trait Backup {
 }
 
 pub trait Check {
+    const MODULE_NAME: &'static str;
+    fn get_module_name(&self) -> &str { Self::MODULE_NAME }
+
     fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
     fn init(&mut self) -> Result<(), String>;
     fn check(&self, timing: &ExecutionTiming) -> Result<bool, String>;
@@ -23,14 +29,13 @@ pub trait Check {
 
 pub trait Controller {
     const MODULE_NAME: &'static str;
+    fn get_module_name(&self) -> &str { Self::MODULE_NAME }
 
-    // This controller init is only called when the controller is used on its own (not a bundle)
     fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
     fn init(&mut self) -> Result<(), String>;
     fn begin(&mut self) -> Result<bool, String>;
     fn end(&mut self) -> Result<bool, String>;
     fn clear(&mut self) -> Result<(), String>;
-    fn get_module_name(&self) -> &str { Self::MODULE_NAME }
 }
 
 pub trait Bundleable {
@@ -39,6 +44,9 @@ pub trait Bundleable {
 }
 
 pub trait Sync {
+    const MODULE_NAME: &'static str;
+    fn get_module_name(&self) -> &str { Self::MODULE_NAME }
+
     fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
     fn init(&mut self) -> Result<(), String>;
     fn sync(&self) -> Result<(), String>;
@@ -47,7 +55,9 @@ pub trait Sync {
 }
 
 pub trait Reporting {
+    // TODO: refactor like other modules: use 'new' function and relay trait
     fn init(&mut self, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(),String>;
+    // TODO: context needs a rework to be more clear
     fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }

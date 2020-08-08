@@ -1,16 +1,16 @@
 use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::reporting::{RunType,Status};
 use crate::modules::controller::{ControllerModule, BundleableRelay, ControllerRelay};
 use crate::modules::controller::bundle::ControllerBundle;
-use crate::modules::traits::Reporting;
 use crate::modules::reporting::ReportingModule;
 use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, SyncUnit};
 use crate::Arguments;
 
-use crate::{try_option, log_error};
+use crate::{try_option};
 
 use std::rc::Rc;
 use std::collections::HashMap;
-use core::borrow::BorrowMut;
+use core::borrow::{BorrowMut};
 
 struct SyncControllerBundleBuilder {
     units: Vec<SyncUnit>,
@@ -37,8 +37,8 @@ pub fn load_controllers(mut configurations: Vec<ConfigurationUnit>, args: &Argum
                     let result = handle_controller_bundle(sync, done.borrow_mut(), bundle_types.borrow_mut(), paths, args);
 
                     if let Err(err) = result {
-                        error!("Could not load controller for '{}', skipping this sync configuration: {}", name, err);
-                        report_error(reporter, "sync", name.as_ref());
+                        error!("Could not load controller for '{}', skipping this sync configuration: {}", &name, err);
+                        report_error(reporter, RunType::SYNC, &name);
                     }
                 }
             }
@@ -124,7 +124,6 @@ fn handle_controller_bundle(mut sync: SyncUnit, done: &mut Vec<ConfigurationUnit
     return Ok(());
 }
 
-fn report_error(reporter: &ReportingModule, run_type: &str, name: &str) {
-    let report_result = reporter.report(Some(&[run_type, name]), "failed");
-    log_error!(report_result);
+fn report_error(reporter: &ReportingModule, run_type: RunType, name: &String) {
+    reporter.report_status(run_type, Some(name.clone()), Status::ERROR);
 }

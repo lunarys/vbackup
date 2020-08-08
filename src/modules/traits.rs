@@ -1,5 +1,6 @@
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::util::objects::time::ExecutionTiming;
+use crate::util::objects::reporting::ReportEvent;
 use crate::Arguments;
 
 use serde_json::Value;
@@ -55,9 +56,11 @@ pub trait Sync {
 }
 
 pub trait Reporting {
-    // TODO: refactor like other modules: use 'new' function and relay trait
-    fn init(&mut self, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<(),String>;
-    // TODO: context needs a rework to be more clear
-    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(),String>;
+    const MODULE_NAME: &'static str;
+    fn get_module_name(&self) -> &str { Self::MODULE_NAME }
+
+    fn new(config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<Box<Self>, String>;
+    fn init(&mut self) -> Result<(),String>;
+    fn report(&self, event: ReportEvent) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }

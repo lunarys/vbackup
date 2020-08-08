@@ -2,7 +2,7 @@ use crate::Arguments;
 use crate::modules::reporting::ReportingModule;
 use crate::util::io::file;
 use crate::util::objects::time::{SaveDataCollection};
-use crate::modules::traits::{Reporting};
+use crate::util::objects::reporting::{SizeType,RunType,Status};
 use crate::processing::backup::backup;
 use crate::processing::sync::sync;
 use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, SyncUnit, BackupUnit};
@@ -11,7 +11,7 @@ use crate::modules::controller::ControllerModule;
 
 use crate::{log_error};
 
-use core::borrow::BorrowMut;
+use core::borrow::{BorrowMut, Borrow};
 use chrono::{DateTime, Local};
 
 pub fn process_configurations(args: &Arguments,
@@ -62,18 +62,18 @@ fn process_backup(config: &mut BackupUnit,
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
 
     // Announce that this backup is starting
-    log_error!(reporter.report(Some(&["backup", config.config.name.as_str()]), "starting"));
+    reporter.report_status(RunType::BACKUP, Some(config.config.name.clone()), Status::START);
 
     // TODO: Pass paths by reference
     // Run the backup and report the result
     let result = backup(args, config, savedata);
-    result_reporter("backup", result, config.config.name.as_str(), reporter);
+    result_reporter(RunType::BACKUP, result, config.config.name.borrow(), reporter);
 
     // Calculate and report the size of the original files
-    size_reporter("backup", "original", original_path.as_str(), config.config.name.as_str(), reporter, args);
+    size_reporter(RunType::BACKUP, SizeType::ORIGINAL, original_path.as_str(), config.config.name.borrow(), reporter, args);
 
     // Calculate and report the size of the backup files
-    size_reporter("backup", "backup", store_path.as_str(), config.config.name.as_str(), reporter, args);
+    size_reporter(RunType::BACKUP, SizeType::BACKUP, store_path.as_str(), config.config.name.borrow(), reporter, args);
 
     return Ok(());
 }
@@ -92,20 +92,20 @@ fn process_sync(config: &mut SyncUnit,
 
     if !timeframe_check::check_sync_after_backup(&config.timeframe, savedata, config.has_backup) {
         info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.config.name.as_str());
-        log_error!(reporter.report(Some(&["sync", config.config.name.as_str()]), "skipped"));
+        reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::SKIP);
         return Ok(());
     }
 
     // Announce that this sync is starting
-    log_error!(reporter.report(Some(&["sync", config.config.name.as_str()]), "starting"));
+    reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::START);
 
     // Run the sync and report the result
     let result = sync(args, config, savedata, controller_override);
-    result_reporter("sync", result, config.config.name.as_str(), reporter);
+    result_reporter(RunType::SYNC, result, config.config.name.borrow(), reporter);
 
     // Calculate and report size of the synced files
     // TODO: Current implementation just takes the size of the local files...
-    size_reporter("sync", "sync", store_path.as_str(), config.config.name.as_str(), reporter, args);
+    size_reporter(RunType::SYNC, SizeType::SYNC, store_path.as_str(), config.config.name.borrow(), reporter, args);
 
     return Ok(());
 }
@@ -133,38 +133,35 @@ fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBun
 }
 
 // ############################ Helper functions ############################
-fn result_reporter(run_type: &str,
+fn result_reporter(run_type: RunType,
                    result: Result<bool,String>,
-                   config_name: &str,
+                   config_name: &String,
                    reporter: &ReportingModule) {
     match result {
         Ok(true) => {
             info!("{} for '{}' was successfully executed", run_type, config_name);
-            let report_result = reporter.report(Some(&[run_type, config_name]), "success");
-            log_error!(report_result);
+            reporter.report_status(run_type, Some(config_name.clone()), Status::DONE);
         },
         Ok(false) => {
             info!("{} for '{}' was not executed", run_type, config_name);
-            let report_result = reporter.report(Some(&[run_type, config_name]), "skipped");
-            log_error!(report_result);
+            reporter.report_status(run_type, Some(config_name.clone()), Status::SKIP);
         },
         Err(err) => {
             error!("{} for '{}' failed: {}", run_type, config_name, err);
-            let report_result = reporter.report(Some(&[run_type, config_name]), "failed");
-            log_error!(report_result);
+            reporter.report_status(run_type, Some(config_name.clone()), Status::ERROR);
         }
     }
 }
 
-fn size_reporter(run_type: &str,
-                 directory_type: &str,
+fn size_reporter(run_type: RunType,
+                 directory_type: SizeType,
                  path: &str,
-                 config_name: &str,
+                 config_name: &String,
                  reporter: &ReportingModule,
                  args: &Arguments) {
     match file::size(path, args.no_docker) {
         Ok(curr_size) => {
-            log_error!(reporter.report(Some(&[run_type, config_name, "size", directory_type]), curr_size.to_string().as_str()));
+            reporter.report_size(run_type, directory_type, Some(config_name.clone()), curr_size);
         },
         Err(err) => {
             error!("Could not read size of the {} files: {}", directory_type, if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() });

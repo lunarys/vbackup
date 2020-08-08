@@ -1,8 +1,9 @@
 use crate::modules::traits::Reporting;
+use crate::util::objects::reporting::*;
 use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths};
 use crate::Arguments;
-use crate::{try_result,try_option};
+use crate::{try_result};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -11,13 +12,9 @@ use std::ops::AddAssign;
 use std::rc::Rc;
 
 pub struct Reporter {
-    bind: Option<Bind>
-}
-
-struct Bind {
     config: Configuration,
     mqtt_config: MqttConfiguration,
-    client: mqtt::Client
+    client: Option<mqtt::Client>
 }
 
 #[derive(Deserialize)]
@@ -41,91 +38,100 @@ struct MqttConfiguration {
 fn default_qos() -> i32 { 1 }
 fn default_port() -> i32 { 1883 }
 
-impl Reporter {
-    pub fn new_empty() -> Self {
-        return Reporter{ bind: None };
-    }
-}
-
 impl Reporting for Reporter {
-    fn init(&mut self, config_json: &Value, paths: &Rc<Paths>, _args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Reporting module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
+    const MODULE_NAME: &'static str = "mqtt";
 
+    fn new(config_json: &Value, paths: &Rc<Paths>, _args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let mqtt_config = auth_data::resolve::<MqttConfiguration>(&config.auth_reference, &config.auth, paths)?;
 
-        let client: mqtt::Client =
-            try_result!(get_client(&config, &mqtt_config), "Could not create mqtt client and receiver");
-
-        self.bind = Some(Bind {
+        return Ok(Box::new(Reporter {
             config,
             mqtt_config,
-            client
-        });
+            client: None
+        }));
+    }
+
+    fn init(&mut self) -> Result<(), String> {
+        let client: mqtt::Client = try_result!(get_client(&self.config, &self.mqtt_config), "Could not create mqtt client and receiver");
+        self.client = Some(client);
 
         return Ok(());
     }
 
-    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "MQTT reporter is not bound");
-
-        let qos = bound.mqtt_config.qos;
-        let mut topic = get_base_topic(&bound.config, &bound.mqtt_config);
-
-        match context {
-            // Size reporting for specific operation on specific volume
-            Some([_, name, "size", what]) => {
-                topic.push('/');
-                topic.add_assign(name);
-                topic.push('/');
-                topic.add_assign(what);
-                topic.push('/');
-                topic.add_assign("size");
-            },
-            // Accumulated size reporting
-            Some(["size", what]) => {
-                topic.push('/');
-                topic.add_assign("size");
-                topic.push('/');
-                topic.add_assign(what);
-            },
-            // General activity reporting
-            Some([operation, name]) => {
-                topic.push('/');
-                topic.add_assign(name);
-                topic.push('/');
-                topic.add_assign(operation);
-            },
-            _ => {},
+    fn report(&self, event: ReportEvent) -> Result<(), String> {
+        if !self.client.is_some() {
+            return Err(String::from("MQTT reporter is not connected for reporting"));
         }
 
-        // TODO: Trace or debug?
-        trace!("Reporting on '{}': '{}'", topic.as_str(), value);
+        let qos = self.mqtt_config.qos;
+        let mut topic = get_base_topic(&self.config, &self.mqtt_config);
 
-        let message = String::from(value);
+        let message = match event {
+            ReportEvent::Status(report) => {
+                if let Some(name) = report.module {
+                    topic.push('/');
+                    topic.add_assign(name.as_str());
+                    topic.push('/');
+                    topic.add_assign(match report.run_type {
+                        RunType::RUN => "run",
+                        RunType::BACKUP => "backup",
+                        RunType::SYNC => "sync"
+                    });
+                }
+
+                String::from(match report.status {
+                    Status::START => "starting",
+                    Status::DONE => "done",
+                    Status::ERROR => "failed",
+                    Status::SKIP => "skipped",
+                    Status::DISABLED => "disabled"
+                })
+            },
+            ReportEvent::Size(report) => {
+                if let Some(name) = report.module {
+                    topic.push('/');
+                    topic.add_assign(name.as_str());
+                }
+
+                topic.push('/');
+                topic.add_assign("size");
+
+                topic.push('/');
+                topic.add_assign(match report.size_type {
+                    SizeType::ORIGINAL => "original",
+                    SizeType::BACKUP => "backup",
+                    SizeType::SYNC => "synced"
+                });
+
+                report.size.to_string()
+            }
+            ReportEvent::Operation(operation) => {
+                match operation {
+                    OperationStatus::START(op) => op,
+                    OperationStatus::DONE => String::from("done")
+                }
+            }
+        };
+
+        // TODO: Trace or debug?
+        trace!("Reporting on '{}': '{}'", topic.as_str(), message);
 
         let msg = mqtt::Message::new(topic, message, qos);
 
-        if bound.client.publish(msg).is_err() {
-            let msg = String::from("Could not send report");
-            error!("{}", msg);
-            return Err(String::from(msg));
+        if self.client.as_ref().unwrap().publish(msg).is_err() {
+            return Err(String::from("Could not send report"));
         }
 
         // Return wether device is available or not
-        Ok(())
+        return Ok(());
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "MQTT reporter is not bound");
+        if let Some(client) = self.client.as_ref() {
+            try_result!(client.disconnect(None), "Disconnect from broker failed");
+        }
 
-        try_result!(bound.client.disconnect(None), "Disconnect from broker failed");
-
-        self.bind = None;
         return Ok(());
     }
 }

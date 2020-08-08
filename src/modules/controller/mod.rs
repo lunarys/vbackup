@@ -15,6 +15,20 @@ pub enum ControllerModule {
 }
 
 impl ControllerModule {
+    pub fn new(controller_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
+        let module: Box<dyn ControllerRelay> = match controller_type.to_lowercase().as_str() {
+            mqtt::MqttController::MODULE_NAME => mqtt::MqttController::new(name, config_json, paths, args)?,
+            ping::Ping::MODULE_NAME => ping::Ping::new(name, config_json, paths, args)?,
+            unknown => {
+                let msg = format!("Unknown controller module: '{}'", unknown);
+                error!("{}", msg);
+                return Err(msg)
+            }
+        };
+
+        return Ok(ControllerModule::Simple(module))
+    }
+
     fn as_mut_controller(&mut self) -> &mut dyn ControllerRelay {
         match self {
             ControllerModule::Simple(relay) => relay.as_mut(),
@@ -34,22 +48,6 @@ impl ControllerModule {
             ControllerModule::Simple(_) => Err(String::from("Controller module does not support bundle operations")),
             ControllerModule::Bundle(relay) => Ok(relay.as_mut_bundleable())
         }
-    }
-}
-
-impl ControllerModule {
-    pub fn new(controller_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
-        let module: Box<dyn ControllerRelay> = match controller_type.to_lowercase().as_str() {
-            mqtt::MqttController::MODULE_NAME => mqtt::MqttController::new(name, config_json, paths, args)?,
-            ping::Ping::MODULE_NAME => ping::Ping::new(name, config_json, paths, args)?,
-            unknown => {
-                let msg = format!("Unknown controller module: '{}'", unknown);
-                error!("{}", msg);
-                return Err(msg)
-            }
-        };
-
-        return Ok(ControllerModule::Simple(module))
     }
 }
 

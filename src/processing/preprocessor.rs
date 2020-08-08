@@ -1,5 +1,4 @@
 use crate::Arguments;
-use crate::modules::traits::Reporting;
 use crate::modules::check::{CheckModule, Reference};
 use crate::modules::controller::ControllerModule;
 use crate::modules::reporting::ReportingModule;
@@ -8,11 +7,11 @@ use crate::util::helper::{check as check_helper};
 use crate::util::objects::time::{ExecutionTiming, SaveDataCollection};
 use crate::util::objects::configuration::{Configuration, BackupConfiguration, SyncConfiguration};
 use crate::util::objects::paths::{ModulePaths, Paths};
+use crate::util::objects::reporting::{RunType,Status};
 use crate::processing::{timeframe_check,controller_bundler};
 
-use crate::{log_error};
-
 use std::rc::Rc;
+use core::borrow::Borrow;
 
 pub enum ConfigurationUnit {
     Backup(BackupUnit),
@@ -119,7 +118,7 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingM
                     return true;
                 } else {
                     info!("Configuration for '{}' is disabled, skipping run", config.name.as_str());
-                    log_error!(reporter.report(Some(&["run", config.name.as_str()]), "disabled"));
+                    reporter.report_status(RunType::RUN, Some(config.name.clone()), Status::DISABLED);
                 }
             }
 
@@ -134,7 +133,7 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingM
                             return true;
                         } else {
                             info!("Backup for '{}' is disabled, skipping run", config.name.as_str());
-                            log_error!(reporter.report(Some(&["backup", config.name.as_str()]), "disabled"));
+                            reporter.report_status(RunType::BACKUP, Some(config.name.clone()), Status::DISABLED);
                         }
                     }
 
@@ -147,7 +146,7 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingM
                             return true;
                         } else {
                             info!("Sync for '{}' is disabled, skipping run", config.name.as_str());
-                            log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "disabled"));
+                            reporter.report_status(RunType::SYNC, Some(config.name.clone()), Status::DISABLED);
                         }
                     }
 
@@ -183,7 +182,7 @@ fn load_savedata(configurations: &Vec<ConfigurationSplit>, reporter: &ReportingM
         .filter_map(|config| {
             if config.backup_paths.is_none() {
                 error!("Module paths for '{}' not loaded in preprocessor... skipping configuration", config.config.name.as_str());
-                report_error(reporter, "run", config.config.name.as_str());
+                report_error(reporter, RunType::RUN, config.config.name.borrow());
                 return None;
             }
 
@@ -193,7 +192,7 @@ fn load_savedata(configurations: &Vec<ConfigurationSplit>, reporter: &ReportingM
                 Ok(savedata) => savedata,
                 Err(err) => {
                     error!("Could not read savedata for '{}': {}", config.config.name.as_str(), err);
-                    report_error(reporter, "run", config.config.name.as_str());
+                    report_error(reporter, RunType::RUN, config.config.name.borrow());
                     return None;
                 }
             };
@@ -258,8 +257,8 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
         .drain(..)
         .filter_map(|configuration| {
             let (name,run_type) = match &configuration {
-                ConfigurationUnitBuilder::Backup(backup) => (backup.config.name.as_str(),"backup"),
-                ConfigurationUnitBuilder::Sync(sync) => (sync.config.name.as_str(), "sync")
+                ConfigurationUnitBuilder::Backup(backup) => (backup.config.name.borrow(),RunType::BACKUP),
+                ConfigurationUnitBuilder::Sync(sync) => (sync.config.name.borrow(),RunType::SYNC)
             };
 
             let savedata = if let Some(savedata) = savedata_collection.get(name) {
@@ -326,7 +325,7 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
                         },
                         Err(err) => {
                             error!("Could not load check for '{}', skipping this backup configuration: {}", backup.config.name.as_str(), err);
-                            report_error(reporter, "backup", backup.config.name.as_str());
+                            report_error(reporter, RunType::BACKUP, backup.config.name.borrow());
                             return None;
                         }
                     }
@@ -344,7 +343,7 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
                         },
                         Err(err) => {
                             error!("Could not load check for '{}', skipping this sync configuration: {}", sync.config.name.as_str(), err);
-                            report_error(reporter, "sync", sync.config.name.as_str());
+                            report_error(reporter, RunType::SYNC, sync.config.name.borrow());
                             return None;
                         }
                     }
@@ -364,7 +363,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     return configurations
         .drain(..)
         .filter_map(|configuration| {
-            fn filter_timeframes(run_type: &str, name: &str, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &ReportingModule) -> Option<Vec<ExecutionTiming>> {
+            fn filter_timeframes(run_type: RunType, name: &String, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &ReportingModule) -> Option<Vec<ExecutionTiming>> {
                 if check.is_none() {
                     debug!("There is no additional check for '{}' {}, only using the interval checks", name, run_type);
                     return timeframes;
@@ -385,20 +384,20 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                             },
                             Err(err) => {
                                 error!("Additional check for '{}' {} failed... skipping run ({})", name, run_type, err);
-                                report_error(reporter, run_type, name);
+                                report_error(reporter, run_type.clone(), name);
                                 return false;
                             }
                         }
                     }).collect()
                 } else {
                     error!("Timeframes not loaded for '{}' {}, even though they should be... skipping run", name, run_type);
-                    report_error(reporter, run_type, name);
+                    report_error(reporter, run_type.clone(), name);
                     vec![]
                 };
 
                 if filtered_timeframes.is_empty() {
                     info!("{} for '{}' is not required in any timeframe due to additional check", run_type, name);
-                    report_skip(reporter, run_type, name);
+                    report_skip(reporter, run_type.clone(), name);
                     return None;
                 } else {
                     return Some(filtered_timeframes);
@@ -407,7 +406,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
 
             match configuration {
                 ConfigurationUnitBuilder::Backup(mut backup) => {
-                    backup.timeframes = filter_timeframes("backup", backup.config.name.as_str(), &backup.check, backup.timeframes, reporter);
+                    backup.timeframes = filter_timeframes(RunType::BACKUP, backup.config.name.borrow(), &backup.check, backup.timeframes, reporter);
 
                     if backup.timeframes.is_none() {
                         return None;
@@ -416,7 +415,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                     }
                 },
                 ConfigurationUnitBuilder::Sync(mut sync) => {
-                    sync.timeframes = filter_timeframes("sync", sync.config.name.as_str(), &sync.check, sync.timeframes, reporter);
+                    sync.timeframes = filter_timeframes(RunType::SYNC, sync.config.name.borrow(), &sync.check, sync.timeframes, reporter);
 
                     if sync.timeframes.is_none() {
                         return None;
@@ -441,7 +440,7 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, rep
 
                     if timeframes_option.is_none() {
                         error!("Backup for '{}' does not have any timeframes, skipping run", backup_builder.config.name.as_str());
-                        report_error(reporter, "backup", backup_builder.config.name.as_str());
+                        report_error(reporter, RunType::BACKUP, backup_builder.config.name.borrow());
                         return None;
                     }
 
@@ -461,7 +460,7 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, rep
 
                     if timeframe_option.is_none() {
                         error!("Sync for '{}' does not have exactly one timeframe, skipping run", sync_builder.config.name.as_str());
-                        report_error(reporter, "sync", sync_builder.config.name.as_str());
+                        report_error(reporter, RunType::SYNC, sync_builder.config.name.borrow());
                         return None;
                     }
 
@@ -480,12 +479,10 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, rep
         .collect();
 }
 
-fn report_skip(reporter: &ReportingModule, run_type: &str, name: &str) {
-    let report_result = reporter.report(Some(&[run_type, name]), "skipped");
-    log_error!(report_result);
+fn report_skip(reporter: &ReportingModule, run_type: RunType, name: &String) {
+    reporter.report_status(run_type, Some(name.clone()), Status::SKIP);
 }
 
-fn report_error(reporter: &ReportingModule, run_type: &str, name: &str) {
-    let report_result = reporter.report(Some(&[run_type, name]), "failed");
-    log_error!(report_result);
+fn report_error(reporter: &ReportingModule, run_type: RunType, name: &String) {
+    reporter.report_status(run_type, Some(name.clone()), Status::ERROR);
 }

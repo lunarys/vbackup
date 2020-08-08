@@ -1,9 +1,9 @@
 use crate::util::io::{file,json};
-use crate::modules::traits::{Reporting};
-use crate::modules::reporting::ReportingModule;
+use crate::modules::reporting::{ReportingModule, ReportingRelay};
 use crate::util::objects::time::{TimeFrameReference};
 use crate::util::objects::paths::{Paths,PathBase,ModulePaths};
 use crate::util::objects::configuration::Configuration;
+use crate::util::objects::reporting::{OperationStatus};
 use crate::processing::{preprocessor,scheduler,processor};
 use crate::Arguments;
 
@@ -27,15 +27,27 @@ pub fn main(args: Arguments) -> Result<(),String> {
 
     // Set up reporter (if existing)
     let mut reporter = if let Some(reporter_config) = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))? {
-        let mut r = ReportingModule::new_combined();
-        r.init(&reporter_config, &paths, &args)?;
-        r
+        let result = ReportingModule::new_combined(&reporter_config, &paths, &args);
+        match result {
+            Ok(mut module) => {
+                match module.init() {
+                    Ok(_) => module,
+                    Err(err) => {
+                        return Err(format!("Could not initialize combined reporter: {}", err));
+                    }
+                }
+            },
+            Err(err) => {
+                return Err(format!("Could not create combined reporter: {}", err));
+            }
+        }
     } else {
         ReportingModule::new_empty()
     };
 
     // Only actually does something if run, backup or sync
-    log_error!(reporter.report(None, args.operation.as_str()));
+    // TODO: Might solve this via RunType also
+    reporter.report_operation(OperationStatus::START(args.operation.clone()));
 
     let (do_backup, do_sync) = match args.operation.as_str() {
         "run" => Ok((true, true)),
@@ -47,11 +59,12 @@ pub fn main(args: Arguments) -> Result<(),String> {
     }?;
 
     let config_list = get_config_list(&args, paths.as_ref())?;
+    println!("Config list: {}", config_list.len());
     let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &reporter, do_backup, do_sync)?;
     let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
     let result = processor::process_configurations(&args, &reporter, scheduled, preprocessed.savedata);
 
-    log_error!(reporter.report(None, "done"));
+    reporter.report_operation(OperationStatus::DONE);
     log_error!(reporter.clear());
     return result;
 }

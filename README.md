@@ -53,7 +53,8 @@ such that the backup server is not started for each sync separately and can prof
 | -q, --quiet | yes | false | Disable info logging (Loglevel: Warn). |
 | -f, --force | yes | false | Disregard all constraints, forcing the run. |
 | -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes (duh!) and might affect the structure of the resulting backup. Not tested thoroughly. |
-| --no-reporting | yes | false | Disable reporting for this run. |    
+| --no-reporting | yes | false | Disable reporting for this run. |
+| --override-disabled, --run-disabled | yes | false | Ignore the disabled status on configurations. |
 
 ## Configuration
 ### Base configuration

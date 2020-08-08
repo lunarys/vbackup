@@ -90,7 +90,7 @@ pub fn preprocess(configurations: Vec<Configuration>,
         return Err(String::from("Preprocessor called for neither backup nor sync"));
     }
 
-    let without_disabled = filter_disabled(configurations, reporter);
+    let without_disabled = filter_disabled(configurations, reporter, args);
     let with_module_paths = load_module_paths(without_disabled, paths);
     let savedata = load_savedata(&with_module_paths, reporter);
     let split = flatten_processing_list(with_module_paths, do_backup, do_sync);
@@ -107,15 +107,20 @@ pub fn preprocess(configurations: Vec<Configuration>,
     });
 }
 
-fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingModule) -> Vec<ConfigurationSplit> {
+fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingModule, args: &Arguments) -> Vec<ConfigurationSplit> {
     // step 1
     //  filter disabled
     //  move to split
     return configurations.drain(..)
         .filter(|config| {
             if config.disabled {
-                info!("Configuration for '{}' is disabled, skipping run", config.name.as_str());
-                log_error!(reporter.report(Some(&["run", config.name.as_str()]), "disabled"));
+                if args.override_disabled {
+                    warn!("Configuration for '{}' is disabled, but will be executed due to the override argument", config.name.as_str());
+                    return true;
+                } else {
+                    info!("Configuration for '{}' is disabled, skipping run", config.name.as_str());
+                    log_error!(reporter.report(Some(&["run", config.name.as_str()]), "disabled"));
+                }
             }
 
             return !config.disabled;
@@ -124,16 +129,26 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingM
             ConfigurationSplit {
                 backup_config: config.backup.clone().filter(|backup| {
                     if backup.disabled {
-                        info!("Backup for '{}' is disabled, skipping run", config.name.as_str());
-                        log_error!(reporter.report(Some(&["backup", config.name.as_str()]), "disabled"));
+                        if args.override_disabled {
+                            warn!("Backup for '{}' is disabled, but will be executed due to the override argument", config.name.as_str());
+                            return true;
+                        } else {
+                            info!("Backup for '{}' is disabled, skipping run", config.name.as_str());
+                            log_error!(reporter.report(Some(&["backup", config.name.as_str()]), "disabled"));
+                        }
                     }
 
                     return !backup.disabled;
                 }),
                 sync_config: config.sync.clone().filter(|sync| {
                     if sync.disabled {
-                        info!("Sync for '{}' is disabled, skipping run", config.name.as_str());
-                        log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "disabled"));
+                        if args.override_disabled {
+                            warn!("Sync for '{}' is disabled, but will be executed due to the override argument", config.name.as_str());
+                            return true;
+                        } else {
+                            info!("Sync for '{}' is disabled, skipping run", config.name.as_str());
+                            log_error!(reporter.report(Some(&["sync", config.name.as_str()]), "disabled"));
+                        }
                     }
 
                     return !sync.disabled;

@@ -1,7 +1,7 @@
 use crate::modules::traits::Sync;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
-use crate::util::objects::paths::{ModulePaths};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
 use crate::Arguments;
 
 use crate::{dry_run};
@@ -86,7 +86,11 @@ impl Sync for Duplicati {
         command.arg_str("backup");
         command.arg_string(format!("{}", get_connection_uri(&self.config, &self.auth)));
         if self.no_docker {
-            command.arg_string(format!("{}", &self.paths.source));
+            if let SourcePath::Single(path) = &self.paths.source {
+                command.arg_string(path.clone());
+            } else {
+                return Err(String::from("Multiple source paths are not supported in duplicati module without docker"));
+            }
         } else {
             command.arg_str("/volume");
         }
@@ -162,7 +166,11 @@ impl Sync for Duplicati {
 
             command.arg_str("--restore-permission=true");
             if self.no_docker {
-                command.arg_string(format!("--restore-path={}", &self.paths.source));
+                if let SourcePath::Single(path) = &self.paths.source {
+                    command.arg_string(format!("--restore-path={}", path));
+                } else {
+                    return Err(String::from("Multiple source paths are not supported in duplicati module without docker"));
+                }
             } else {
                 command.arg_str("--restore-path=/volume");
             }
@@ -180,9 +188,6 @@ impl Sync for Duplicati {
 }
 
 fn get_base_cmd(no_docker: bool, paths: &ModulePaths) -> CommandWrapper {
-    let original_path= &paths.source;
-    let module_data = &paths.module_data_dir;
-
     if no_docker {
         return CommandWrapper::new("duplicati-cli");
     } else {
@@ -190,8 +195,8 @@ fn get_base_cmd(no_docker: bool, paths: &ModulePaths) -> CommandWrapper {
         command.arg_str("run")
             .arg_str("--rm")
             .arg_str("--name=vbackup-duplicati-tmp")
-            .arg_string(format!("--volume={}:/volume", original_path))
-            .arg_string(format!("--volume={}:/module", module_data))
+            .add_docker_volume_mapping(&paths.source, "volume")
+            .arg_string(format!("--volume={}:/module", &paths.module_data_dir))
             .arg_str("--env=AUTH_USERNAME")
             .arg_str("--env=AUTH_PASSWORD")
             .arg_str("--env=PASSPHRASE")

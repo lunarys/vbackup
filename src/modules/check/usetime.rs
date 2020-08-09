@@ -6,7 +6,7 @@ use crate::{try_result,dry_run};
 use serde_json::Value;
 use serde::{Deserialize};
 use crate::util::objects::time::{ExecutionTiming};
-use crate::util::objects::paths::{ModulePaths};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
 use crate::Arguments;
 
 pub struct Usetime {
@@ -74,7 +74,7 @@ impl Check for Usetime {
         debug!("Resetting usetime for server to zero");
 
         if self.dry_run {
-            dry_run!(format!("Writing usetime=0 to file '{}'", self.backupinfo_path()));
+            dry_run!(format!("Writing usetime=0 to file '{}'", self.backupinfo_path()?));
             return Ok(());
         } else {
             return self.reset_backupinfo(&backup_info);
@@ -87,12 +87,16 @@ impl Check for Usetime {
 }
 
 impl Usetime {
-    fn backupinfo_path(&self) -> String {
-        return format!("{}/{}", self.paths.source, self.config.backup_info);
+    fn backupinfo_path(&self) -> Result<String,String> {
+        if let SourcePath::Single(path) = &self.paths.source {
+            return Ok(format!("{}/{}", path, self.config.backup_info));
+        } else {
+            return Err(String::from("Multiple source paths are not supported in usetime check"));
+        }
     }
 
     fn read_backupinfo(&self) -> Result<BackupInfo, String> {
-        let file = self.backupinfo_path();
+        let file = self.backupinfo_path()?;
 
         // TODO: Currently does not handle missing backupinfo file properly (exit with error)
         let content = if self.no_docker {
@@ -149,7 +153,7 @@ impl Usetime {
     fn reset_backupinfo(&self, info: &BackupInfo) -> Result<(), String> {
         if self.no_docker {
             // Use the original value to reset the usetime
-            let file = self.backupinfo_path();
+            let file = self.backupinfo_path()?;
             let to_replace = format!("usetime={}", info.usetime);
             let content = info.file_content.replace(to_replace.as_str(), "usetime=0");
             return file::write(file.as_str(), content.as_str(), true);
@@ -157,7 +161,7 @@ impl Usetime {
             let mut cmd = CommandWrapper::new("docker");
             cmd.arg_str("run")
                 .arg_str("--rm")
-                .arg_string(format!("--volume={}:/volume", self.paths.source))
+                .add_docker_volume_mapping(&self.paths.source, "volume") // at this point source path is only single, as backupinfo is loaded before and fails otherwise
                 .arg_str("--name=vbackup-tmp")
                 .arg_str("alpine")
                 .arg_str("sh")

@@ -1,7 +1,7 @@
 use crate::util::io::{file,json};
 use crate::modules::reporting::{ReportingModule, ReportingRelay};
 use crate::util::objects::time::{TimeFrameReference};
-use crate::util::objects::paths::{Paths,PathBase,ModulePaths};
+use crate::util::objects::paths::{Paths,PathBase,ModulePaths,SourcePath};
 use crate::util::objects::configuration::Configuration;
 use crate::util::objects::reporting::{OperationStatus};
 use crate::processing::{preprocessor,scheduler,processor};
@@ -164,7 +164,18 @@ pub fn list(args: &Arguments, paths: &Rc<Paths>) -> Result<(), String> {
 
             // Only show more information if not disabled
             if !backup_config.disabled {
-                println!("     * Original data path: {}", backup_paths.source);
+                match backup_paths.source {
+                    SourcePath::Single(path) => {
+                        println!("     * Original data path: {}", path.as_str());
+                    },
+                    SourcePath::Multiple(paths) => {
+                        println!("     * Original data paths:");
+                        for path in paths {
+                            println!("       {}: {}", path.name, path.path);
+                        }
+                    }
+                }
+
                 println!("     * Backup data path:   {}", backup_paths.destination);
 
                 println!("     * Timeframes for backup:");
@@ -182,7 +193,17 @@ pub fn list(args: &Arguments, paths: &Rc<Paths>) -> Result<(), String> {
 
             // Only show more if not disabled
             if !sync_config.disabled {
-                println!("     * Path of synced data: {}", sync_paths.source);
+                match sync_paths.source {
+                    SourcePath::Single(path) => {
+                        println!("     * Path of synced data: {}", path.as_str());
+                    },
+                    SourcePath::Multiple(paths) => {
+                        println!("     * Path of synced data:");
+                        for path in paths {
+                            println!("       {}: {}", path.name, path.path);
+                        }
+                    }
+                }
 
                 println!("     * Interval for sync:");
                 print_timeframe_ref(&sync_config.interval, false);

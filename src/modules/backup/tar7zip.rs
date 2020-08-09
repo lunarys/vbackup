@@ -3,7 +3,7 @@ use crate::util::io::{json,savefile,file};
 use crate::util::command::CommandWrapper;
 use crate::util::docker;
 use crate::util::objects::time::{ExecutionTiming};
-use crate::util::objects::paths::{ModulePaths};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
 use crate::Arguments;
 
 use crate::{dry_run};
@@ -11,6 +11,7 @@ use crate::{dry_run};
 use serde_json::Value;
 use serde::{Deserialize};
 use std::fs::{copy, remove_file};
+use core::borrow::{Borrow};
 
 pub struct Tar7Zip {
     name: String,
@@ -58,7 +59,7 @@ impl Backup for Tar7Zip {
             let mut tmp = CommandWrapper::new("docker");
             tmp.arg_str("run")
                 .arg_str("--rm")
-                .arg_string(format!("--volume={}:/volume", self.paths.source))
+                .add_docker_volume_mapping(self.paths.source.borrow(), "volume")
                 .arg_string(format!("--volume={}:/savedir", self.paths.module_data_dir))
                 .arg_str("--env=ENCRYPTION_KEY")
                 .arg_str("--name=vbackup-tmp")
@@ -69,10 +70,14 @@ impl Backup for Tar7Zip {
         };
 
         // Relative path to backup (if docker is used)
-        let save_path = if self.no_docker {
-            self.paths.source.as_str()
+        let save_path = if let SourcePath::Single(path) = &self.paths.source {
+            if self.no_docker {
+                path.as_str()
+            } else {
+                "/volume"
+            }
         } else {
-            "/volume"
+            return Err(String::from("Multiple source paths are not supported in tar7zip module without docker"));
         };
 
         // File name for the temporary backup file

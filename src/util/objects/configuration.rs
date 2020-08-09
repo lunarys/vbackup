@@ -1,4 +1,5 @@
 use crate::util::objects::time::TimeFrameReference;
+use crate::util::objects::paths::SourcePath;
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -11,7 +12,7 @@ pub struct Configuration {
     pub disabled: bool,
     pub name: String,
     pub savedata_in_store: Option<bool>,
-    pub source_path: String,
+    pub source_path: SourcePath,
     pub backup_path: Option<String>,
     pub backup: Option<BackupConfiguration>,
     pub sync: Option<SyncConfiguration>

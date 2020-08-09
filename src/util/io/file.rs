@@ -1,10 +1,11 @@
 use crate::{try_result, bool_result};
 use crate::util::command::CommandWrapper;
+use crate::util::objects::paths::SourcePath;
 
 use std::process::{Command, Child, ExitStatus};
 use std::io::{Write, Read};
 use std::fs;
-use std::fs::{OpenOptions, File, read_dir, metadata, remove_file, rename};
+use std::fs::{OpenOptions, File, read_dir, remove_file, rename};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
@@ -160,7 +161,7 @@ pub fn list_in_dir(dir_name: &str) -> Result<Vec<PathBuf>, String> {
     return Ok(files);
 }
 
-pub fn size(path: &str, no_docker: bool) -> Result<u64,String> {
+pub fn size(path: &SourcePath, no_docker: bool) -> Result<u64,String> {
     // TODO: Not ideal as it relies on other tools
     let mut cmd = if no_docker {
         let mut tmp = CommandWrapper::new("sh");
@@ -171,7 +172,7 @@ pub fn size(path: &str, no_docker: bool) -> Result<u64,String> {
         tmp.arg_str("run")
             .arg_str("--rm")
             .arg_str("--name=vbackup-size-calc-tmp")
-            .arg_string(format!("--volume={}:/volume", path))
+            .add_docker_volume_mapping(path, "volume")
             .arg_str("alpine")
             .arg_str("sh")
             .arg_str("-c");
@@ -179,7 +180,11 @@ pub fn size(path: &str, no_docker: bool) -> Result<u64,String> {
     };
 
     let cmd_path = if no_docker {
-        path
+        if let SourcePath::Single(path) = path {
+            path.as_str()
+        } else {
+            return Err(String::from("Multiple source paths are not supported in file size checks without docker"));
+        }
     } else {
         "/volume"
     };
@@ -188,14 +193,4 @@ pub fn size(path: &str, no_docker: bool) -> Result<u64,String> {
 
     let output = cmd.run_get_output()?;
     return output.parse().map_err(|_| String::from("Could not parse size in bytes from command output"));
-}
-
-pub fn _size_checked(path: &str, no_docker: bool) -> Result<u64,String> {
-    let meta = try_result!(metadata(Path::new(path)), "Could not read metadata");
-
-    if meta.is_dir() {
-        return size(path, no_docker);
-    } else {
-        return Ok(meta.len());
-    }
 }

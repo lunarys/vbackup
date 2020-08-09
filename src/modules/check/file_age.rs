@@ -2,7 +2,7 @@ use crate::modules::traits::Check;
 use crate::{try_result,try_option,dry_run};
 use crate::util::command::CommandWrapper;
 use crate::util::objects::time::{ExecutionTiming};
-use crate::util::objects::paths::{ModulePaths};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
 use crate::Arguments;
 
 use serde_json::Value;
@@ -52,7 +52,7 @@ impl Check for FileAge {
             command.arg_str("run")
                 .arg_str("--rm")
                 .arg_str("--name=vbackup-check-fileage-tmp")
-                .arg_string(format!("--volume={}:/volume", check_path))
+                .add_docker_volume_mapping(check_path, "volume")
                 .arg_str("alpine")
                 .arg_str("sh")
                 .arg_str("-c");
@@ -60,7 +60,11 @@ impl Check for FileAge {
         };
 
         let search_path = if self.no_docker {
-            check_path.as_str()
+            if let SourcePath::Single(path) = check_path {
+                path.as_str()
+            } else {
+                return Err(String::from("Multiple source paths are not supported in file age check module without docker"));
+            }
         } else {
             "/volume"
         };

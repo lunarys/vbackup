@@ -1,3 +1,4 @@
+use crate::util::objects::paths::SourcePath;
 use crate::{change_error, try_result, dry_run};
 
 use std::process::{Command, Child, ExitStatus};
@@ -28,6 +29,21 @@ impl CommandWrapper {
         self.command.arg(&this);
         self.args.push(this);
         self
+    }
+
+    pub fn add_docker_volume_mapping(&mut self, source_path: &SourcePath, name: &str) -> &mut CommandWrapper {
+        match source_path {
+            SourcePath::Single(path) => {
+                self.arg_string(format!("--volume={}:/{}", path, name));
+            },
+            SourcePath::Multiple(paths) => {
+                for path in paths {
+                    self.arg_string(format!("--volume={}:/{}/{}", path.path, name, path.name));
+                }
+            }
+        }
+
+        return self;
     }
 
     pub fn env(&mut self, key: &str, value: &str) {

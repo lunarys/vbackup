@@ -3,6 +3,7 @@ use crate::modules::reporting::ReportingModule;
 use crate::util::io::file;
 use crate::util::objects::time::{SaveDataCollection};
 use crate::util::objects::reporting::{SizeType,RunType,Status};
+use crate::util::objects::paths::SourcePath;
 use crate::processing::backup::backup;
 use crate::processing::sync::sync;
 use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, SyncUnit, BackupUnit};
@@ -70,10 +71,10 @@ fn process_backup(config: &mut BackupUnit,
     result_reporter(RunType::BACKUP, result, config.config.name.borrow(), reporter);
 
     // Calculate and report the size of the original files
-    size_reporter(RunType::BACKUP, SizeType::ORIGINAL, original_path.as_str(), config.config.name.borrow(), reporter, args);
+    size_reporter(RunType::BACKUP, SizeType::ORIGINAL, original_path.borrow(), config.config.name.borrow(), reporter, args);
 
     // Calculate and report the size of the backup files
-    size_reporter(RunType::BACKUP, SizeType::BACKUP, store_path.as_str(), config.config.name.borrow(), reporter, args);
+    size_reporter(RunType::BACKUP, SizeType::BACKUP, &SourcePath::Single(store_path.clone()), config.config.name.borrow(), reporter, args);
 
     return Ok(());
 }
@@ -105,7 +106,7 @@ fn process_sync(config: &mut SyncUnit,
 
     // Calculate and report size of the synced files
     // TODO: Current implementation just takes the size of the local files...
-    size_reporter(RunType::SYNC, SizeType::SYNC, store_path.as_str(), config.config.name.borrow(), reporter, args);
+    size_reporter(RunType::SYNC, SizeType::SYNC, store_path.borrow(), config.config.name.borrow(), reporter, args);
 
     return Ok(());
 }
@@ -155,7 +156,7 @@ fn result_reporter(run_type: RunType,
 
 fn size_reporter(run_type: RunType,
                  directory_type: SizeType,
-                 path: &str,
+                 path: &SourcePath,
                  config_name: &String,
                  reporter: &ReportingModule,
                  args: &Arguments) {

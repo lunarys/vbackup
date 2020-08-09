@@ -2,7 +2,7 @@ use crate::modules::traits::Sync;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
-use crate::util::objects::paths::{ModulePaths};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
 use crate::Arguments;
 
 use serde_json::Value;
@@ -12,13 +12,18 @@ pub struct Rsync {
     _name: String,
     config: Configuration,
     ssh_config: SshConfig,
-    paths: ModulePaths,
-    sync_from: String,
-    sync_to: String,
+    module_paths: ModulePaths,
+    sync_paths: DockerPaths,
     dry_run: bool,
     no_docker: bool,
     verbose: bool,
     print_command: bool
+}
+
+struct DockerPaths {
+    volume: Option<SourcePath>,
+    from: String,
+    to: String
 }
 
 #[derive(Deserialize)]
@@ -50,9 +55,9 @@ struct SshConfig {
 impl Sync for Rsync {
     const MODULE_NAME: &'static str = "rsync-ssh";
 
-    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(name: &str, config_json: &Value, module_paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
-        let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths.as_ref())?;
+        let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
 
         let default_path_prefix = format!("/home/{}", ssh_config.user);
         let path_prefix = config.path_prefix.as_ref().unwrap_or(&default_path_prefix);
@@ -61,17 +66,37 @@ impl Sync for Rsync {
                                   ssh_config.hostname,
                                   path_prefix);
 
-        let (sync_from, sync_to) = if args.no_docker {
-            if config.to_remote {
-                (paths.source.clone(), remote_path)
+        let paths = if args.no_docker {
+            if let SourcePath::Single(source_path) = module_paths.source.clone() {
+                if config.to_remote {
+                    DockerPaths {
+                        volume: None,
+                        from: source_path,
+                        to: remote_path,
+                    }
+                } else {
+                    DockerPaths {
+                        volume: None,
+                        from: format!("{}/{}", remote_path, config.dirname),
+                        to: source_path,
+                    }
+                }
             } else {
-                (format!("{}/{}", remote_path, config.dirname), paths.source.clone())
+                return Err(String::from("Multiple source paths are not supported in rsync module without docker"));
             }
         } else {
             if config.to_remote {
-                (format!("/{}", config.dirname), remote_path)
+                DockerPaths {
+                    volume: Some(module_paths.source.clone()),
+                    from: format!("/{}", config.dirname),
+                    to: remote_path
+                }
             } else {
-                (format!("{}/{}", remote_path, config.dirname), String::from("/"))
+                DockerPaths {
+                    volume: Some(module_paths.source.clone()),
+                    from: format!("{}/{}", remote_path, config.dirname),
+                    to: String::from("/")
+                }
             }
         };
 
@@ -79,9 +104,8 @@ impl Sync for Rsync {
             _name: String::from(name),
             config,
             ssh_config,
-            paths,
-            sync_from,
-            sync_to,
+            module_paths,
+            sync_paths: paths,
             dry_run: args.dry_run,
             no_docker: args.no_docker,
             verbose: args.verbose,
@@ -91,15 +115,15 @@ impl Sync for Rsync {
 
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image if missing
-        docker::build_image_if_missing(&self.paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
+        docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
         return Ok(());
     }
 
     fn sync(&self) -> Result<(), String> {
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("{}", &self.sync_from))
-            .arg_string(format!("{}", &self.sync_to));
+        command.arg_string(format!("{}", &self.sync_paths.from))
+            .arg_string(format!("{}", &self.sync_paths.to));
 
         command.run_configuration(self.print_command, self.dry_run)?;
 
@@ -109,8 +133,8 @@ impl Sync for Rsync {
     fn restore(&self) -> Result<(), String> {
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("{}", &self.sync_to))
-            .arg_string(format!("{}", &self.sync_from));
+        command.arg_string(format!("{}", &self.sync_paths.to))
+            .arg_string(format!("{}", &self.sync_paths.from));
 
         command.run_configuration(self.print_command, self.dry_run)?;
 
@@ -125,11 +149,11 @@ impl Sync for Rsync {
 impl Rsync {
     fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
         if !self.dry_run {
-            file::create_dir_if_missing(self.paths.module_data_dir.as_str(), true)?;
+            file::create_dir_if_missing(self.module_paths.module_data_dir.as_str(), true)?;
         }
 
-        let known_hosts_file_actual = format!("{}/known_host", &self.paths.module_data_dir);
-        let identity_file_actual = format!("{}/identity", &self.paths.module_data_dir);
+        let known_hosts_file_actual = format!("{}/known_host", &self.module_paths.module_data_dir);
+        let identity_file_actual = format!("{}/identity", &self.module_paths.module_data_dir);
 
         // Known host is required anyway, write it now
         if !self.dry_run {
@@ -147,18 +171,18 @@ impl Rsync {
         };
 
         // Distinguish run in docker and directly on the machine
-        let mut command = if self.no_docker {
-            CommandWrapper::new("rsync")
-        } else {
+        let mut command = if let Some(docker_paths) = self.sync_paths.volume.as_ref() {
             let mut command = CommandWrapper::new("docker");
             command.arg_str("run")
                 .arg_str("--rm")
                 .arg_str("--name=rsync-vbackup-tmp")
-                .arg_str("--env=SSHPASS")
-                .arg_string(format!("--volume={}:/{}", &self.paths.source, &self.config.dirname));
+                .arg_str("--env=SSHPASS");
+
+            // Volume(s) for the source files
+            command.add_docker_volume_mapping(docker_paths, &self.config.dirname);
 
             // Volume for authentication files
-            command.arg_string(format!("--volume={}:{}", &self.paths.module_data_dir, "/module"));
+            command.arg_string(format!("--volume={}:{}", &self.module_paths.module_data_dir, "/module"));
 
             // End docker command
             command.arg_str("vbackup-rsync"); // Docker image name
@@ -166,6 +190,8 @@ impl Rsync {
             // Start rsync command
             command.arg_str("rsync");
             command
+        } else {
+            CommandWrapper::new("rsync")
         };
 
         // Authentication: password or private key

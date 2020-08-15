@@ -70,14 +70,14 @@ impl Backup for Tar7Zip {
         };
 
         // Relative path to backup (if docker is used)
-        let save_path = if let SourcePath::Single(path) = &self.paths.source {
-            if self.no_docker {
+        let save_path = if self.no_docker {
+            if let SourcePath::Single(path) = &self.paths.source {
                 path.as_str()
             } else {
-                "/volume"
+                return Err(String::from("Multiple source paths are not supported in tar7zip module without docker"));
             }
         } else {
-            return Err(String::from("Multiple source paths are not supported in tar7zip module without docker"));
+            "/volume"
         };
 
         // File name for the temporary backup file

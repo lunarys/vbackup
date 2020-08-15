@@ -1,29 +1,29 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::{ModulePaths,Arguments};
 use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
-
-use crate::{try_option};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
+use crate::Arguments;
 
 use serde_json::Value;
 use serde::{Deserialize};
 
-pub struct Rsync<'a> {
-    bind: Option<Bind<'a>>
-}
-
-struct Bind<'a> {
+pub struct Rsync {
     _name: String,
     config: Configuration,
     ssh_config: SshConfig,
-    paths: ModulePaths<'a>,
-    sync_from: String,
-    sync_to: String,
+    module_paths: ModulePaths,
+    sync_paths: DockerPaths,
     dry_run: bool,
     no_docker: bool,
     verbose: bool,
     print_command: bool
+}
+
+struct DockerPaths {
+    volume: Option<SourcePath>,
+    from: String,
+    to: String
 }
 
 #[derive(Deserialize)]
@@ -52,25 +52,12 @@ struct SshConfig {
     host_key: String // SSH public key of host
 }
 
-impl<'a> Rsync<'a> {
-    pub fn new_empty() -> Self {
-        return Rsync { bind: None }
-    }
-}
+impl Sync for Rsync {
+    const MODULE_NAME: &'static str = "rsync-ssh";
 
-impl<'a> Sync<'a> for Rsync<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Sync module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
-        // Build local docker image if missing
-        docker::build_image_if_missing(&paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
-
+    fn new(name: &str, config_json: &Value, module_paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
-        let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths)?;
+        let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
 
         let default_path_prefix = format!("/home/{}", ssh_config.user);
         let path_prefix = config.path_prefix.as_ref().unwrap_or(&default_path_prefix);
@@ -79,107 +66,123 @@ impl<'a> Sync<'a> for Rsync<'a> {
                                   ssh_config.hostname,
                                   path_prefix);
 
-        let (sync_from, sync_to) = if args.no_docker {
-            if config.to_remote {
-                (paths.source.clone(), remote_path)
+        let paths = if args.no_docker {
+            if let SourcePath::Single(source_path) = module_paths.source.clone() {
+                if config.to_remote {
+                    DockerPaths {
+                        volume: None,
+                        from: source_path,
+                        to: remote_path,
+                    }
+                } else {
+                    DockerPaths {
+                        volume: None,
+                        from: format!("{}/{}", remote_path, config.dirname),
+                        to: source_path,
+                    }
+                }
             } else {
-                (format!("{}/{}", remote_path, config.dirname), paths.source.clone())
+                return Err(String::from("Multiple source paths are not supported in rsync module without docker"));
             }
         } else {
             if config.to_remote {
-                (format!("/{}", config.dirname), remote_path)
+                DockerPaths {
+                    volume: Some(module_paths.source.clone()),
+                    from: format!("/{}", config.dirname),
+                    to: remote_path
+                }
             } else {
-                (format!("{}/{}", remote_path, config.dirname), String::from("/"))
+                DockerPaths {
+                    volume: Some(module_paths.source.clone()),
+                    from: format!("{}/{}", remote_path, config.dirname),
+                    to: String::from("/")
+                }
             }
         };
 
-        self.bind = Some(Bind {
+        return Ok(Box::new(Self {
             _name: String::from(name),
             config,
             ssh_config,
-            paths,
-            sync_from,
-            sync_to,
+            module_paths,
+            sync_paths: paths,
             dry_run: args.dry_run,
             no_docker: args.no_docker,
             verbose: args.verbose,
             print_command: args.debug || args.verbose
-        });
+        }));
+    }
 
+    fn init(&mut self) -> Result<(), String> {
+        // Build local docker image if missing
+        docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
         return Ok(());
     }
 
     fn sync(&self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Rsync sync is not bound, it can not be used for syncing");
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("{}", &bound.sync_from))
-            .arg_string(format!("{}", &bound.sync_to));
+        command.arg_string(format!("{}", &self.sync_paths.from))
+            .arg_string(format!("{}", &self.sync_paths.to));
 
-        command.run_configuration(bound.print_command, bound.dry_run)?;
+        command.run_configuration(self.print_command, self.dry_run)?;
 
         return Ok(());
     }
 
     fn restore(&self) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Rsync is not bound, it can not be used for restoring");
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("{}", &bound.sync_to))
-            .arg_string(format!("{}", &bound.sync_from));
+        command.arg_string(format!("{}", &self.sync_paths.to))
+            .arg_string(format!("{}", &self.sync_paths.from));
 
-        command.run_configuration(bound.print_command, bound.dry_run)?;
+        command.run_configuration(self.print_command, self.dry_run)?;
 
         return Ok(());
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let _bound = try_option!(self.bind.as_ref(), "Rsync is not bound, thus it can not be cleared");
-
-        self.bind = None;
         return Ok(());
     }
 }
 
-impl<'a> Rsync<'a> {
+impl Rsync {
     fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
-        let bound = try_option!(self.bind.as_ref(), "Rsync is not bound");
-
-        if !bound.dry_run {
-            file::create_dir_if_missing(bound.paths.module_data_dir.as_str(), true)?;
+        if !self.dry_run {
+            file::create_dir_if_missing(self.module_paths.module_data_dir.as_str(), true)?;
         }
 
-        let known_hosts_file_actual = format!("{}/known_host", &bound.paths.module_data_dir);
-        let identity_file_actual = format!("{}/identity", &bound.paths.module_data_dir);
+        let known_hosts_file_actual = format!("{}/known_host", &self.module_paths.module_data_dir);
+        let identity_file_actual = format!("{}/identity", &self.module_paths.module_data_dir);
 
         // Known host is required anyway, write it now
-        if !bound.dry_run {
+        if !self.dry_run {
             file::write_if_change(&known_hosts_file_actual,
                                   Some("600"),
-                                  &bound.ssh_config.host_key,
+                                  &self.ssh_config.host_key,
                                   true)?;
         }
 
         // Store path of known_host and identity relative to docker
-        let (known_host_file, identity_file) = if bound.no_docker {
+        let (known_host_file, identity_file) = if self.no_docker {
             (known_hosts_file_actual.as_str(), identity_file_actual.as_str())
         } else {
             ("/module/known_host", "/module/identity")
         };
 
         // Distinguish run in docker and directly on the machine
-        let mut command = if bound.no_docker {
-            CommandWrapper::new("rsync")
-        } else {
+        let mut command = if let Some(docker_paths) = self.sync_paths.volume.as_ref() {
             let mut command = CommandWrapper::new("docker");
             command.arg_str("run")
                 .arg_str("--rm")
                 .arg_str("--name=rsync-vbackup-tmp")
-                .arg_str("--env=SSHPASS")
-                .arg_string(format!("--volume={}:/{}", &bound.paths.source, &bound.config.dirname));
+                .arg_str("--env=SSHPASS");
+
+            // Volume(s) for the source files
+            command.add_docker_volume_mapping(docker_paths, &self.config.dirname);
 
             // Volume for authentication files
-            command.arg_string(format!("--volume={}:{}", &bound.paths.module_data_dir, "/module"));
+            command.arg_string(format!("--volume={}:{}", &self.module_paths.module_data_dir, "/module"));
 
             // End docker command
             command.arg_str("vbackup-rsync"); // Docker image name
@@ -187,26 +190,28 @@ impl<'a> Rsync<'a> {
             // Start rsync command
             command.arg_str("rsync");
             command
+        } else {
+            CommandWrapper::new("rsync")
         };
 
         // Authentication: password or private key
         command.arg_str("-e");
-        let ssh_option_end = format!("-oUserKnownHostsFile={} -oCheckHostIp=no -p {}", known_host_file, bound.ssh_config.port);
-        if bound.ssh_config.ssh_key.is_some() {
+        let ssh_option_end = format!("-oUserKnownHostsFile={} -oCheckHostIp=no -p {}", known_host_file, self.ssh_config.port);
+        if self.ssh_config.ssh_key.is_some() {
             // SSH private key needs to be written to a file
-            if !bound.dry_run {
+            if !self.dry_run {
                 file::write_if_change(&identity_file_actual,
                                       Some("600"),
-                                      bound.ssh_config.ssh_key.as_ref().unwrap(),
+                                      self.ssh_config.ssh_key.as_ref().unwrap(),
                                       true)?;
             }
 
             // Now it can be used in the command
             command.arg_string(format!("ssh -oIdentityFile={} {}", identity_file, ssh_option_end));
-        } else if bound.ssh_config.password.is_some() {
+        } else if self.ssh_config.password.is_some() {
             // Use sshpass to read password as environment variable
             command.arg_string(format!("sshpass -e ssh {}", ssh_option_end));
-            command.env("SSHPASS", bound.ssh_config.password.as_ref().unwrap());
+            command.env("SSHPASS", self.ssh_config.password.as_ref().unwrap());
         }
 
         // Default sync options
@@ -216,20 +221,20 @@ impl<'a> Rsync<'a> {
 
         // TODO: Create an option for this?
         // Set file permissions for receiving end
-        if bound.config.to_remote {
+        if self.config.to_remote {
             command.arg_str("--chmod=ug=rwX,o-rwx");
             command.arg_str("--perms");
         }
 
-        if bound.config.compress {
+        if self.config.compress {
             command.arg_str("--compress");
         }
 
-        if bound.dry_run {
+        if self.dry_run {
             command.arg_str("--dry-run");
         }
 
-        if bound.verbose {
+        if self.verbose {
             command.arg_str("--verbose");
         }
 

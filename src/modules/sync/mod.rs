@@ -1,56 +1,80 @@
 use crate::modules::traits::Sync;
-use crate::modules::object::{ModulePaths,Arguments};
+use crate::util::objects::paths::{ModulePaths};
+use crate::Arguments;
 
 use serde_json::Value;
 
 mod duplicati;
 mod rsync;
 
-pub enum SyncModule<'a> {
-    Duplicati(duplicati::Duplicati<'a>),
-    Rsync(rsync::Rsync<'a>)
+pub struct SyncModule {
+    module: Box<dyn SyncRelay>
 }
 
-use SyncModule::*;
-
-pub fn get_module(name: &str) -> Result<SyncModule,String> {
-    return Ok(match name.to_lowercase().as_str() {
-        "duplicati" => Duplicati(duplicati::Duplicati::new_empty()),
-        "rsync-ssh" => Rsync(rsync::Rsync::new_empty()),
-        unknown => {
-            let msg = format!("Unknown sync module: '{}'", unknown);
-            error!("{}", msg);
-            return Err(msg)
-        }
-    })
-}
-
-impl<'a> Sync<'a> for SyncModule<'a> {
-    fn init<'b: 'a>(&mut self, name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
-        return match self {
-            Duplicati(sync) => sync.init(name, config_json, paths, args),
-            Rsync(sync) => sync.init(name, config_json, paths, args)
+impl SyncModule {
+    pub fn new(sync_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
+        let module: Box<dyn SyncRelay> = match sync_type.to_lowercase().as_str() {
+            duplicati::Duplicati::MODULE_NAME => duplicati::Duplicati::new(name, config_json, paths, args)?,
+            rsync::Rsync::MODULE_NAME => rsync::Rsync::new(name, config_json, paths, args)?,
+            unknown => {
+                let msg = format!("Unknown sync module: '{}'", unknown);
+                error!("{}", msg);
+                return Err(msg)
+            }
         };
+
+        return Ok(SyncModule { module } );
+    }
+}
+
+impl SyncRelay for SyncModule {
+    fn init(&mut self) -> Result<(), String> {
+        self.module.init()
     }
 
     fn sync(&self) -> Result<(), String> {
-        return match self {
-            Duplicati(sync) => sync.sync(),
-            Rsync(sync) => sync.sync()
-        }
+        self.module.sync()
     }
 
     fn restore(&self) -> Result<(), String> {
-        return match self {
-            Duplicati(sync) => sync.restore(),
-            Rsync(sync) => sync.restore()
-        }
+        self.module.restore()
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        return match self {
-            Duplicati(sync) => sync.clear(),
-            Rsync(sync) => sync.clear()
-        }
+        self.module.clear()
+    }
+
+    fn get_module_name(&self) -> &str {
+        self.module.get_module_name()
+    }
+}
+
+pub trait SyncRelay {
+    fn init(&mut self) -> Result<(), String>;
+    fn sync(&self) -> Result<(), String>;
+    fn restore(&self) -> Result<(), String>;
+    fn clear(&mut self) -> Result<(), String>;
+    fn get_module_name(&self) -> &str;
+}
+
+impl<T: Sync> SyncRelay for T {
+    fn init(&mut self) -> Result<(), String> {
+        Sync::init(self)
+    }
+
+    fn sync(&self) -> Result<(), String> {
+        Sync::sync(self)
+    }
+
+    fn restore(&self) -> Result<(), String> {
+        Sync::restore(self)
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        Sync::clear(self)
+    }
+
+    fn get_module_name(&self) -> &str {
+        Sync::get_module_name(self)
     }
 }

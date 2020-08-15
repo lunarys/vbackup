@@ -1,20 +1,17 @@
 use crate::modules::traits::Check;
-use crate::modules::object::*;
 use crate::util::command::CommandWrapper;
 use crate::util::io::{json,file};
-use crate::{try_option,try_result,dry_run};
+use crate::{try_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use chrono::{Local, DateTime};
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
+use crate::Arguments;
 
-pub struct Usetime<'a> {
-    bind: Option<Bind<'a>>
-}
-
-struct Bind<'a> {
+pub struct Usetime {
     config: Configuration,
-    paths: ModulePaths<'a>,
+    paths: ModulePaths,
     dry_run: bool,
     no_docker: bool
 }
@@ -35,38 +32,28 @@ fn relative_backup_info() -> String {
     return String::from("backupinfo/props.info");
 }
 
-impl<'a> Usetime<'a> {
-    pub fn new_empty() -> Self {
-        return Self { bind: None };
-    }
-}
+impl Check for Usetime {
+    const MODULE_NAME: &'static str = "usetime";
 
-impl<'a> Check<'a> for Usetime<'a> {
-    fn init<'b: 'a>(&mut self, _name: &str, config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Check module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
+    fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
 
-        self.bind = Some(Bind {
+        return Ok(Box::new(Self {
             config,
             paths,
             dry_run: args.dry_run,
             no_docker: args.no_docker
-        });
+        }));
+    }
 
+    fn init(&mut self) -> Result<(), String> {
         return Ok(());
     }
 
-    fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
-        let bound = try_option!(self.bind.as_ref(), "Check is not bound");
-
-        if last.is_some() {
-            let backup_info = read_backupinfo(bound)?;
-            let test_result = bound.config.targeted_usetime < backup_info.usetime;
+    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
+        if timing.last_run.is_some() {
+            let backup_info = self.read_backupinfo()?;
+            let test_result = self.config.targeted_usetime < backup_info.usetime;
 
             if test_result {
                 debug!("Usetime for server is larger than targeted usetime");
@@ -81,103 +68,106 @@ impl<'a> Check<'a> for Usetime<'a> {
         }
     }
 
-    fn update(&self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
-        let bound = try_option!(self.bind.as_ref(), "Check is not bound");
-        let backup_info = read_backupinfo(bound)?;
+    fn update(&mut self, _timing: &ExecutionTiming) -> Result<(), String> {
+        let backup_info = self.read_backupinfo()?;
 
         debug!("Resetting usetime for server to zero");
 
-        if bound.dry_run {
-            dry_run!(format!("Writing usetime=0 to file '{}'", backupinfo_path(bound)));
+        if self.dry_run {
+            dry_run!(format!("Writing usetime=0 to file '{}'", self.backupinfo_path()?));
             return Ok(());
         } else {
-            return reset_backupinfo(bound, &backup_info);
+            return self.reset_backupinfo(&backup_info);
         }
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        try_option!(self.bind.as_ref(), "Check is not bound, thus it can not be cleared");
-        self.bind = None;
         return Ok(());
     }
 }
 
-fn backupinfo_path(bind: &Bind) -> String {
-    return format!("{}/{}", bind.paths.source, bind.config.backup_info);
-}
-
-fn read_backupinfo(bind: &Bind) -> Result<BackupInfo, String> {
-    let file = backupinfo_path(bind);
-
-    // TODO: Currently does not handle missing backupinfo file properly (exit with error)
-    let content = if bind.no_docker {
-        file::read(file.as_str())?
-    } else {
-        let mut cmd = CommandWrapper::new("docker");
-        cmd.arg_str("run")
-            .arg_str("--rm")
-            .arg_string(format!("--volume={}:/file", file))
-            .arg_str("--name=vbackup-tmp")
-            .arg_str("alpine")
-            .arg_str("sh")
-            .arg_str("-c");
-        cmd.arg_str("cat /file");
-
-        if bind.dry_run {
-            dry_run!(cmd.to_string());
-        }
-
-        cmd.run_get_output()?
-    };
-
-    let mut usetime: Option<i64> = None;
-    for line in content.split("\n") {
-        let separator_option = line.find("=");
-        if separator_option.is_none() {
-            continue;
+impl Usetime {
+    fn backupinfo_path(&self) -> Result<String,String> {
+        if let SourcePath::Single(path) = &self.paths.source {
+            return Ok(format!("{}/{}", path, self.config.backup_info));
         } else {
-            let (key,value_tmp): (&str, &str) = line.split_at(separator_option.unwrap());
-            let value = if value_tmp.starts_with("=") {
-                let (_, tmp) = value_tmp.split_at(1);
-                tmp
-            } else {
-                value_tmp
-            };
-            match key.to_lowercase().as_str() {
-                "usetime" => {
-                    debug!("Value for usetime: {}", value);
-                    usetime = Some(try_result!(value.parse(), "Could not parse usetime for minecraft server"))
-                }
-                _ => ()
-            }
+            return Err(String::from("Multiple source paths are not supported in usetime check"));
         }
     }
 
-    let result = BackupInfo {
-        usetime: usetime.unwrap_or(0),
-        file_content: content
-    };
+    fn read_backupinfo(&self) -> Result<BackupInfo, String> {
+        let file = self.backupinfo_path()?;
 
-    return Ok(result);
-}
+        // TODO: Currently does not handle missing backupinfo file properly (exit with error)
+        let content = if self.no_docker {
+            file::read(file.as_str())?
+        } else {
+            let mut cmd = CommandWrapper::new("docker");
+            cmd.arg_str("run")
+                .arg_str("--rm")
+                .arg_string(format!("--volume={}:/file", file))
+                .arg_str("--name=vbackup-tmp")
+                .arg_str("alpine")
+                .arg_str("sh")
+                .arg_str("-c");
+            cmd.arg_str("cat /file");
 
-fn reset_backupinfo(bind: &Bind, info: &BackupInfo) -> Result<(), String> {
-    if bind.no_docker {
-        // Use the original value to reset the usetime
-        let file = backupinfo_path(bind);
-        let to_replace = format!("usetime={}", info.usetime);
-        let content = info.file_content.replace(to_replace.as_str(), "usetime=0");
-        return file::write(file.as_str(), content.as_str(), true);
-    } else {
-        let mut cmd = CommandWrapper::new("docker");
-        cmd.arg_str("run")
-            .arg_str("--rm")
-            .arg_string(format!("--volume={}:/volume", bind.paths.source))
-            .arg_str("--name=vbackup-tmp")
-            .arg_str("alpine")
-            .arg_str("sh")
-            .arg_str("-c");
-        cmd.arg_string(format!("sed -i 's/usetime=.*/usetime=0/g' /volume/{}", bind.config.backup_info));
-        return cmd.run();
+            if self.dry_run {
+                dry_run!(cmd.to_string());
+            }
+
+            cmd.run_get_output()?
+        };
+
+        let mut usetime: Option<i64> = None;
+        for line in content.split("\n") {
+            let separator_option = line.find("=");
+            if separator_option.is_none() {
+                continue;
+            } else {
+                let (key, value_tmp): (&str, &str) = line.split_at(separator_option.unwrap());
+                let value = if value_tmp.starts_with("=") {
+                    let (_, tmp) = value_tmp.split_at(1);
+                    tmp
+                } else {
+                    value_tmp
+                };
+                match key.to_lowercase().as_str() {
+                    "usetime" => {
+                        debug!("Value for usetime: {}", value);
+                        usetime = Some(try_result!(value.parse(), "Could not parse usetime for minecraft server"))
+                    }
+                    _ => ()
+                }
+            }
+        }
+
+        let result = BackupInfo {
+            usetime: usetime.unwrap_or(0),
+            file_content: content
+        };
+
+        return Ok(result);
+    }
+
+    fn reset_backupinfo(&self, info: &BackupInfo) -> Result<(), String> {
+        if self.no_docker {
+            // Use the original value to reset the usetime
+            let file = self.backupinfo_path()?;
+            let to_replace = format!("usetime={}", info.usetime);
+            let content = info.file_content.replace(to_replace.as_str(), "usetime=0");
+            return file::write(file.as_str(), content.as_str(), true);
+        } else {
+            let mut cmd = CommandWrapper::new("docker");
+            cmd.arg_str("run")
+                .arg_str("--rm")
+                .add_docker_volume_mapping(&self.paths.source, "volume") // at this point source path is only single, as backupinfo is loaded before and fails otherwise
+                .arg_str("--name=vbackup-tmp")
+                .arg_str("alpine")
+                .arg_str("sh")
+                .arg_str("-c");
+            cmd.arg_string(format!("sed -i 's/usetime=.*/usetime=0/g' /volume/{}", self.config.backup_info));
+            return cmd.run();
+        }
     }
 }

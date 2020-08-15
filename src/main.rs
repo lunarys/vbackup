@@ -7,7 +7,9 @@ extern crate serde_derive;
 extern crate chrono;
 extern crate glob;
 extern crate fs2;
+extern crate ping;
 
+mod processing;
 mod vbackup;
 mod modules;
 mod util;
@@ -18,9 +20,24 @@ use std::fs::OpenOptions;
 use fs2::FileExt;
 use std::os::unix::fs::OpenOptionsExt;
 
-use crate::modules::object::Arguments;
 use std::process::exit;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
+use serde::{Deserialize};
+
+#[derive(Deserialize)]
+pub struct Arguments {
+    pub operation: String,
+    pub dry_run: bool,
+    pub verbose: bool,
+    pub debug: bool,
+    pub quiet: bool,
+    pub force: bool,
+    pub name: Option<String>,
+    pub base_config: String,
+    pub no_docker: bool,
+    pub no_reporting: bool,
+    pub override_disabled: bool
+}
 
 fn main() {
     let mut args = Arguments {
@@ -33,7 +50,8 @@ fn main() {
         name: None,
         base_config: String::from("/etc/vbackup/config.json"),
         no_docker: false,
-        no_reporting: false
+        no_reporting: false,
+        override_disabled: false
     };
 
     {
@@ -60,6 +78,8 @@ fn main() {
             .add_option(&["-b", "--bare", "--no-docker"], StoreTrue, "'Bare' run without using docker");
         parser.refer(&mut args.no_reporting)
             .add_option(&["--no-reporting"], StoreTrue, "Disable reporting for this run");
+        parser.refer(&mut args.override_disabled)
+            .add_option(&["--override-disabled", "--run-disabled"], StoreTrue, "Ignore the disabled status on configurations");
         parser.parse_args_or_exit();
     }
 

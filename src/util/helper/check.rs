@@ -1,20 +1,27 @@
-use crate::modules::check;
-use crate::modules::object::{Arguments, Paths, Configuration, TimeEntry, TimeFrame};
-use crate::modules::check::CheckModule;
-use crate::modules::traits::Check;
+use crate::modules::check::{CheckModule,CheckRelay};
 use crate::modules::check::Reference;
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{Paths,ModulePaths};
+use crate::util::objects::configuration::Configuration;
 use crate::try_option;
+use crate::Arguments;
 
 use serde_json::Value;
-use chrono::{DateTime, Local};
+use std::rc::Rc;
 
-pub fn init<'a>(args: &Arguments, paths: &'a Paths, config: &Configuration, check_config: &'a Option<Value>, reference: Reference) -> Result<Option<CheckModule<'a>>,String> {
+pub fn init(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, check_config: &Option<Value>, reference: Reference) -> Result<Option<CheckModule>,String> {
     if check_config.is_some() {
         let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
-        let module_paths = paths.for_check_module("check", &config, reference);
+        let module_paths = ModulePaths::for_check_module(paths, "check", &config, reference);
 
-        let mut module = check::get_module(try_option!(check_type.as_str(), "Expected controller type as string"))?;
-        module.init(config.name.as_str(), check_config.as_ref().unwrap(), module_paths, args)?;
+        let mut module = CheckModule::new(
+            try_option!(check_type.as_str(), "Expected check type as string"),
+            config.name.as_str(),
+            check_config.as_ref().unwrap(),
+            module_paths,
+            args
+        )?;
+        module.init()?;
 
         return Ok(Some(module));
     } else {
@@ -22,9 +29,9 @@ pub fn init<'a>(args: &Arguments, paths: &'a Paths, config: &Configuration, chec
     }
 }
 
-pub fn run(module: &Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool,String> {
+pub fn run(module: &Option<CheckModule>, timing: &ExecutionTiming) -> Result<bool,String> {
     if module.is_some() {
-        let result = module.as_ref().unwrap().check(time, frame, last)?;
+        let result = module.as_ref().unwrap().check(timing)?;
         /*if result {
             debug!("TODO: check_helper debug");
         } else {
@@ -36,9 +43,9 @@ pub fn run(module: &Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFra
     return Ok(true);
 }
 
-pub fn update(module: &Option<CheckModule>, time: &DateTime<Local>, frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<(),String> {
+pub fn update(module: &mut Option<CheckModule>, timing: &ExecutionTiming) -> Result<(),String> {
     if module.is_some() {
-        module.as_ref().unwrap().update(time, frame, last)?;
+        module.as_mut().unwrap().update(timing)?;
     }
 
     return Ok(());

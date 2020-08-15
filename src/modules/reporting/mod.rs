@@ -1,141 +1,125 @@
 use crate::modules::traits::Reporting;
-use crate::modules::object::{Paths,Arguments};
-
-use crate::try_option;
+use crate::util::objects::paths::{Paths};
+use crate::util::objects::reporting::*;
+use crate::Arguments;
+use crate::{log_error};
 
 use serde_json::Value;
 
 mod mqtt;
 
-pub enum ReportingModule {
-    Combined(Reporter),
-    Mqtt(mqtt::Reporter),
-    Empty // ?
+pub struct ReportingModule {
+    modules: Vec<Box<dyn ReportingRelay>>
 }
 
-use ReportingModule::*;
 use std::ops::Add;
-
-fn get_module(name: &str) -> Result<ReportingModule, String> {
-    return Ok(match name.to_lowercase().as_str() {
-        "mqtt" => Mqtt(mqtt::Reporter::new_empty()),
-        unknown => {
-            let msg = format!("Unknown controller module: '{}'", unknown);
-            error!("{}", msg);
-            return Err(msg)
-        }
-    })
-}
+use std::rc::Rc;
 
 impl ReportingModule {
-    pub fn new_combined() -> ReportingModule {
-        return ReportingModule::Combined(Reporter::new_empty());
-    }
-
-    pub fn new_empty() -> ReportingModule {
-        return ReportingModule::Empty;
-    }
-}
-
-impl Reporting for ReportingModule {
-    fn init(&mut self, config_json: &Value, paths: &Paths, args: &Arguments) -> Result<(), String> {
-        return match self {
-            Combined(reporter) => reporter.init(config_json, paths, args),
-            Mqtt(reporter) => reporter.init(config_json, paths, args),
-            Empty => Ok(())
-        }
-    }
-
-    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(), String> {
-        return match self {
-            Combined(reporter) => reporter.report(context, value),
-            Mqtt(reporter) => reporter.report(context, value),
-            Empty => Ok(())
-        }
-    }
-
-    fn clear(&mut self) -> Result<(), String> {
-        return match self {
-            Combined(reporter) => reporter.clear(),
-            Mqtt(reporter) => reporter.clear(),
-            Empty => Ok(())
-        }
-    }
-}
-
-pub struct Reporter {
-    bind: Option<Bind>
-}
-
-struct Bind {
-    modules: Vec<ReportingModule>
-}
-
-impl Reporter {
-    pub fn new_empty() -> Reporter {
-        return Reporter{ bind: None };
-    }
-}
-
-impl Reporting for Reporter {
-    fn init(&mut self, config_json: &Value, paths: &Paths, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Reporting module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
+    pub fn new_combined(config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<ReportingModule,String> {
         let array = if let Some(array) = config_json.as_array() {
             let mut vec = vec![];
             for value in array {
-                vec.push(value)
+                vec.push(value);
             }
             vec
         } else {
             vec![config_json]
         };
 
-        let result = array.iter().map(|value| {
+        let mut modules: Vec<Result<Box<dyn ReportingRelay>, String>> = vec![];
+
+        for (index,value) in array.iter().enumerate() {
+            let mut parser_error = false;
             if let Some(reporter) = value.get("type") {
                 if reporter.is_string() {
-                    let mut result = get_module(reporter.as_str().unwrap())?;
-                    result.init(*value, paths, args)?;
-                    return Ok(result);
+                    if let Some(name) = reporter.as_str() {
+                        match name.to_lowercase().as_str() {
+                            mqtt::Reporter::MODULE_NAME => {
+                                modules.push(mqtt::Reporter::new(value, paths, args)
+                                    .map(|boxed| boxed as Box<dyn ReportingRelay>)
+                                    .map_err(|err| format!("Error in reporter {}: {}", index, err)));
+                            },
+                            unknown => {
+                                let msg = format!("Unknown controller module at position {}: '{}'... Skipping this one", index, unknown);
+                                error!("{}", msg);
+                                return Err(msg);
+                            }
+                        }
+                    } else {
+                        parser_error = true;
+                    }
                 } else {
-                    return Err(String::from(""));
+                    parser_error = true;
                 }
             } else {
-                return Err(String::from(""));
+                let msg = format!("Reporting module at position {} specified without type... Skipping this one", index);
+                error!("{}", msg);
+                return Err(msg);
             }
-        }).collect();
 
-        let modules = accumulate(result)?;
+            if parser_error {
+                let msg = format!("Could not parse reporter config at position {}... Skipping this one", index);
+                error!("{}", msg);
+                return Err(msg);
+            }
+        }
 
-        self.bind = Some(Bind {
-            modules
-        });
-
-        return Ok(());
+        return Ok(ReportingModule { modules: accumulate(modules)? });
     }
 
-    fn report(&self, context: Option<&[&str]>, value: &str) -> Result<(), String> {
-        let bound: &Bind = try_option!(self.bind.as_ref(), "Reporting module is not bound");
+    pub fn new_empty() -> ReportingModule {
+        return ReportingModule { modules: vec![] };
+    }
 
-        let result = bound.modules.iter().map(|module| {
-            module.report(context, value)
+    pub fn report_status(&self, run_type: RunType, name: Option<String>, status: Status) {
+        let result = self.report(ReportEvent::Status(StatusReport {
+            module: name.map(|input| String::from(input)),
+            status,
+            run_type
+        }));
+
+        log_error!(result);
+    }
+
+    pub fn report_size(&self, run_type: RunType, size_type: SizeType, name: Option<String>, size: u64) {
+        let result = self.report(ReportEvent::Size(SizeReport {
+            module: name.map(|input| String::from(input)),
+            size,
+            run_type,
+            size_type
+        }));
+
+        log_error!(result);
+    }
+
+    pub fn report_operation(&self, operation: OperationStatus) {
+        let result = self.report(ReportEvent::Operation(operation));
+        log_error!(result);
+    }
+}
+
+impl ReportingRelay for ReportingModule {
+    fn init(&mut self) -> Result<(), String> {
+        let result = self.modules.iter_mut().map(|module| {
+            module.init()
+        }).collect();
+
+        return accumulate(result).map(|_| ());
+    }
+
+    fn report(&self, event: ReportEvent) -> Result<(), String> {
+        let result = self.modules.iter().map(|module| {
+            module.report(event.clone())
         }).collect();
 
         return accumulate(result).map(|_| ());
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let mut bound: Bind = try_option!(self.bind.take(), "Reporting module is not bound");
-
-        let result = bound.modules.iter_mut().map(|module| {
+        let result = self.modules.iter_mut().map(|module| {
             module.clear()
         }).collect();
-
-        self.bind = None;
 
         return accumulate(result).map(|_| ());
     }
@@ -163,5 +147,25 @@ fn accumulate<T>(input: Vec<Result<T,String>>) -> Result<Vec<T>,String> {
             }
         }
         return Ok(result_vec);
+    }
+}
+
+pub trait ReportingRelay {
+    fn init(&mut self) -> Result<(),String>;
+    fn report(&self, event: ReportEvent) -> Result<(),String>;
+    fn clear(&mut self) -> Result<(), String>;
+}
+
+impl<T: Reporting> ReportingRelay for T {
+    fn init(&mut self) -> Result<(), String> {
+        Reporting::init(self)
+    }
+
+    fn report(&self, event: ReportEvent) -> Result<(), String> {
+        Reporting::report(self, event)
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        Reporting::clear(self)
     }
 }

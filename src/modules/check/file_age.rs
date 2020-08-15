@@ -1,61 +1,49 @@
 use crate::modules::traits::Check;
-use crate::modules::object::*;
 use crate::{try_result,try_option,dry_run};
 use crate::util::command::CommandWrapper;
+use crate::util::objects::time::{ExecutionTiming};
+use crate::util::objects::paths::{ModulePaths,SourcePath};
+use crate::Arguments;
 
 use serde_json::Value;
-use chrono::{Local, DateTime};
 
-pub struct FileAge<'a> {
-    bind: Option<Bind<'a>>
-}
-
-struct Bind<'a> {
-    paths: ModulePaths<'a>,
+pub struct FileAge {
+    paths: ModulePaths,
     no_docker: bool,
     dry_run: bool
 }
 
-impl<'a> FileAge<'a> {
-    pub fn new_empty() -> Self {
-        return FileAge { bind: None };
-    }
-}
+impl Check for FileAge {
+    const MODULE_NAME: &'static str = "file-age";
 
-impl<'a> Check<'a> for FileAge<'a> {
-    fn init<'b: 'a>(&mut self, _name: &str, _config_json: &Value, paths: ModulePaths<'b>, args: &Arguments) -> Result<(), String> {
-        if self.bind.is_some() {
-            let msg = String::from("Check module is already bound");
-            error!("{}", msg);
-            return Err(msg);
-        }
-
+    fn new(_name: &str, _config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         // TODO: Could include an ignore list in _config_json
 
-        self.bind = Some(Bind {
+        return Ok(Box::new(Self {
             paths,
             no_docker: args.no_docker,
             dry_run: args.dry_run
-        });
+        }))
+    }
 
+    fn init(&mut self) -> Result<(), String> {
         return Ok(());
     }
 
-    fn check(&self, _time: &DateTime<Local>, _frame: &TimeFrame, last: &Option<&TimeEntry>) -> Result<bool, String> {
-        let bound = try_option!(self.bind.as_ref(), "Check module is not bound");
-
-        let last_run = if last.is_none() {
+    // TODO: cache result to not run the whole check for every timeframe
+    fn check(&self, frame: &ExecutionTiming) -> Result<bool, String> {
+        let last_run = if frame.last_run.is_none() {
             // If there is no last run, just run it
             debug!("Check is not necessary as there was no run before");
             return Ok(true);
         } else {
             trace!("Checking the age of files before doing anything");
-            last.unwrap()
+            frame.last_run.as_ref().unwrap()
         };
 
-        let check_path = &bound.paths.source;
+        let check_path = &self.paths.source;
 
-        let mut command_base = if bound.no_docker {
+        let mut command_base = if self.no_docker {
             let mut command = CommandWrapper::new("sh");
             command.arg_str("-c");
             command
@@ -64,15 +52,19 @@ impl<'a> Check<'a> for FileAge<'a> {
             command.arg_str("run")
                 .arg_str("--rm")
                 .arg_str("--name=vbackup-check-fileage-tmp")
-                .arg_string(format!("--volume={}:/volume", check_path))
+                .add_docker_volume_mapping(check_path, "volume")
                 .arg_str("alpine")
                 .arg_str("sh")
                 .arg_str("-c");
             command
         };
 
-        let search_path = if bound.no_docker {
-            check_path.as_str()
+        let search_path = if self.no_docker {
+            if let SourcePath::Single(path) = check_path {
+                path.as_str()
+            } else {
+                return Err(String::from("Multiple source paths are not supported in file age check module without docker"));
+            }
         } else {
             "/volume"
         };
@@ -80,7 +72,7 @@ impl<'a> Check<'a> for FileAge<'a> {
         let command_actual = format!("[[ -d '{s}' ]] && [[ ! -z \"$(ls -A '{s}')\" ]] && find {s} -type f -print0 | xargs -0 stat -c '%Y;%n' | grep -v -e .savedata.json | sort -nr | head -n 1", s = search_path);
         command_base.arg_string(command_actual);
 
-        if bound.dry_run {
+        if self.dry_run {
             dry_run!(command_base.to_string());
         }
 
@@ -103,15 +95,12 @@ impl<'a> Check<'a> for FileAge<'a> {
         }
     }
 
-    fn update(&self, _time: &DateTime<Local>, _frame: &TimeFrame, _last: &Option<&TimeEntry>) -> Result<(), String> {
-        let _bound = try_option!(self.bind.as_ref(), "Check module is not bound");
+    fn update(&mut self, _frame: &ExecutionTiming) -> Result<(), String> {
         // This check is stateless, so no update is required
         return Ok(())
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        try_option!(self.bind.as_ref(), "Check module is not bound, thus it can not be cleared");
-        self.bind = None;
         return Ok(());
     }
 }

@@ -53,7 +53,8 @@ such that the backup server is not started for each sync separately and can prof
 | -q, --quiet | yes | false | Disable info logging (Loglevel: Warn). |
 | -f, --force | yes | false | Disregard all constraints, forcing the run. |
 | -b, --bare, --no-docker | yes | false | Do not use docker. Warning: Can't backup docker volumes (duh!) and might affect the structure of the resulting backup. Not tested thoroughly. |
-| --no-reporting | yes | false | Disable reporting for this run. |    
+| --no-reporting | yes | false | Disable reporting for this run. |
+| --override-disabled, --run-disabled | yes | false | Ignore the disabled status on configurations. |
 
 ## Configuration
 ### Base configuration
@@ -110,7 +111,9 @@ Default directory: `/etc/vbackup/volumes`. This is the configuration file for a 
 |-----|----------|---------|-------------|
 | name | yes | | A unique name for this configuration. Filename is recommended. |
 | disabled | no | false | Flag to disable this configuration. |
-| source_path | yes | | Path of the directory or name of the docker volume to back up. |
+| source_path | yes | | Path of the directory or name of the docker volume to back up, alternatively a list of paths with name mappings. |
+| source_path[].path | no | | Path to a directory / name of a docker volume to back up. |
+| source_path[].name | no | | Name for the backup up location (Used for example as a top-level directory in an archive). |
 | backup_path | no | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. Uses the backup directory and the name of the configuration by default.|
 | savedata_in_store | no | false | Wether to store the savedata file with the backup or not. Overwrites the global flag if set. |
 | backup | no | | The backup configuration for this volume. |
@@ -127,6 +130,22 @@ Default directory: `/etc/vbackup/volumes`. This is the configuration file for a 
   "sync": { ... }
 }
 ```
+
+```json
+{
+  "source_path": [
+    {
+      "path": "imporant-volume",
+      "name": "some-name"
+    },
+    {
+      "path": "/path/to/a/directory",
+      "name": "another-name"
+    }
+  ]
+}
+```
+
 #### Backup
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
@@ -350,6 +369,10 @@ updated by an external program, like a server plugin.
 Controller for starting remote devices for syncs and stopping them afterwards.
 
 #### mqtt
+Use the [MQTT device controller](https://github.com/lunarys/mqtt-device-controller) to start and stop devices for the sync.
+This controller can be bundled for different configurations: 
+If the configuration matches for some configurations, they are executed right after another, so that the controller only sends the start command once to the server.
+
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | start | no | true | Wether to start the remote device or not. |
@@ -380,6 +403,15 @@ Controller for starting remote devices for syncs and stopping them afterwards.
   }
 }
 ```
+
+#### ping
+Ping the specified host before attempting to sync in order to determine whether it is online.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| address | yes | | The IP address to ping, currently does not work with domain names. |
+| timeout  | no | 10 | A timeout for the ping request in seconds. |
+
 ### Reporting
 Send information about backup and sync runs to additional destinations.
 

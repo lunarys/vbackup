@@ -1,28 +1,16 @@
-use crate::modules::controller;
-use crate::modules::object::{Arguments, Paths, Configuration};
-use crate::modules::controller::ControllerModule;
-use crate::modules::traits::Controller;
-use crate::try_option;
+use crate::modules::controller::{ControllerModule, ControllerRelay};
 
-use serde_json::Value;
-
-pub fn init(args: &Arguments, paths: &Paths, config: &Configuration, controller_config: &Option<Value>) -> Result<Option<ControllerModule>,String> {
-    if controller_config.is_some() {
-        let controller_type = try_option!(controller_config.as_ref().unwrap().get("type"), "Controller config contains no field 'type'");
-        let module_paths = paths.for_sync_module("controller", &config);
-
-        let mut module = controller::get_module(try_option!(controller_type.as_str(), "Expected controller type as string"))?;
-        module.init(config.name.as_str(), controller_config.as_ref().unwrap(), module_paths, args)?;
-
-        return Ok(Some(module));
-    } else {
-        return Ok(None);
+pub fn init(module: &mut Option<&mut ControllerModule>) -> Result<(),String> {
+    if let Some(module_mut) = module {
+        return module_mut.init();
     }
+
+    return Ok(());
 }
 
-pub fn start(module: &Option<ControllerModule>) -> Result<bool,String> {
+pub fn start(module: &mut Option<&mut ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
-        let result = module.as_ref().unwrap().begin()?;
+        let result = module.as_mut().unwrap().begin()?;
         /*if result {
             debug!("");
         } else {
@@ -35,9 +23,9 @@ pub fn start(module: &Option<ControllerModule>) -> Result<bool,String> {
     return Ok(true);
 }
 
-pub fn end(module: &Option<ControllerModule>) -> Result<bool,String> {
+pub fn end(module: &mut Option<&mut ControllerModule>) -> Result<bool,String> {
     if module.is_some() {
-        let result = module.as_ref().unwrap().end()?;
+        let result = module.as_mut().unwrap().end()?;
         /*if result {
             debug!("");
         } else {
@@ -49,7 +37,7 @@ pub fn end(module: &Option<ControllerModule>) -> Result<bool,String> {
     return Ok(true);
 }
 
-pub fn clear(module: &mut Option<ControllerModule>) -> Result<(),String> {
+pub fn clear(module: &mut Option<&mut ControllerModule>) -> Result<(),String> {
     if module.is_some() {
         module.as_mut().unwrap().clear()?;
     }

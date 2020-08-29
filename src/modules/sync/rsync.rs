@@ -115,7 +115,10 @@ impl Sync for Rsync {
 
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image if missing
-        docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
+        if !self.no_docker {
+            docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
+        }
+
         return Ok(());
     }
 

@@ -46,7 +46,10 @@ impl Backup for Tar7Zip {
 
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image
-        docker::build_image_if_missing(&self.paths.base_paths, "p7zip.Dockerfile", "vbackup-p7zip")?;
+        if !self.no_docker {
+            docker::build_image_if_missing(&self.paths.base_paths, "p7zip.Dockerfile", "vbackup-p7zip")?;
+        }
+
         return Ok(());
     }
 

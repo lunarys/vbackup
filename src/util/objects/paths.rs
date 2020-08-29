@@ -4,6 +4,7 @@ use serde::{Deserialize};
 use std::rc::Rc;
 
 fn default_bool_true() -> bool { true }
+fn default_bool_false() -> bool { false }
 fn default_config_dir() -> String { String::from("/etc/vbackup") }
 fn default_save_dir() -> String { String::from("/var/vbackup") }
 fn default_tmp_dir() -> String { String::from("/tmp/vbackup ")}
@@ -21,7 +22,9 @@ pub struct PathBase {
     #[serde(default="default_bool_true")]
     pub savedata_in_store: bool,
     pub reporting_file: Option<String>,
-    pub docker_images: Option<String>
+    pub docker_images: Option<String>,
+    #[serde(default="default_bool_false")]
+    pub no_docker: bool
 }
 
 #[derive(Clone)]

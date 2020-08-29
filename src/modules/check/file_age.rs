@@ -44,7 +44,7 @@ impl Check for FileAge {
         let check_path = &self.paths.source;
 
         let mut command_base = if self.no_docker {
-            let mut command = CommandWrapper::new("sh");
+            let mut command = CommandWrapper::new("bash");
             command.arg_str("-c");
             command
         } else {

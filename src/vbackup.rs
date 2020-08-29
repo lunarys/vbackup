@@ -13,9 +13,14 @@ use std::path::Path;
 use serde_json::Value;
 use std::rc::Rc;
 
-pub fn main(args: Arguments) -> Result<(),String> {
+pub fn main(mut args: Arguments) -> Result<(),String> {
     let base_paths = json::from_file::<PathBase>(Path::new(args.base_config.as_str()))?;
+    args.no_docker = args.no_docker || base_paths.no_docker;
     let paths = Rc::new(Paths::from(base_paths));
+
+    if args.no_docker {
+        warn!("Running without docker, this only supports limited features");
+    }
 
     file::create_dir_if_missing(paths.save_dir.as_str(), true)?;
     file::create_dir_if_missing(paths.tmp_dir.as_str(), true)?;

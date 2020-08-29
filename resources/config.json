@@ -6,5 +6,6 @@
   "auth_data_file": "/etc/vbackup/auth_data.json",
   "savedata_in_store": false,
   "reporting_file": "/etc/vbackup/reporting.json",
-  "docker_images": "/etc/vbackup/images"
+  "docker_images": "/etc/vbackup/images",
+  "no_docker": false
 }

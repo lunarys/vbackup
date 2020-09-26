@@ -19,10 +19,10 @@ if [[ ! -e ./install.sh ]]; then
     exit 2
 fi
 
-# Check if docker is installed
-if ! which docker &> /dev/null; then
-    echo "Please install docker to use this installer..."
-    exit 3
+# Only one option makes sense, so just check $1
+SKIP_COMPILE=false
+if [[ "$1" == "--skip-compile" ]] || [[ "$1" == "--no-compile" ]]; then
+	SKIP_COMPILE=true
 fi
 
 UPDATE_ONLY=false
@@ -30,17 +30,26 @@ if [[ "$1" == "--update" ]] || [[ "$1" == "-u" ]] || [[ "$1" == "--update-only" 
     UPDATE_ONLY=true
 fi
 
-# Check if image exists (is built)
-DOCKER_FILE="cargo.Dockerfile"
-DOCKER_IMAGE="my-rust-compiler"
-if [[ "$(docker images -q ${DOCKER_IMAGE} 2> /dev/null)" == "" ]]; then
-    echo "Building compiler docker image..."
-    docker build -t ${DOCKER_IMAGE} -f ${DOCKER_FILE} .
-fi
+# Skip compile e.g. for mode without docker, binary needs to be precompiled then
+if ! $SKIP_COMPILE; then
+	# Check if docker is installed
+	if ! which docker &> /dev/null; then
+    	echo "Please install docker to use this installer..."
+    	exit 3
+	fi
 
-# Compile vbackup
-echo "Compiling vbackup..."
-docker run --rm --name="vbackup-compiler" --volume="$(pwd)/..:/project" -w /project ${DOCKER_IMAGE} cargo build --release
+	# Check if image exists (is built)
+	DOCKER_FILE="cargo.Dockerfile"
+	DOCKER_IMAGE="my-rust-compiler"
+	if [[ "$(docker images -q ${DOCKER_IMAGE} 2> /dev/null)" == "" ]]; then
+    	echo "Building compiler docker image..."
+	    docker build -t ${DOCKER_IMAGE} -f ${DOCKER_FILE} .
+	fi
+
+	# Compile vbackup
+	echo "Compiling vbackup..."
+	docker run --rm --name="vbackup-compiler" --volume="$(pwd)/..:/project" -w /project ${DOCKER_IMAGE} cargo build --release
+fi
 
 # Create directories
 INSTALL_DIR="/usr/local/bin"

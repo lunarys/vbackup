@@ -257,7 +257,8 @@ Send the backup to a remote destination using rsync over ssh.
 | compress | no | false | Compress the files before transmitting. |
 | path_prefix | no | /home/%u | Prefix for the remote path. |
 | dirname | yes | | Directory to sync to on the server. |
-| host_reference | depends | | Reference to ssh server information in the shared authentication store. | 
+| detect_renamed | no | true | Enable the rsync detect-renamed patch. |
+| host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
 | host.hostname | yes | | Hostname of the server.
 | host.port | yes | | Port of the server. |

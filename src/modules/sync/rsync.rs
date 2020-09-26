@@ -36,7 +36,10 @@ struct Configuration {
     dirname: String,
 
     host: Option<Value>,
-    host_reference: Option<String>
+    host_reference: Option<String>,
+
+    #[serde(default="default_true")]
+    detect_renamed: bool
 }
 
 fn default_true() -> bool { true }
@@ -124,6 +127,10 @@ impl Sync for Rsync {
 
     fn sync(&self) -> Result<(), String> {
         let mut command = self.get_base_cmd()?;
+
+        if self.config.detect_renamed {
+            command.arg_str("--detect-renamed");
+        }
 
         command.arg_string(format!("{}", &self.sync_paths.from))
             .arg_string(format!("{}", &self.sync_paths.to));

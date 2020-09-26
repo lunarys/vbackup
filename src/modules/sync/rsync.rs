@@ -38,7 +38,9 @@ struct Configuration {
     host: Option<Value>,
     host_reference: Option<String>,
 
-    #[serde(default="default_true")]
+    // detect-renamed activated would be the better options, but only works with patched servers
+    //  so set it disabled by default
+    #[serde(default="default_false")]
     detect_renamed: bool
 }
 

@@ -2,20 +2,26 @@ use crate::modules::traits::Controller;
 use crate::util::objects::paths::ModulePaths;
 use crate::util::io::json;
 use crate::Arguments;
+use crate::try_result;
 
 use std::net::IpAddr;
 use serde_json::Value;
 use serde::Deserialize;
 use std::time::Duration;
 use ping::ping;
+use dns_lookup::lookup_host;
 
 #[derive(Deserialize)]
-pub struct Ping {
-    // TODO: should support domain names
+pub struct DeserializedConfig {
     #[serde(rename = "address")]
-    ip_address: IpAddr,
+    address: String,
 
     #[serde(default="default_timeout")]
+    timeout: u64
+}
+
+pub struct Ping {
+    ip_address: IpAddr,
     timeout: u64
 }
 
@@ -25,8 +31,16 @@ impl Controller for Ping {
     const MODULE_NAME: &'static str = "ping";
 
     fn new(_name: &str, config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<Box<Self>, String> {
-        let config = json::from_value::<Ping>(config_json.clone())?; // TODO: - clone
-        return Ok(Box::new(config));
+        let config = json::from_value::<DeserializedConfig>(config_json.clone())?; // TODO: - clone
+        let ips: Vec<std::net::IpAddr> = try_result!(lookup_host(config.address.as_str()), format!("DNS lookup for '{}' failed", config.address));
+        if ips.is_empty() {
+            return Err(String::from("DNS lookup for '{}' found no addresses"));
+        }
+
+        return Ok(Box::new(Ping {
+            ip_address: ips[0],
+            timeout: config.timeout
+        }));
     }
 
     fn init(&mut self) -> Result<(), String> {

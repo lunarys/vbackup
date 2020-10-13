@@ -257,7 +257,7 @@ Send the backup to a remote destination using rsync over ssh.
 | compress | no | false | Compress the files before transmitting. |
 | path_prefix | no | /home/%u | Prefix for the remote path. |
 | dirname | yes | | Directory to sync to on the server. |
-| detect_renamed | no | false | Enable the rsync detect-renamed patch. Only works if the patch is installed on client on server. If running with docker a patched version is used. |
+| detect_renamed | no | false | Enable the rsync detect-renamed patch. Only works if the patch is installed on client and server. If running with docker a patched version is used automatically. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
 | host.hostname | yes | | Hostname of the server.
@@ -411,7 +411,7 @@ Ping the specified host before attempting to sync in order to determine whether 
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| address | yes | | The IP address to ping, currently does not work with domain names. |
+| address | yes | | The IP address or hostname to ping. |
 | timeout  | no | 10 | A timeout for the ping request in seconds. |
 
 ### Reporting

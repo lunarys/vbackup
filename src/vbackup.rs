@@ -31,7 +31,9 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
     }
 
     // Set up reporter (if existing)
-    let mut reporter = if let Some(reporter_config) = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))? {
+    let mut reporter = if args.no_reporting {
+        ReportingModule::new_empty()
+    } else if let Some(reporter_config) = json::from_file_checked::<Value>(Path::new(paths.reporting_file.as_str()))? {
         let result = ReportingModule::new_combined(&reporter_config, &paths, &args);
         match result {
             Ok(mut module) => {

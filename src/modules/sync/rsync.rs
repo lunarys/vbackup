@@ -64,12 +64,21 @@ impl Sync for Rsync {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
 
-        let default_path_prefix = format!("/home/{}", ssh_config.user);
-        let path_prefix = config.path_prefix.as_ref().unwrap_or(&default_path_prefix);
         let remote_path = format!("{}@{}:{}",
                                   ssh_config.user,
                                   ssh_config.hostname,
-                                  path_prefix);
+                                  config.path_prefix.as_ref().map_or("", |prefix| prefix.as_str()));
+
+        let separator = if let Some(prefix) = config.path_prefix.as_ref() {
+            if prefix.eq("") || prefix.eq("/") {
+                // Putting a separating slash after an empty string or slash only makes no sense
+                ""
+            } else {
+                "/"
+            }
+        } else {
+            ""
+        };
 
         let paths = if args.no_docker {
             if let SourcePath::Single(source_path) = module_paths.source.clone() {
@@ -82,7 +91,7 @@ impl Sync for Rsync {
                 } else {
                     DockerPaths {
                         volume: None,
-                        from: format!("{}/{}", remote_path, config.dirname),
+                        from: format!("{}{}{}", remote_path, separator, config.dirname),
                         to: source_path,
                     }
                 }
@@ -99,7 +108,7 @@ impl Sync for Rsync {
             } else {
                 DockerPaths {
                     volume: Some(module_paths.source.clone()),
-                    from: format!("{}/{}", remote_path, config.dirname),
+                    from: format!("{}{}{}", remote_path, separator, config.dirname),
                     to: String::from("/")
                 }
             }

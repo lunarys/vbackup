@@ -274,11 +274,20 @@ fn add_default_options(command: &mut CommandWrapper, name: &str, config: &Config
 }
 
 fn get_connection_uri(config: &Configuration, auth: &Authentication) -> String {
-    let directory_prefix = if config.directory_prefix.is_some() {
-        config.directory_prefix.clone().unwrap()
+    let (directory_prefix, separator) = if let Some(prefix) = config.directory_prefix.as_ref() {
+        let separator = if prefix.eq("") || prefix.eq("/") {
+            // Putting a separating slash after an empty string or slash only makes no sense
+            ""
+        } else {
+            "/"
+        };
+
+        (prefix.as_str(), separator)
     } else {
-        format!("/home/{}", auth.user)
+        ("", "")
     };
 
-    format!("ssh://{}:{}/{}/{}", auth.hostname, auth.port, directory_prefix, config.directory)
+    // TODO: Check if this is handled correctly with the changed (relative prefix)
+    //  There would be a second slash in the prefix if the path is not relative
+    format!("ssh://{}:{}/{}{}{}", auth.hostname, auth.port, directory_prefix, separator, config.directory)
 }

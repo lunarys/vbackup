@@ -255,8 +255,8 @@ Send the backup to a remote destination using rsync over ssh.
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | compress | no | false | Compress the files before transmitting. |
-| path_prefix | no | /home/%u | Prefix for the remote path. |
-| dirname | yes | | Directory to sync to on the server. |
+| path_prefix | no | | Prefix for the remote path. Treated as a path relative to the home directory unless there is a '/' as the first character. |
+| dirname | yes | | Directory to sync to on the server. Should be only the name of the directory, not the path. |
 | detect_renamed | no | false | Enable the rsync detect-renamed patch. Only works if the patch is installed on client and server. If running with docker a patched version is used automatically. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
@@ -290,8 +290,8 @@ Only really makes sense without creating a local backup before.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| directory_prefix | no | |  Prefix for the remote path. |
-| directory | yes | | Directory to sync to on the server. | 
+| directory_prefix | no | | Prefix for the remote path. Treated as a path relative to the home directory unless there is a '/' as the first character. |
+| directory | yes | | Directory to sync to on the server. Should be only the name of the directory, not the path. |
 | keep_versions | no | 1 | Number of versions of a file to keep. Note: Only if `smart_retention=false`.
 | smart_retention | no | false | Switch between smart retention policy or simple versioning. 
 | retention_policy | no | 1W:1D,4W:1W,12M:1M | Retention policy to use. Note: Only if `smart_retention=true`. [More here.](https://duplicati.readthedocs.io/en/latest/06-advanced-options/#retention-policy)

@@ -35,6 +35,14 @@ struct Configuration {
     path_prefix: Option<String>,
     dirname: String,
 
+    #[serde(default="default_chmod_perms")]
+    chmod_perms: String,
+    // Add additional options for local and remote, to apply to the respective sync direction
+    local_chmod: Option<String>,
+    remote_chmod: Option<String>,
+
+    local_chown: Option<String>,
+
     host: Option<Value>,
     host_reference: Option<String>,
 
@@ -46,6 +54,7 @@ struct Configuration {
 
 fn default_true() -> bool { true }
 fn default_false() -> bool { false }
+fn default_chmod_perms() -> String { String::from("D0775,F0664") }
 
 #[derive(Deserialize)]
 struct SshConfig {
@@ -240,11 +249,27 @@ impl Rsync {
             .arg_str("--delete")
             .arg_str("--partial");
 
-        // TODO: Create an option for this?
         // Set file permissions for receiving end
-        if self.config.to_remote {
-            command.arg_str("--chmod=ug=rwX,o-rwx");
-            command.arg_str("--perms");
+        command.arg_str("--perms");
+        if (self.config.to_remote
+                && self.config.remote_chmod.is_none())
+            || (!self.config.to_remote
+                && self.config.local_chmod.is_none()) {
+
+            command.arg_string(format!("--chmod={}", self.config.chmod_perms.as_str()));
+        } else {
+            if self.config.to_remote {
+                command.arg_string(format!("--chmod={}", self.config.remote_chmod.as_ref().unwrap()));
+            } else {
+                command.arg_string(format!("--chmod={}", self.config.local_chmod.as_ref().unwrap()));
+            }
+        }
+
+        // If copying to the local filesystem, set owning user and group
+        if !self.config.to_remote {
+            if let Some(chown_string) = self.config.local_chown.as_ref() {
+                command.arg_string(format!("--chown={}", chown_string));
+            }
         }
 
         if self.config.compress {

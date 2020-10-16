@@ -43,6 +43,10 @@ struct Configuration {
 
     local_chown: Option<String>,
 
+    filter: Option<Vec<String>>,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+
     host: Option<Value>,
     host_reference: Option<String>,
 
@@ -269,6 +273,34 @@ impl Rsync {
         if !self.config.to_remote {
             if let Some(chown_string) = self.config.local_chown.as_ref() {
                 command.arg_string(format!("--chown={}", chown_string));
+            }
+        }
+
+        // Parse include and exclude options
+        if self.config.filter.is_some() || self.config.include.is_some() || self.config.exclude.is_some() {
+            if let Some(filter_list) = self.config.filter.as_ref() {
+                filter_list.iter().for_each(|filter_option| {
+                    command.arg_string(format!("--filter={}", filter_option));
+                });
+            }
+
+            if let Some(exclude_list) = self.config.exclude.as_ref() {
+                exclude_list.iter().for_each(|exclude_path| {
+                    command.arg_string(format!("--exclude={}", exclude_path));
+                });
+            }
+
+            if let Some(include_list) = self.config.include.as_ref() {
+                // Include only works with including directories by default, so remove empty ones
+                command.arg_str("--prune-empty-dirs");
+                command.arg_str("--include=*/");
+
+                include_list.iter().for_each(|include_path| {
+                    command.arg_string(format!("--include={}", include_path));
+                });
+
+                // Argument order matters, so exclude everything else last
+                command.arg_str("--exclude=*");
             }
         }
 

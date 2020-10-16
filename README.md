@@ -262,9 +262,12 @@ Send the backup to a remote destination using rsync over ssh.
 | local_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the local filesystem. |
 | remote_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the remote filesystem. |
 | local_chown | no | | Owner and group for files and directories copied to the local filesystem, according to the '--chown' option of rsync. It is recommended to use the UID/GID when using docker mode, as names are not present. |
+| filter | no | | Set a list of filter rules according to rsync 'FILTER RULES'. Paths anchored at the root need to be prefixed with the dirname and a leading '/'. Same for in-/exclude. |
+| include | no | | Include only the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. As a side-effect does not copy empty directories. Uses filter rules internally. |
+| exclude | no | | Exclude the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. Uses filter rules internally. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
-| host.hostname | yes | | Hostname of the server.
+| host.hostname | yes | | Hostname of the server. |
 | host.port | yes | | Port of the server. |
 | host.user | yes | | Username for login on the server. |
 | host.password | no | | Password for login on the server. |
@@ -276,10 +279,14 @@ Send the backup to a remote destination using rsync over ssh.
   "type": "rsync-ssh",
   "compress": false,
   "path_prefix": "/home/foo",
-  "dirname": "my-backup-dir/sub-dir",
+  "dirname": "my-backup-dir",
   "detect_renamed": true,
   "local_chmod": "0000,Dug+rwx,Fug+rw,o-rwx",
   "local_chown": "1000:1000",
+  "include": [
+    "/my-backup-dir/some-dir-in-sync-root/***",
+    "*.txt"
+  ],
   "host": {
     "hostname": "my-ssh-server.local",
     "port": 22,
@@ -321,7 +328,7 @@ and [this guideline by the developers](https://www.duplicati.com/articles/Choosi
   "type": "duplicati",
   "encryption_key": "supersecure",
   "directory_prefix": "/home/foo",
-  "directory": "directory/sub-directory",
+  "directory": "some-directory",
   "auth": {
     "hostname": "my-ssh-server.local",
     "port": "22",

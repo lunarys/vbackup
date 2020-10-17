@@ -66,6 +66,7 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     // Write savedata update only if sync was successful
     if sync_result.is_ok() {
         if !args.dry_run {
+            savedata.create_directory_if_missing()?;
             if let Err(err) = savedata.write() {
                 error!("Could not update savedata for '{}' sync ({})", unit.config.name.as_str(), err);
             }

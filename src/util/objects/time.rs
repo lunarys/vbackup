@@ -1,4 +1,4 @@
-use crate::util::io::json;
+use crate::util::io::{json,file};
 
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
@@ -63,6 +63,18 @@ impl SaveData {
             nextsave: deserialized.nextsave,
             lastsync: deserialized.lastsync,
             path: String::from(path)
+        }
+    }
+
+    pub fn create_directory_if_missing(&self) -> Result<bool, String> {
+        let parent_dir_option = Path::new(self.path.as_str()).parent();
+        return if let Some(parent_dir) = parent_dir_option {
+            file::create_path_dir_if_missing(parent_dir, false)
+        } else {
+            warn!("Path for the savedata file is in the filesystem root, won't be creating a designated directory");
+
+            // Suppose this behavior is intended (?)
+            Ok(false)
         }
     }
 

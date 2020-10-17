@@ -121,22 +121,28 @@ pub fn exists(file_name: &str) -> bool {
 
 pub fn create_dir_if_missing(dir_name: &str, also_parent: bool) -> Result<bool,String> {
     let path = Path::new(dir_name);
-    if path.exists() {
+    return create_path_dir_if_missing(path, also_parent);
+}
+
+pub fn create_path_dir_if_missing(path: &Path, also_parent: bool) -> Result<bool,String> {
+    return if path.exists() {
         if path.is_dir() {
-            return Ok(false);
+            Ok(false)
         } else {
-            return Err(format!("Could not create directory '{}': A file with this name already exists", dir_name));
+            Err(format!("Could not create directory '{}': A file with this name already exists", path.to_string_lossy()))
         }
     } else {
         let result = if also_parent {
+            trace!("Creating missing directory '{}' (and possibly parent directories)", path.to_string_lossy());
             fs::create_dir_all(path)
         } else {
+            trace!("Creating missing directory '{}'", path.to_string_lossy());
             fs::create_dir(path)
         };
         if let Err(err) = result {
-            return Err(format!("Could not create directory '{}': {}", dir_name, err));
+            Err(format!("Could not create directory '{}': {}", path.to_string_lossy(), err))
         } else {
-            return Ok(true);
+            Ok(true)
         }
     }
 }

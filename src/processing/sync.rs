@@ -2,7 +2,8 @@ use crate::modules::sync::{SyncModule,SyncRelay};
 use crate::modules::controller::ControllerModule;
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::util::io::savefile::{time_format};
-use crate::util::objects::time::{SaveData, TimeEntry};
+use crate::util::objects::time::TimeEntry;
+use crate::util::objects::savedata::SaveData;
 use crate::processing::preprocessor::SyncUnit;
 use crate::Arguments;
 

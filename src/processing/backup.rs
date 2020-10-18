@@ -1,7 +1,8 @@
 use crate::modules::backup::{BackupModule,BackupRelay};
 use crate::util::helper::{check as check_helper};
 use crate::util::io::savefile::{time_format};
-use crate::util::objects::time::{SaveData, TimeEntry};
+use crate::util::objects::time::TimeEntry;
+use crate::util::objects::savedata::SaveData;
 use crate::processing::preprocessor::BackupUnit;
 use crate::Arguments;
 

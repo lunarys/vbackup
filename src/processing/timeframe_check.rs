@@ -1,6 +1,6 @@
 use crate::Arguments;
-use crate::util::objects::time::{TimeFrameReference, TimeFrame, SaveData, TimeFrames};
-use crate::util::objects::time::ExecutionTiming;
+use crate::util::objects::time::{TimeFrameReference, TimeFrame, TimeFrames, ExecutionTiming};
+use crate::util::objects::savedata::SaveData;
 use crate::util::objects::paths::Paths;
 
 use chrono::{DateTime, Local};

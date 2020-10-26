@@ -72,7 +72,7 @@ impl ReportingModule {
         return ReportingModule { modules: vec![] };
     }
 
-    pub fn report_status(&self, run_type: RunType, name: Option<String>, status: Status) {
+    pub fn report_status(&mut self, run_type: RunType, name: Option<String>, status: Status) {
         let result = self.report(ReportEvent::Status(StatusReport {
             module: name.map(|input| String::from(input)),
             status,
@@ -82,7 +82,7 @@ impl ReportingModule {
         log_error!(result);
     }
 
-    pub fn report_size(&self, run_type: RunType, size_type: SizeType, name: Option<String>, size: u64) {
+    pub fn report_size(&mut self, run_type: RunType, size_type: SizeType, name: Option<String>, size: u64) {
         let result = self.report(ReportEvent::Size(SizeReport {
             module: name.map(|input| String::from(input)),
             size,
@@ -93,7 +93,7 @@ impl ReportingModule {
         log_error!(result);
     }
 
-    pub fn report_operation(&self, operation: OperationStatus) {
+    pub fn report_operation(&mut self, operation: OperationStatus) {
         let result = self.report(ReportEvent::Operation(operation));
         log_error!(result);
     }
@@ -108,8 +108,8 @@ impl ReportingRelay for ReportingModule {
         return accumulate(result).map(|_| ());
     }
 
-    fn report(&self, event: ReportEvent) -> Result<(), String> {
-        let result = self.modules.iter().map(|module| {
+    fn report(&mut self, event: ReportEvent) -> Result<(), String> {
+        let result = self.modules.iter_mut().map(|module| {
             module.report(event.clone())
         }).collect();
 
@@ -152,7 +152,7 @@ fn accumulate<T>(input: Vec<Result<T,String>>) -> Result<Vec<T>,String> {
 
 pub trait ReportingRelay {
     fn init(&mut self) -> Result<(),String>;
-    fn report(&self, event: ReportEvent) -> Result<(),String>;
+    fn report(&mut self, event: ReportEvent) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }
 
@@ -161,7 +161,7 @@ impl<T: Reporting> ReportingRelay for T {
         Reporting::init(self)
     }
 
-    fn report(&self, event: ReportEvent) -> Result<(), String> {
+    fn report(&mut self, event: ReportEvent) -> Result<(), String> {
         Reporting::report(self, event)
     }
 

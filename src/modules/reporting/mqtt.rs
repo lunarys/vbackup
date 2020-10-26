@@ -4,17 +4,18 @@ use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths};
 use crate::Arguments;
 use crate::{try_result};
+use crate::modules::controller::mqtt::{MqttConfiguration,get_client,qos_from_u8};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use paho_mqtt as mqtt;
 use std::ops::AddAssign;
 use std::rc::Rc;
+use rumqtt::{MqttClient};
 
 pub struct Reporter {
     config: Configuration,
     mqtt_config: MqttConfiguration,
-    client: Option<mqtt::Client>
+    client: Option<MqttClient>
 }
 
 #[derive(Deserialize)]
@@ -23,20 +24,6 @@ struct Configuration {
     base_topic: Option<String>,
     auth: Option<Value>
 }
-
-#[derive(Deserialize)]
-struct MqttConfiguration {
-    host: String,
-    #[serde(default="default_port")]
-    port: i32,
-    user: String,
-    password: Option<String>,
-    #[serde(default="default_qos")]
-    qos: i32
-}
-
-fn default_qos() -> i32 { 1 }
-fn default_port() -> i32 { 1883 }
 
 impl Reporting for Reporter {
     const MODULE_NAME: &'static str = "mqtt";
@@ -53,18 +40,21 @@ impl Reporting for Reporter {
     }
 
     fn init(&mut self) -> Result<(), String> {
-        let client: mqtt::Client = try_result!(get_client(&self.config, &self.mqtt_config), "Could not create mqtt client and receiver");
+        let base_topic = get_base_topic(&self.config, &self.mqtt_config);
+        trace!("Base topic is '{}'", base_topic);
+
+        let (client,_) = try_result!(get_client(&self.mqtt_config, base_topic.as_str(), "cancelled"), "Could not create mqtt client and receiver");
         self.client = Some(client);
 
         return Ok(());
     }
 
-    fn report(&self, event: ReportEvent) -> Result<(), String> {
+    fn report(&mut self, event: ReportEvent) -> Result<(), String> {
         if !self.client.is_some() {
             return Err(String::from("MQTT reporter is not connected for reporting"));
         }
 
-        let qos = self.mqtt_config.qos;
+        let qos = qos_from_u8(self.mqtt_config.qos)?;
         let mut topic = get_base_topic(&self.config, &self.mqtt_config);
 
         let message = match event {
@@ -117,51 +107,21 @@ impl Reporting for Reporter {
         // TODO: Trace or debug?
         trace!("Reporting on '{}': '{}'", topic.as_str(), message);
 
-        let msg = mqtt::Message::new(topic, message, qos);
-
-        if self.client.as_ref().unwrap().publish(msg).is_err() {
-            return Err(String::from("Could not send report"));
+        if let Err(err) = self.client.as_mut().unwrap().publish(topic, qos, false, message) {
+            return Err(format!("Could not send report: {}", err));
         }
 
-        // Return wether device is available or not
+        // Return whether device is available or not
         return Ok(());
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        if let Some(client) = self.client.as_ref() {
-            try_result!(client.disconnect(None), "Disconnect from broker failed");
+        if let Some(client) = self.client.as_mut() {
+            try_result!(client.shutdown(), "Disconnect from broker failed");
         }
 
         return Ok(());
     }
-}
-
-fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result<mqtt::Client, String> {
-    let mqtt_host = format!("tcp://{}:{}", mqtt_config.host, mqtt_config.port);
-
-    trace!("Trying to connect to mqtt broker with address '{}'", mqtt_host);
-
-    let client: mqtt::Client = try_result!(mqtt::Client::new(mqtt_host), "Failed connecting to broker");
-
-    let mut options_builder = mqtt::ConnectOptionsBuilder::new();
-    let mut options = options_builder.clean_session(true);
-    options = options.user_name(mqtt_config.user.as_str());
-    if mqtt_config.password.is_some() {
-        options = options.password(mqtt_config.password.as_ref().unwrap().as_str());
-    }
-
-    //options.connect_timeout()
-    //options.automatic_reconnect()
-
-    // Set last will in case of whatever failure that includes a interrupted connection
-    let testament_topic = get_base_topic(config, mqtt_config);
-    let testament = mqtt::Message::new(testament_topic.as_str(), "cancelled", mqtt_config.qos);
-    options.will_message(testament);
-
-    trace!("Base topic is '{}'", testament_topic);
-    try_result!(client.connect(options.finalize()), "Could not connect to the mqtt broker");
-
-    Ok(client)
 }
 
 fn get_base_topic(config: &Configuration, mqtt_config: &MqttConfiguration) -> String {

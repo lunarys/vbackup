@@ -16,7 +16,7 @@ use core::borrow::{BorrowMut, Borrow};
 use chrono::{DateTime, Local};
 
 pub fn process_configurations(args: &Arguments,
-                              reporter: &ReportingModule,
+                              reporter: &mut ReportingModule,
                               configurations: Vec<ConfigurationUnit>,
                               mut savedata_collection: SaveDataCollection) -> Result<(),String> {
     for configuration in configurations {
@@ -53,7 +53,7 @@ pub fn process_configurations(args: &Arguments,
 fn process_backup(config: &mut BackupUnit,
                   savedata_collection: &mut SaveDataCollection,
                   args: &Arguments,
-                  reporter: &ReportingModule) -> Result<(), String> {
+                  reporter: &mut ReportingModule) -> Result<(), String> {
     // Save those paths for later, as the ModulePaths will be moved
     let original_path = config.module_paths.source.clone();
     let store_path = config.module_paths.destination.clone();
@@ -82,7 +82,7 @@ fn process_backup(config: &mut BackupUnit,
 fn process_sync(config: &mut SyncUnit,
                 savedata_collection: &mut SaveDataCollection,
                 args: &Arguments,
-                reporter: &ReportingModule,
+                reporter: &mut ReportingModule,
                 controller_override: Option<&mut ControllerModule>) -> Result<(), String> {
     // Save owned objects of configuration and path
     let store_path = config.module_paths.source.clone();
@@ -114,7 +114,7 @@ fn process_sync(config: &mut SyncUnit,
 fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBundle,
                                   savedata: &mut SaveDataCollection,
                                   args: &Arguments,
-                                  reporter: &ReportingModule) -> Result<(), String> {
+                                  reporter: &mut ReportingModule) -> Result<(), String> {
 
     for configuration in &mut sync_controller_bundle.units {
         let result = process_sync(configuration, savedata, args, reporter, Some(sync_controller_bundle.controller.borrow_mut()));
@@ -137,7 +137,7 @@ fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBun
 fn result_reporter(run_type: RunType,
                    result: Result<bool,String>,
                    config_name: &String,
-                   reporter: &ReportingModule) {
+                   reporter: &mut ReportingModule) {
     match result {
         Ok(true) => {
             info!("{} for '{}' was successfully executed", run_type, config_name);
@@ -158,7 +158,7 @@ fn size_reporter(run_type: RunType,
                  directory_type: SizeType,
                  path: &SourcePath,
                  config_name: &String,
-                 reporter: &ReportingModule,
+                 reporter: &mut ReportingModule,
                  args: &Arguments) {
     match file::size(path, args.no_docker) {
         Ok(curr_size) => {

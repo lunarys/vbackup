@@ -66,9 +66,9 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
     }?;
 
     let config_list = get_config_list(&args, paths.as_ref())?;
-    let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &reporter, do_backup, do_sync)?;
+    let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &mut reporter, do_backup, do_sync)?;
     let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
-    let result = processor::process_configurations(&args, &reporter, scheduled, preprocessed.savedata);
+    let result = processor::process_configurations(&args, &mut reporter, scheduled, preprocessed.savedata);
 
     reporter.report_operation(OperationStatus::DONE);
     log_error!(reporter.clear());

@@ -6,7 +6,7 @@ use bundle::BundleableControllerRelay;
 use serde_json::Value;
 
 pub mod bundle;
-mod mqtt;
+pub mod mqtt;
 mod ping;
 
 pub enum ControllerModule {

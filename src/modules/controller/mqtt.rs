@@ -6,8 +6,7 @@ use crate::{try_result,try_option,bool_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use paho_mqtt as mqtt;
-use std::sync::mpsc::Receiver;
+use rumqtt::{MqttClient, MqttOptions, Receiver, Notification, SecurityOptions, QoS, Publish, LastWill};
 use std::time::{Duration, Instant};
 use std::rc::Rc;
 use std::cmp::max;
@@ -22,8 +21,8 @@ pub struct MqttController {
 }
 
 struct Connection {
-    client: mqtt::Client,
-    receiver: Receiver<Option<mqtt::Message>>,
+    client: MqttClient,
+    receiver: Receiver<Notification>,
     is_controller_online: bool
 }
 
@@ -38,21 +37,21 @@ struct Configuration {
 }
 
 #[derive(Deserialize)]
-struct MqttConfiguration {
-    host: String,
+pub struct MqttConfiguration {
+    pub host: String,
 
     #[serde(default="default_port")]
-    port: i32,
+    pub port: u16,
 
-    user: String,
-    password: Option<String>,
+    pub user: String,
+    pub password: Option<String>,
 
     #[serde(default="default_qos")]
-    qos: i32
+    pub qos: u8
 }
 
-fn default_qos() -> i32 { 1 }
-fn default_port() -> i32 { 1883 }
+fn default_qos() -> u8 { 1 }
+fn default_port() -> u16 { 1883 }
 
 impl Controller for MqttController {
     const MODULE_NAME: &'static str = "mqtt";
@@ -62,11 +61,19 @@ impl Controller for MqttController {
     }
 
     fn init(&mut self) -> Result<(), String> {
-        let (client,receiver) : (mqtt::Client,Receiver<Option<mqtt::Message>>) =
-            try_result!(get_client(&self.config, &self.mqtt_config), "Could not create mqtt client and receiver");
+        let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
+        let topic_sub = get_topic_sub(&self.config, &self.mqtt_config);
+        trace!("Subscription topic is '{}'", topic_sub);
+        trace!("Publish topic is '{}'", topic_pub);
+
+        let qos = qos_from_u8(self.mqtt_config.qos)?;
+
+        let (mut client,receiver) =
+            try_result!(get_client(&self.mqtt_config, topic_pub.as_str(), "ABORT"), "Could not create mqtt client and receiver");
+        try_result!(client.subscribe(&topic_sub, qos), "Could not subscribe to mqtt topic");
 
         let controller_topic = get_controller_state_topic(&self.config);
-        let is_controller_online = get_controller_state(&client, &receiver, controller_topic, self.mqtt_config.qos)?;
+        let is_controller_online = get_controller_state(&mut client, &receiver, controller_topic, qos)?;
         if is_controller_online {
             debug!("MQTT controller for '{}' is available", self.config.device);
         } else {
@@ -83,7 +90,7 @@ impl Controller for MqttController {
     }
 
     fn begin(&mut self) -> Result<bool, String> {
-        let connection = try_option!(self.connected.as_ref(), "MQTT controller could not begin, as it is not connected... was the init step skipped?");
+        let connection = try_option!(self.connected.as_mut(), "MQTT controller could not begin, as it is not connected... was the init step skipped?");
 
         info!("MQTT controller start run for device '{}' (start={})", self.config.device, self.config.start);
 
@@ -91,11 +98,11 @@ impl Controller for MqttController {
             return Ok(false);
         }
 
-        let qos = self.mqtt_config.qos;
+        let qos = qos_from_u8(self.mqtt_config.qos)?;
         let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
         let result = if !self.dry_run {
-            start(&connection.client, &connection.receiver, self.config.start, topic_pub, qos)?
+            start(&mut connection.client, &connection.receiver, self.config.start, topic_pub, qos)?
         } else {
             dry_run!(format!("Sending start command on MQTT topic '{}'", &topic_pub));
             true
@@ -106,7 +113,7 @@ impl Controller for MqttController {
     }
 
     fn end(&mut self) -> Result<bool, String> {
-        let connection = try_option!(self.connected.as_ref(), "MQTT controller could not end, as it is not connected... was the init step skipped?");
+        let connection = try_option!(self.connected.as_mut(), "MQTT controller could not end, as it is not connected... was the init step skipped?");
 
         debug!("MQTT controller end run for device '{}'", self.config.device);
 
@@ -118,7 +125,7 @@ impl Controller for MqttController {
         let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
         let result = if !self.dry_run {
-            end(&connection.client, topic_pub, qos)?
+            end(&mut connection.client, topic_pub, qos)?
         } else {
             dry_run!(format!("Sending end command on MQTT topic '{}'", &topic_pub));
             true
@@ -129,9 +136,9 @@ impl Controller for MqttController {
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let connection = try_option!(self.connected.as_ref(), "MQTT controller could not terminate, as it is not connected... was the init step skipped?");
+        let connection = try_option!(self.connected.as_mut(), "MQTT controller could not terminate, as it is not connected... was the init step skipped?");
 
-        try_result!(connection.client.disconnect(None), "Disconnect from broker failed");
+        try_result!(connection.client.shutdown(), "Disconnect from broker failed");
 
         self.connected = None;
         return Ok(());
@@ -185,7 +192,7 @@ impl Bundleable for MqttController {
     }
 }
 
-fn get_controller_state(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, topic: String, qos: i32) -> Result<bool, String> {
+fn get_controller_state(client: &mut MqttClient, receiver: &Receiver<Notification>, topic: String, qos: QoS) -> Result<bool, String> {
     debug!("Checking the mqtt controller state for availability of the remote device");
 
     // Subscribe to state topic
@@ -205,11 +212,11 @@ fn get_controller_state(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::
     return Ok(result);
 }
 
-fn start(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, boot: bool, topic: String, qos: i32) -> Result<bool, String> {
-    let msg = mqtt::Message::new(topic.as_str(), if boot { "START_BOOT" } else { "START_RUN" }, qos);
+fn start(client: &mut MqttClient, receiver: &Receiver<Notification>, boot: bool, topic: String, qos: QoS) -> Result<bool, String> {
+    let payload = if boot { "START_BOOT" } else { "START_RUN" };
 
-    if client.publish(msg).is_err() {
-        return Err("Could not send start initiation message".to_string());
+    if let Err(err) = client.publish(topic.as_str(), qos, false, payload) {
+        return Err(format!("Could not send start message: {}", err));
     }
 
     // TODO: Timeout as option?
@@ -242,8 +249,7 @@ fn start(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, boot
 
     // Wait for check from controller to confirm still waiting
     if received2.to_lowercase().eq("check") {
-        let msg = mqtt::Message::new(topic.as_str(), "STILL_WAITING", qos);
-        if client.publish(msg).is_err() {
+        if client.publish(topic.as_str(), qos, false, "STILL_WAITING").is_err() {
             return Err(String::from("Could not send confirmation for still waiting"));
         }
     } else {
@@ -258,79 +264,91 @@ fn start(client: &mqtt::Client, receiver: &Receiver<Option<mqtt::Message>>, boot
     return Ok(received3.to_lowercase().eq("ready"))
 }
 
-fn end(client: &mqtt::Client, topic: String, qos: i32) -> Result<bool, String> {
-    let msg = mqtt::Message::new(topic, "DONE", qos);
-    return bool_result!(client.publish(msg).is_ok(), true, "Could not send end message");
+fn end(client: &mut MqttClient, topic: String, qos: u8) -> Result<bool, String> {
+    let qos = try_result!(QoS::from_u8(qos), "Could not parse QoS value");
+    let result = client.publish(topic, qos, false, "DONE");
+    return bool_result!(result.is_ok(), true, "Could not send end message");
 }
 
-fn get_client(config: &Configuration, mqtt_config: &MqttConfiguration) -> Result<(mqtt::Client,Receiver<Option<mqtt::Message>>), String> {
+pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str) -> Result<(MqttClient,Receiver<Notification>), String> {
+    trace!("Trying to connect to mqtt broker with address '{}:{}'", mqtt_config.host.as_str(), mqtt_config.port);
 
-    let mqtt_host = format!("tcp://{}:{}", mqtt_config.host, mqtt_config.port);
-
-    trace!("Trying to connect to mqtt broker with address '{}'", mqtt_host);
-
-    let mut client: mqtt::Client = try_result!(mqtt::Client::new(mqtt_host), "Failed connecting to broker");
-
-    let mut options_builder = mqtt::ConnectOptionsBuilder::new();
-    let mut options = options_builder.clean_session(true);
-    options = options.user_name(mqtt_config.user.as_str());
-    if mqtt_config.password.is_some() {
-        options = options.password(mqtt_config.password.as_ref().unwrap().as_str());
-    }
-
-    //options.connect_timeout()
-    //options.automatic_reconnect()
+    // TODO: id
+    let mut options = MqttOptions::new("TODO: ID", mqtt_config.host.as_str(), mqtt_config.port);
+    // options.set_reconnect_opts(mqtt::mqttoptions::ReconnectOptions::AfterFirstSuccess(15));
+    // options.set_connection_timeout(30);
+    options = options.set_clean_session(true);
 
     // Set last will in case of whatever failure that includes a interrupted connection
-    let testament_topic = get_topic_pub(config, mqtt_config);
-    let testament = mqtt::Message::new(testament_topic.as_str(), "ABORT", mqtt_config.qos);
-    options.will_message(testament);
+    let testament_topic = String::from(testament_topic);
+    let qos = try_result!(QoS::from_u8(mqtt_config.qos), "Could not parse QoS value");
+    let last_will = LastWill {
+        topic: testament_topic,
+        message: String::from(testament_payload),
+        qos,
+        retain: false
+    };
+    options = options.set_last_will(last_will);
 
-    let topic_sub = get_topic_sub(config, mqtt_config);
-    let qos = mqtt_config.qos;
+    // set authentication
+    if mqtt_config.password.is_some() {
+        let auth = SecurityOptions::UsernamePassword(mqtt_config.user.clone(), mqtt_config.password.clone().unwrap());
+        options = options.set_security_opts(auth);
+    }
 
-    trace!("Subscription topic is '{}'", topic_sub);
-    trace!("Publish topic is '{}'", testament_topic);
-
-    try_result!(client.connect(options.finalize()), "Could not connect to the mqtt broker");
-
-    let receiver = client.start_consuming();
-    try_result!(client.subscribe(&topic_sub, qos), "Could not subscribe to mqtt topic");
-
-    Ok((client, receiver))
+    return MqttClient::start(options).map_err(|e| format!("Could not connect to the mqtt broker: {}", e));
 }
 
-fn wait_for_message(receiver: &Receiver<Option<mqtt::Message>>, on_topic: Option<&str>, timeout: Duration, expected: Option<String>) -> Result<String, String> {
+fn wait_for_message(receiver: &Receiver<Notification>, on_topic: Option<&str>, timeout: Duration, expected: Option<String>) -> Result<String, String> {
     let start_time = Instant::now();
 
     loop {
         let time_left = timeout - start_time.elapsed();
+        let received_message = try_option!(wait_for_publish(receiver, time_left), "Timeout on receive operation");
+        let payload = decode_payload(&received_message.payload)?;
 
-        let received : Option<mqtt::Message> = try_result!(receiver.recv_timeout(time_left), "Timeout exceeded");
-        // TODO: What was this again?
-        let received_message: mqtt::Message = try_option!(received, "Timeout on receive operation");
-        // TODO: Reconnect on connection loss
-
-        debug!("Received mqtt message '{}'", received_message.to_string());
+        debug!("Received mqtt message '{}'", payload);
 
         if let Some(expected_topic) = on_topic {
-            trace!("Expected to receive message on '{}', received on '{}'", received_message.topic(), expected_topic);
-            if received_message.topic() != expected_topic {
+            trace!("Expected to receive message on '{}', received on '{}'", received_message.topic_name, expected_topic);
+            if received_message.topic_name != expected_topic {
                 debug!("Received message on topic other than the expected one, still waiting");
                 continue;
             }
         }
 
-        let received_string = received_message.payload_str().to_string();
-        if expected.is_some() {
-            if received_string.eq(expected.as_ref().unwrap()) {
-                return Ok(received_string);
+        if let Some(expected_string) = expected.as_ref() {
+            if payload.eq(expected_string.as_str()) {
+                return Ok(payload);
             }
         } else {
-            return Ok(received_string);
+            return Ok(payload);
         }
 
         // Did not receive expected message -> Wait again
+    }
+}
+
+fn wait_for_publish(receiver: &Receiver<Notification>, timeout: Duration) -> Option<Publish> {
+    let start_time = Instant::now();
+    loop {
+        let time_left = timeout - start_time.elapsed();
+
+        if let Ok(notification) = receiver.recv_timeout(time_left) {
+            // TODO: Reconnect on connection loss
+            if let Notification::Publish(publish) = notification {
+                return Some(publish);
+            }
+
+            // TODO: ??
+            //  - None
+            //  - Other variants
+            //  Currently: loop continues
+        } else {
+            return None;
+        }
+
+        //let received = try_result!(receiver.recv_timeout(time_left), "Timeout on receive operation");
     }
 }
 
@@ -346,4 +364,14 @@ fn get_topic_pub(config: &Configuration, mqtt_config: &MqttConfiguration) -> Str
 
 fn get_controller_state_topic(config: &Configuration) -> String {
     return format!("device/{}/controller/status", config.device);
+}
+
+pub fn decode_payload(payload: &Vec<u8>) -> Result<String,String> {
+    return std::str::from_utf8(payload)
+        .map(|s| s.to_owned())
+        .map_err(|e| format!("Could not decode payload as UTF-8: {}", e));
+}
+
+pub fn qos_from_u8(input: u8) -> Result<QoS, String> {
+    return QoS::from_u8(input).map_err(|e| format!("Could not parse QoS: {}", e));
 }

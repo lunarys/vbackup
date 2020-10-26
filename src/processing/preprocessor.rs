@@ -83,7 +83,7 @@ pub struct PreprocessorResult {
 pub fn preprocess(configurations: Vec<Configuration>,
                   args: &Arguments,
                   paths: &Rc<Paths>,
-                  reporter: &ReportingModule,
+                  reporter: &mut ReportingModule,
                   do_backup: bool,
                   do_sync: bool) -> Result<PreprocessorResult,String> {
     if !do_backup && !do_sync {
@@ -107,26 +107,23 @@ pub fn preprocess(configurations: Vec<Configuration>,
     });
 }
 
-fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingModule, args: &Arguments) -> Vec<ConfigurationSplit> {
+fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut ReportingModule, args: &Arguments) -> Vec<ConfigurationSplit> {
     // step 1
     //  filter disabled
     //  move to split
     return configurations.drain(..)
-        .filter(|config| {
+        .filter_map(|config| {
             if config.disabled {
                 if args.override_disabled {
                     warn!("Configuration for '{}' is disabled, but will be executed due to the override argument", config.name.as_str());
-                    return true;
                 } else {
                     info!("Configuration for '{}' is disabled, skipping run", config.name.as_str());
                     reporter.report_status(RunType::RUN, Some(config.name.clone()), Status::DISABLED);
+                    return None;
                 }
             }
 
-            return !config.disabled;
-        })
-        .map(|config| {
-            ConfigurationSplit {
+            return Some(ConfigurationSplit {
                 backup_config: config.backup.clone().filter(|backup| {
                     if backup.disabled {
                         if args.override_disabled {
@@ -156,7 +153,7 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &ReportingM
                 config,
                 backup_paths: None,
                 sync_paths: None
-            }
+            });
         })
         .filter(|config| {
             config.backup_config.is_some() || config.sync_config.is_some()
@@ -175,7 +172,7 @@ fn load_module_paths(mut configurations: Vec<ConfigurationSplit>, paths: &Rc<Pat
     return configurations;
 }
 
-fn load_savedata(configurations: &Vec<ConfigurationSplit>, reporter: &ReportingModule) -> SaveDataCollection {
+fn load_savedata(configurations: &Vec<ConfigurationSplit>, reporter: &mut ReportingModule) -> SaveDataCollection {
     // step 3
     //  load savedata for all
     return configurations
@@ -245,7 +242,7 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
                            args: &Arguments,
                            paths: &Rc<Paths>,
                            savedata_collection: &SaveDataCollection,
-                           reporter: &ReportingModule) -> Result<Vec<ConfigurationUnitBuilder>,String> {
+                           reporter: &mut ReportingModule) -> Result<Vec<ConfigurationUnitBuilder>,String> {
     // step 5
     if args.force {
         info!("Skipping time constraints checks due to forced run");
@@ -307,7 +304,7 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
 fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
                args: &Arguments,
                paths: &Rc<Paths>,
-               reporter: &ReportingModule) -> Vec<ConfigurationUnitBuilder> {
+               reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 6
     return configurations
         .drain(..)
@@ -354,7 +351,7 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
         .collect();
 }
 
-fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, reporter: &ReportingModule) -> Vec<ConfigurationUnitBuilder> {
+fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 7
     if args.force {
         debug!("Skipping additional checks due to forced run");
@@ -364,7 +361,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     return configurations
         .drain(..)
         .filter_map(|configuration| {
-            fn filter_timeframes(run_type: RunType, name: &String, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &ReportingModule) -> Option<Vec<ExecutionTiming>> {
+            fn filter_timeframes(run_type: RunType, name: &String, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &mut ReportingModule) -> Option<Vec<ExecutionTiming>> {
                 if check.is_none() {
                     debug!("There is no additional check for '{}' {}, only using the interval checks", name, run_type);
                     return timeframes;
@@ -429,7 +426,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
         .collect();
 }
 
-fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, reporter: &ReportingModule) -> Vec<ConfigurationUnit> {
+fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, reporter: &mut ReportingModule) -> Vec<ConfigurationUnit> {
     // step 8
     return configurations
         .drain(..)
@@ -480,10 +477,10 @@ fn assemble_from_builders(mut configurations: Vec<ConfigurationUnitBuilder>, rep
         .collect();
 }
 
-fn report_skip(reporter: &ReportingModule, run_type: RunType, name: &String) {
+fn report_skip(reporter: &mut ReportingModule, run_type: RunType, name: &String) {
     reporter.report_status(run_type, Some(name.clone()), Status::SKIP);
 }
 
-fn report_error(reporter: &ReportingModule, run_type: RunType, name: &String) {
+fn report_error(reporter: &mut ReportingModule, run_type: RunType, name: &String) {
     reporter.report_status(run_type, Some(name.clone()), Status::ERROR);
 }

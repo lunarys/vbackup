@@ -10,6 +10,7 @@ use rumqtt::{MqttClient, MqttOptions, Receiver, Notification, SecurityOptions, Q
 use std::time::{Duration, Instant};
 use std::rc::Rc;
 use std::cmp::max;
+use rand;
 
 pub struct MqttController {
     config: Configuration,
@@ -273,8 +274,10 @@ fn end(client: &mut MqttClient, topic: String, qos: u8) -> Result<bool, String> 
 pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str) -> Result<(MqttClient,Receiver<Notification>), String> {
     trace!("Trying to connect to mqtt broker with address '{}:{}'", mqtt_config.host.as_str(), mqtt_config.port);
 
-    // TODO: id
-    let mut options = MqttOptions::new("TODO: ID", mqtt_config.host.as_str(), mqtt_config.port);
+    let random_id: i32 = rand::random();
+    let mqtt_client_id = format!("vbackup-{}-{}", mqtt_config.user, random_id);
+
+    let mut options = MqttOptions::new(mqtt_client_id, mqtt_config.host.as_str(), mqtt_config.port);
     // options.set_reconnect_opts(mqtt::mqttoptions::ReconnectOptions::AfterFirstSuccess(15));
     // options.set_connection_timeout(30);
     options = options.set_clean_session(true);

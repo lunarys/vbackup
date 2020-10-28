@@ -1182,6 +1182,7 @@ dependencies = [
  "glob",
  "log",
  "ping",
+ "rand 0.7.3",
  "rumqtt",
  "serde",
  "serde_derive",

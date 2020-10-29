@@ -265,6 +265,8 @@ Send the backup to a remote destination using rsync over ssh.
 | filter | no | | Set a list of filter rules according to rsync 'FILTER RULES'. Paths anchored at the root need to be prefixed with the dirname and a leading '/'. Same for in-/exclude. |
 | include | no | | Include only the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. As a side-effect does not copy empty directories. Uses filter rules internally. |
 | exclude | no | | Exclude the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. Uses filter rules internally. |
+| local_rsync | no | rsync | Path to the local rsync executable. When using docker:  Use '/usr/bin/rsync' for a standard version and 'rsync' or '/usr/local/bin/rsync' for the patched version (default). |
+| remote_rsync | no | | Path to the remote rsync executable. Default is set by rsync. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
 | host.hostname | yes | | Hostname of the server. |
@@ -283,6 +285,7 @@ Send the backup to a remote destination using rsync over ssh.
   "detect_renamed": true,
   "local_chmod": "0000,Dug+rwx,Fug+rw,o-rwx",
   "local_chown": "1000:1000",
+  "local_rsync": "/path/to/executable/rsync",
   "include": [
     "/my-backup-dir/some-dir-in-sync-root/***",
     "*.txt"

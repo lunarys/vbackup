@@ -47,6 +47,11 @@ struct Configuration {
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
 
+    // Configuration option for rsync executable
+    #[serde(default="default_rsync")]
+    local_rsync: String,
+    remote_rsync: Option<String>,
+
     host: Option<Value>,
     host_reference: Option<String>,
 
@@ -59,6 +64,7 @@ struct Configuration {
 fn default_true() -> bool { true }
 fn default_false() -> bool { false }
 fn default_chmod_perms() -> String { String::from("D0775,F0664") }
+fn default_rsync() -> String { String::from("rsync") }
 
 #[derive(Deserialize)]
 struct SshConfig {
@@ -222,10 +228,10 @@ impl Rsync {
             command.arg_str("vbackup-rsync"); // Docker image name
 
             // Start rsync command
-            command.arg_str("rsync");
+            command.arg_str(self.config.local_rsync.as_str());
             command
         } else {
-            CommandWrapper::new("rsync")
+            CommandWrapper::new(self.config.local_rsync.as_str())
         };
 
         // Authentication: password or private key
@@ -302,6 +308,10 @@ impl Rsync {
                 // Argument order matters, so exclude everything else last
                 command.arg_str("--exclude=*");
             }
+        }
+
+        if let Some(rsync_path) = self.config.remote_rsync.as_ref() {
+            command.arg_string(format!("--rsync-path={}", rsync_path));
         }
 
         if self.config.compress {

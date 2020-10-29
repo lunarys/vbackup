@@ -1,7 +1,8 @@
 use crate::modules::backup::{BackupModule,BackupRelay};
 use crate::util::helper::{check as check_helper};
 use crate::util::io::savefile::{time_format};
-use crate::util::objects::time::{SaveData, TimeEntry};
+use crate::util::objects::time::TimeEntry;
+use crate::util::objects::savedata::SaveData;
 use crate::processing::preprocessor::BackupUnit;
 use crate::Arguments;
 
@@ -64,6 +65,7 @@ pub fn backup(args: &Arguments, unit: &mut BackupUnit, savedata: &mut SaveData) 
     // Write savedata update only if backup was successful
     if backup_result.is_ok() {
         if !args.dry_run {
+            savedata.create_directory_if_missing()?;
             if let Err(err) = savedata.write() {
                 error!("Could not update savedata for '{}' backup ({})", unit.config.name.as_str(), err);
             }

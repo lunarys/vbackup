@@ -35,6 +35,23 @@ struct Configuration {
     path_prefix: Option<String>,
     dirname: String,
 
+    #[serde(default="default_chmod_perms")]
+    chmod_perms: String,
+    // Add additional options for local and remote, to apply to the respective sync direction
+    local_chmod: Option<String>,
+    remote_chmod: Option<String>,
+
+    local_chown: Option<String>,
+
+    filter: Option<Vec<String>>,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+
+    // Configuration option for rsync executable
+    #[serde(default="default_rsync")]
+    local_rsync: String,
+    remote_rsync: Option<String>,
+
     host: Option<Value>,
     host_reference: Option<String>,
 
@@ -46,6 +63,8 @@ struct Configuration {
 
 fn default_true() -> bool { true }
 fn default_false() -> bool { false }
+fn default_chmod_perms() -> String { String::from("D0775,F0664") }
+fn default_rsync() -> String { String::from("rsync") }
 
 #[derive(Deserialize)]
 struct SshConfig {
@@ -64,12 +83,21 @@ impl Sync for Rsync {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
 
-        let default_path_prefix = format!("/home/{}", ssh_config.user);
-        let path_prefix = config.path_prefix.as_ref().unwrap_or(&default_path_prefix);
         let remote_path = format!("{}@{}:{}",
                                   ssh_config.user,
                                   ssh_config.hostname,
-                                  path_prefix);
+                                  config.path_prefix.as_ref().map_or("", |prefix| prefix.as_str()));
+
+        let separator = if let Some(prefix) = config.path_prefix.as_ref() {
+            if prefix.eq("") || prefix.eq("/") {
+                // Putting a separating slash after an empty string or slash only makes no sense
+                ""
+            } else {
+                "/"
+            }
+        } else {
+            ""
+        };
 
         let paths = if args.no_docker {
             if let SourcePath::Single(source_path) = module_paths.source.clone() {
@@ -82,7 +110,7 @@ impl Sync for Rsync {
                 } else {
                     DockerPaths {
                         volume: None,
-                        from: format!("{}/{}", remote_path, config.dirname),
+                        from: format!("{}{}{}", remote_path, separator, config.dirname),
                         to: source_path,
                     }
                 }
@@ -99,7 +127,7 @@ impl Sync for Rsync {
             } else {
                 DockerPaths {
                     volume: Some(module_paths.source.clone()),
-                    from: format!("{}/{}", remote_path, config.dirname),
+                    from: format!("{}{}{}", remote_path, separator, config.dirname),
                     to: String::from("/")
                 }
             }
@@ -200,10 +228,10 @@ impl Rsync {
             command.arg_str("vbackup-rsync"); // Docker image name
 
             // Start rsync command
-            command.arg_str("rsync");
+            command.arg_str(self.config.local_rsync.as_str());
             command
         } else {
-            CommandWrapper::new("rsync")
+            CommandWrapper::new(self.config.local_rsync.as_str())
         };
 
         // Authentication: password or private key
@@ -231,11 +259,59 @@ impl Rsync {
             .arg_str("--delete")
             .arg_str("--partial");
 
-        // TODO: Create an option for this?
         // Set file permissions for receiving end
-        if self.config.to_remote {
-            command.arg_str("--chmod=ug=rwX,o-rwx");
-            command.arg_str("--perms");
+        command.arg_str("--perms");
+        if (self.config.to_remote
+                && self.config.remote_chmod.is_none())
+            || (!self.config.to_remote
+                && self.config.local_chmod.is_none()) {
+
+            command.arg_string(format!("--chmod={}", self.config.chmod_perms.as_str()));
+        } else {
+            if self.config.to_remote {
+                command.arg_string(format!("--chmod={}", self.config.remote_chmod.as_ref().unwrap()));
+            } else {
+                command.arg_string(format!("--chmod={}", self.config.local_chmod.as_ref().unwrap()));
+            }
+        }
+
+        // If copying to the local filesystem, set owning user and group
+        if !self.config.to_remote {
+            if let Some(chown_string) = self.config.local_chown.as_ref() {
+                command.arg_string(format!("--chown={}", chown_string));
+            }
+        }
+
+        // Parse include and exclude options
+        if self.config.filter.is_some() || self.config.include.is_some() || self.config.exclude.is_some() {
+            if let Some(filter_list) = self.config.filter.as_ref() {
+                filter_list.iter().for_each(|filter_option| {
+                    command.arg_string(format!("--filter={}", filter_option));
+                });
+            }
+
+            if let Some(exclude_list) = self.config.exclude.as_ref() {
+                exclude_list.iter().for_each(|exclude_path| {
+                    command.arg_string(format!("--exclude={}", exclude_path));
+                });
+            }
+
+            if let Some(include_list) = self.config.include.as_ref() {
+                // Include only works with including directories by default, so remove empty ones
+                command.arg_str("--prune-empty-dirs");
+                command.arg_str("--include=*/");
+
+                include_list.iter().for_each(|include_path| {
+                    command.arg_string(format!("--include={}", include_path));
+                });
+
+                // Argument order matters, so exclude everything else last
+                command.arg_str("--exclude=*");
+            }
+        }
+
+        if let Some(rsync_path) = self.config.remote_rsync.as_ref() {
+            command.arg_string(format!("--rsync-path={}", rsync_path));
         }
 
         if self.config.compress {

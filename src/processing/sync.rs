@@ -2,7 +2,8 @@ use crate::modules::sync::{SyncModule,SyncRelay};
 use crate::modules::controller::ControllerModule;
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::util::io::savefile::{time_format};
-use crate::util::objects::time::{SaveData, TimeEntry};
+use crate::util::objects::time::TimeEntry;
+use crate::util::objects::savedata::SaveData;
 use crate::processing::preprocessor::SyncUnit;
 use crate::Arguments;
 
@@ -66,6 +67,7 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     // Write savedata update only if sync was successful
     if sync_result.is_ok() {
         if !args.dry_run {
+            savedata.create_directory_if_missing()?;
             if let Err(err) = savedata.write() {
                 error!("Could not update savedata for '{}' sync ({})", unit.config.name.as_str(), err);
             }

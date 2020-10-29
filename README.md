@@ -255,12 +255,21 @@ Send the backup to a remote destination using rsync over ssh.
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | compress | no | false | Compress the files before transmitting. |
-| path_prefix | no | /home/%u | Prefix for the remote path. |
-| dirname | yes | | Directory to sync to on the server. |
-| detect_renamed | no | false | Enable the rsync detect-renamed patch. Only works if the patch is installed on client on server. If running with docker a patched version is used. |
+| path_prefix | no | | Prefix for the remote path. Treated as a path relative to the home directory unless there is a '/' as the first character. |
+| dirname | yes | | Directory to sync to on the server. Should be only the name of the directory, not the path. |
+| detect_renamed | no | false | Enable the rsync detect-renamed patch. Only works if the patch is installed on client and server. If running with docker a patched version is used automatically. |
+| chmod_perms | no | D0775,F0664 | File and directory modes to apply to written files and directories, according to the '--chmod' option of rsync. |
+| local_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the local filesystem. |
+| remote_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the remote filesystem. |
+| local_chown | no | | Owner and group for files and directories copied to the local filesystem, according to the '--chown' option of rsync. It is recommended to use the UID/GID when using docker mode, as names are not present. |
+| filter | no | | Set a list of filter rules according to rsync 'FILTER RULES'. Paths anchored at the root need to be prefixed with the dirname and a leading '/'. Same for in-/exclude. |
+| include | no | | Include only the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. As a side-effect does not copy empty directories. Uses filter rules internally. |
+| exclude | no | | Exclude the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. Uses filter rules internally. |
+| local_rsync | no | rsync | Path to the local rsync executable. When using docker:  Use '/usr/bin/rsync' for a standard version and 'rsync' or '/usr/local/bin/rsync' for the patched version (default). |
+| remote_rsync | no | | Path to the remote rsync executable. Default is set by rsync. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
-| host.hostname | yes | | Hostname of the server.
+| host.hostname | yes | | Hostname of the server. |
 | host.port | yes | | Port of the server. |
 | host.user | yes | | Username for login on the server. |
 | host.password | no | | Password for login on the server. |
@@ -272,8 +281,15 @@ Send the backup to a remote destination using rsync over ssh.
   "type": "rsync-ssh",
   "compress": false,
   "path_prefix": "/home/foo",
-  "dirname": "my-backup-dir/sub-dir",
+  "dirname": "my-backup-dir",
   "detect_renamed": true,
+  "local_chmod": "0000,Dug+rwx,Fug+rw,o-rwx",
+  "local_chown": "1000:1000",
+  "local_rsync": "/path/to/executable/rsync",
+  "include": [
+    "/my-backup-dir/some-dir-in-sync-root/***",
+    "*.txt"
+  ],
   "host": {
     "hostname": "my-ssh-server.local",
     "port": 22,
@@ -290,8 +306,8 @@ Only really makes sense without creating a local backup before.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| directory_prefix | no | |  Prefix for the remote path. |
-| directory | yes | | Directory to sync to on the server. | 
+| directory_prefix | no | | Prefix for the remote path. Treated as a path relative to the home directory unless there is a '/' as the first character. |
+| directory | yes | | Directory to sync to on the server. Should be only the name of the directory, not the path. |
 | keep_versions | no | 1 | Number of versions of a file to keep. Note: Only if `smart_retention=false`.
 | smart_retention | no | false | Switch between smart retention policy or simple versioning. 
 | retention_policy | no | 1W:1D,4W:1W,12M:1M | Retention policy to use. Note: Only if `smart_retention=true`. [More here.](https://duplicati.readthedocs.io/en/latest/06-advanced-options/#retention-policy)
@@ -315,7 +331,7 @@ and [this guideline by the developers](https://www.duplicati.com/articles/Choosi
   "type": "duplicati",
   "encryption_key": "supersecure",
   "directory_prefix": "/home/foo",
-  "directory": "directory/sub-directory",
+  "directory": "some-directory",
   "auth": {
     "hostname": "my-ssh-server.local",
     "port": "22",
@@ -411,7 +427,7 @@ Ping the specified host before attempting to sync in order to determine whether 
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| address | yes | | The IP address to ping, currently does not work with domain names. |
+| address | yes | | The IP address or hostname to ping. |
 | timeout  | no | 10 | A timeout for the ping request in seconds. |
 
 ### Reporting

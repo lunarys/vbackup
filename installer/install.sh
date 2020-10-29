@@ -30,6 +30,11 @@ if [[ "$1" == "--update" ]] || [[ "$1" == "-u" ]] || [[ "$1" == "--update-only" 
     UPDATE_ONLY=true
 fi
 
+if ! $SKIP_COMPILE && ! $UPDATE_ONLY && [[ -n "$1" ]]; then
+  echo "Unknown option: $1"
+  exit 34
+fi
+
 # Skip compile e.g. for mode without docker, binary needs to be precompiled then
 if ! $SKIP_COMPILE; then
 	# Check if docker is installed

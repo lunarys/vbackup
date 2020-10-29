@@ -12,7 +12,10 @@
         "user": "foo",
         "host_key": "[ilirea.elda]:22222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZff7FihzerO07wxa1DDNdsADpU9urbR7DlPdYG5aBH",
 	    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\nQyNTUxOQAAACChgnJydSPWYRFRDFrVZ0aSTIL6XRMJQjAwkF3BosVgAAAAAJDCZZyswmWc\nrAAAAAtzc2gtZWQyNTUxOQAAACChgnJydSPWYRFRDFrVZ0aSTIL6XRMJQjAwkF3BosVgAA\nAAAECz6AfBIkw6iB6kkP5dFkrTJOnY4YWALnjO1VMgZMSLYaGCcnJ1I9ZhEVEMWtVnRpJM\ngvpdEwlCMDCQXcGixWAAAAAACWp1QElsaXJlYQECAwQ=\n-----END OPENSSH PRIVATE KEY-----\n"
-      }
+      },
+      "local_chown": "1000:1000",
+      "local_chmod":  "D0750,F0640",
+      "remote_chmod": "D2770,F0660"
     },
     "check": {
       "type": "file-age"

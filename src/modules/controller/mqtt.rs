@@ -6,10 +6,12 @@ use crate::{try_result,try_option,bool_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use rumqtt::{MqttClient, MqttOptions, Receiver, Notification, SecurityOptions, QoS, Publish, LastWill};
+use rumqttc::{Client, Connection, MqttOptions, SecurityOptions, QoS, Publish, LastWill, Event, Packet};
 use std::time::{Duration, Instant};
 use std::rc::Rc;
 use std::cmp::max;
+use std::thread;
+use crossbeam_channel::{unbounded,Receiver};
 use rand;
 
 pub struct MqttController {
@@ -18,12 +20,12 @@ pub struct MqttController {
     dry_run: bool,
     name: String,
     paths: Rc<Paths>,
-    connected: Option<Connection>
+    connected: Option<MqttConnection>
 }
 
-struct Connection {
+struct MqttConnection {
     client: MqttClient,
-    receiver: Receiver<Notification>,
+    receiver: Receiver<Publish>,
     is_controller_online: bool
 }
 
@@ -81,7 +83,7 @@ impl Controller for MqttController {
             warn!("MQTT controller for '{}' is not available", self.config.device);
         }
 
-        self.connected = Some(Connection {
+        self.connected = Some(MqttConnection {
             client,
             receiver,
             is_controller_online
@@ -193,7 +195,7 @@ impl Bundleable for MqttController {
     }
 }
 
-fn get_controller_state(client: &mut MqttClient, receiver: &Receiver<Notification>, topic: String, qos: QoS) -> Result<bool, String> {
+fn get_controller_state(client: &mut Client, receiver: &Receiver<Notification>, topic: String, qos: QoS) -> Result<bool, String> {
     debug!("Checking the mqtt controller state for availability of the remote device");
 
     // Subscribe to state topic
@@ -213,7 +215,7 @@ fn get_controller_state(client: &mut MqttClient, receiver: &Receiver<Notificatio
     return Ok(result);
 }
 
-fn start(client: &mut MqttClient, receiver: &Receiver<Notification>, boot: bool, topic: String, qos: QoS) -> Result<bool, String> {
+fn start(client: &mut Client, receiver: &Receiver<Notification>, boot: bool, topic: String, qos: QoS) -> Result<bool, String> {
     let payload = if boot { "START_BOOT" } else { "START_RUN" };
 
     if let Err(err) = client.publish(topic.as_str(), qos, false, payload) {
@@ -265,13 +267,13 @@ fn start(client: &mut MqttClient, receiver: &Receiver<Notification>, boot: bool,
     return Ok(received3.to_lowercase().eq("ready"))
 }
 
-fn end(client: &mut MqttClient, topic: String, qos: u8) -> Result<bool, String> {
+fn end(client: &mut Client, topic: String, qos: u8) -> Result<bool, String> {
     let qos = try_result!(QoS::from_u8(qos), "Could not parse QoS value");
     let result = client.publish(topic, qos, false, "DONE");
     return bool_result!(result.is_ok(), true, "Could not send end message");
 }
 
-pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str) -> Result<(MqttClient,Receiver<Notification>), String> {
+pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str) -> Result<(Client,Receiver<Publish>), String> {
     trace!("Trying to connect to mqtt broker with address '{}:{}'", mqtt_config.host.as_str(), mqtt_config.port);
 
     let random_id: i32 = rand::random();
@@ -280,26 +282,52 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
     let mut options = MqttOptions::new(mqtt_client_id, mqtt_config.host.as_str(), mqtt_config.port);
     // options.set_reconnect_opts(mqtt::mqttoptions::ReconnectOptions::AfterFirstSuccess(15));
     // options.set_connection_timeout(30);
-    options = options.set_clean_session(true);
+    options.set_clean_session(true);
 
     // Set last will in case of whatever failure that includes a interrupted connection
     let testament_topic = String::from(testament_topic);
     let qos = try_result!(QoS::from_u8(mqtt_config.qos), "Could not parse QoS value");
-    let last_will = LastWill {
-        topic: testament_topic,
-        message: String::from(testament_payload),
-        qos,
-        retain: false
-    };
-    options = options.set_last_will(last_will);
+    let last_will = LastWill::new(testament_topic, qos, testament_payload);
+
+    options.set_last_will(last_will);
 
     // set authentication
     if mqtt_config.password.is_some() {
-        let auth = SecurityOptions::UsernamePassword(mqtt_config.user.clone(), mqtt_config.password.clone().unwrap());
-        options = options.set_security_opts(auth);
+        options.set_credentials(mqtt_config.user.clone(), mqtt_config.password.clone().unwrap());
     }
 
-    return MqttClient::start(options).map_err(|e| format!("Could not connect to the mqtt broker: {}", e));
+    // TODO: cap=10 ?? (taken from crate examples)
+    let (client,mut connection) = Client::new(options, 10);
+    let (sender, receiver) = unbounded();
+
+    thread::spawn(move || {
+        for (i, notification) in connection.iter().enumerate() {
+            match notification {
+                Ok(event) => {
+                    match event {
+                        Event::Incoming(packet) => {
+                            match packet {
+                                Packet::Publish(publish) => {
+                                    sender.send(publish);
+                                },
+                                Packet::ConnAck(conn_ack) => {
+                                    // TODO: use this to wait for connected?
+                                }
+                                _ => {}
+                            }
+                        }
+                        Event::Outgoing(_) => {}
+                    }
+                },
+                Err(error) => {
+                    error!("Connection error in mqtt receiver: {}", error);
+                }
+            }
+        }
+    });
+
+    // TODO: await connect? how?
+    return Ok((client, receiver));
 }
 
 fn wait_for_message(receiver: &Receiver<Notification>, on_topic: Option<&str>, timeout: Duration, expected: Option<String>) -> Result<String, String> {
@@ -307,6 +335,7 @@ fn wait_for_message(receiver: &Receiver<Notification>, on_topic: Option<&str>, t
 
     loop {
         let time_left = timeout - start_time.elapsed();
+
         let received_message = try_option!(wait_for_publish(receiver, time_left), "Timeout on receive operation");
         let payload = decode_payload(&received_message.payload)?;
 

@@ -55,6 +55,9 @@ struct Configuration {
     host: Option<Value>,
     host_reference: Option<String>,
 
+    // Option to inject additional arguments
+    additional_args: Option<Vec<String>>,
+
     // detect-renamed activated would be the better options, but only works with patched servers
     //  so set it disabled by default
     #[serde(default="default_false")]
@@ -324,6 +327,12 @@ impl Rsync {
 
         if self.verbose {
             command.arg_str("--verbose");
+        }
+
+        if let Some(args) = self.config.additional_args.as_ref() {
+            for arg in args {
+                command.arg_str(arg.as_str());
+            }
         }
 
         return Ok(command);

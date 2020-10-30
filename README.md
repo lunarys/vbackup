@@ -56,6 +56,16 @@ such that the backup server is not started for each sync separately and can prof
 | --no-reporting | yes | false | Disable reporting for this run. |
 | --override-disabled, --run-disabled | yes | false | Ignore the disabled status on configurations. |
 
+## Requirements
+### Docker mode
+- docker
+### No docker mode
+- rsync (for rsync module)
+- sshpass (for rsync with password)
+- duplicati (for duplicati module)
+
+Note: this list is probably incomplete.
+
 ## Configuration
 ### Base configuration
 Default file: `/etc/vbackup/config.json`
@@ -267,6 +277,7 @@ Send the backup to a remote destination using rsync over ssh.
 | exclude | no | | Exclude the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. Uses filter rules internally. |
 | local_rsync | no | rsync | Path to the local rsync executable. When using docker:  Use '/usr/bin/rsync' for a standard version and 'rsync' or '/usr/local/bin/rsync' for the patched version (default). |
 | remote_rsync | no | | Path to the remote rsync executable. Default is set by rsync. |
+| additional_args | no | | Additional arguments for rsync. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
 | host.hostname | yes | | Hostname of the server. |
@@ -289,6 +300,9 @@ Send the backup to a remote destination using rsync over ssh.
   "include": [
     "/my-backup-dir/some-dir-in-sync-root/***",
     "*.txt"
+  ],
+  "additional_args": [
+    "--omit-dir-times"
   ],
   "host": {
     "hostname": "my-ssh-server.local",

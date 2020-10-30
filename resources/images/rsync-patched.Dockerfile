@@ -3,28 +3,20 @@
 #  available as lunarys/rsync-detect-renamed
 #  but it does not support different archs
 # =============================================
-FROM debian:testing-slim as builder
-ARG VERSION=3.2.3
+FROM debian:stable-slim as builder
+ARG VERSION=3.1.3
 
-RUN apt-get update && apt-get install -y \
-	gcc g++ gawk autoconf automake python3-cmarkgfm \
-	acl libacl1-dev \
-	attr libattr1-dev \
-	libxxhash-dev \
-	libzstd-dev \
-	liblz4-dev \
-	libssl-dev \
-	build-essential \
-	wget
+RUN apt-get update && apt-get install -y build-essential wget
 
-RUN wget https://download.samba.org/pub/rsync/rsync-${VERSION}.tar.gz \
-	&& wget https://download.samba.org/pub/rsync/rsync-patches-${VERSION}.tar.gz \
+RUN wget https://download.samba.org/pub/rsync/src/rsync-${VERSION}.tar.gz \
+	&& wget https://download.samba.org/pub/rsync/src/rsync-patches-${VERSION}.tar.gz \
 	&& tar xzvf rsync-${VERSION}.tar.gz \
 	&& tar xzvf rsync-patches-${VERSION}.tar.gz
 
 WORKDIR rsync-${VERSION}
 
 RUN patch -p1 <patches/detect-renamed.diff \
+    && patch -p1 <patches/detect-renamed-lax.diff \
 	&& ./configure \
 	&& make \
 	&& make install
@@ -32,7 +24,7 @@ RUN patch -p1 <patches/detect-renamed.diff \
 # =============================================
 #  Only the executables are required
 # =============================================
-FROM debian:testing-slim
+FROM debian:stable-slim
 
 COPY --from=builder /usr/local/bin/rsync* /usr/local/bin/
 

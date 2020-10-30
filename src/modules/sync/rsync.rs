@@ -61,7 +61,11 @@ struct Configuration {
     // detect-renamed activated would be the better options, but only works with patched servers
     //  so set it disabled by default
     #[serde(default="default_false")]
-    detect_renamed: bool
+    detect_renamed: bool,
+    #[serde(default="default_false")]
+    detect_renamed_lax: bool,
+    #[serde(default="default_false")]
+    detect_moved: bool
 }
 
 fn default_true() -> bool { true }
@@ -152,7 +156,7 @@ impl Sync for Rsync {
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image if missing
         if !self.no_docker {
-            if self.config.detect_renamed {
+            if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
                 docker::build_image_if_missing(&self.module_paths.base_paths, "rsync-patched.Dockerfile", "vbackup-rsync-patched")?;
             } else {
                 docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
@@ -167,6 +171,14 @@ impl Sync for Rsync {
 
         if self.config.detect_renamed {
             command.arg_str("--detect-renamed");
+        }
+
+        if self.config.detect_renamed_lax {
+            command.arg_str("--detect-renamed-lax");
+        }
+
+        if self.config.detect_moved {
+            command.arg_str("--detect-moved");
         }
 
         command.arg_string(format!("{}", &self.sync_paths.from))
@@ -232,7 +244,7 @@ impl Rsync {
             command.arg_string(format!("--volume={}:{}", &self.module_paths.module_data_dir, "/module"));
 
             // End docker command with docker image name
-            if self.config.detect_renamed {
+            if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
                 command.arg_str("vbackup-rsync-patched");
             } else {
                 command.arg_str("vbackup-rsync");

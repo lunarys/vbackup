@@ -268,6 +268,8 @@ Send the backup to a remote destination using rsync over ssh.
 | path_prefix | no | | Prefix for the remote path. Treated as a path relative to the home directory unless there is a '/' as the first character. |
 | dirname | yes | | Directory to sync to on the server. Should be only the name of the directory, not the path. |
 | detect_renamed | no | false | Enable the rsync detect-renamed patch. Only works if the patch is installed on client and server. If running with docker a patched version is used automatically. |
+| detect_renamed_lax | no | false | Enable the rsync detect-renamed-lax patch. Same notes as for detect_renamed. |
+| detect_moved | no | false | Enable the rsync detect-moved patch. Same notes as for detect_renamed. |
 | chmod_perms | no | D0775,F0664 | File and directory modes to apply to written files and directories, according to the '--chmod' option of rsync. |
 | local_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the local filesystem. |
 | remote_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the remote filesystem. |
@@ -275,7 +277,7 @@ Send the backup to a remote destination using rsync over ssh.
 | filter | no | | Set a list of filter rules according to rsync 'FILTER RULES'. Paths anchored at the root need to be prefixed with the dirname and a leading '/'. Same for in-/exclude. |
 | include | no | | Include only the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. As a side-effect does not copy empty directories. Uses filter rules internally. |
 | exclude | no | | Exclude the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. Uses filter rules internally. |
-| local_rsync | no | rsync | Path to the local rsync executable. When using docker:  Use '/usr/bin/rsync' for a standard version and 'rsync' or '/usr/local/bin/rsync' for the patched version (default). |
+| local_rsync | no | rsync | Path to the local rsync executable. When using docker:  A different image is built for detect-renamed(-lax)/detect-moved where '/usr/bin/rsync' is standard rsync and 'rsync' is the patched version. |
 | remote_rsync | no | | Path to the remote rsync executable. Default is set by rsync. |
 | additional_args | no | | Additional arguments for rsync. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |

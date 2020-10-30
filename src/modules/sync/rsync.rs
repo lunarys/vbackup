@@ -152,7 +152,11 @@ impl Sync for Rsync {
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image if missing
         if !self.no_docker {
-            docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
+            if self.config.detect_renamed {
+                docker::build_image_if_missing(&self.module_paths.base_paths, "rsync-patched.Dockerfile", "vbackup-rsync-patched")?;
+            } else {
+                docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
+            }
         }
 
         return Ok(());
@@ -227,8 +231,12 @@ impl Rsync {
             // Volume for authentication files
             command.arg_string(format!("--volume={}:{}", &self.module_paths.module_data_dir, "/module"));
 
-            // End docker command
-            command.arg_str("vbackup-rsync"); // Docker image name
+            // End docker command with docker image name
+            if self.config.detect_renamed {
+                command.arg_str("vbackup-rsync-patched");
+            } else {
+                command.arg_str("vbackup-rsync");
+            }
 
             // Start rsync command
             command.arg_str(self.config.local_rsync.as_str());

@@ -24,8 +24,12 @@ pub struct Tar7Zip {
 
 #[derive(Deserialize)]
 struct Configuration {
-    encryption_key: Option<String>
+    encryption_key: Option<String>,
+    #[serde(default="default_7z_executable")]
+    executable: String
 }
+
+fn default_7z_executable() -> String { String::from("/usr/lib/p7zip/7z") }
 
 impl Backup for Tar7Zip {
     const MODULE_NAME: &'static str = "tar7zip";
@@ -103,7 +107,7 @@ impl Backup for Tar7Zip {
         };
 
         //  Use full path to 7z executable to avoid additional forking without the password being replaced in the process overview
-        let command_actual = format!("tar -cf - -C '{}' . | /usr/lib/p7zip/7z a -si -mhe=on {}'{}'", save_path, password_option, tmp_backup_file);
+        let command_actual = format!("tar -cf - -C '{}' . | {} a -si -mhe=on {}'{}'", save_path, self.config.executable.as_str(), password_option, tmp_backup_file);
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file

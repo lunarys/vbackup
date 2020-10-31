@@ -3,7 +3,7 @@ use crate::util::objects::configuration::Configuration;
 use serde::{Deserialize};
 use std::rc::Rc;
 
-fn default_bool_true() -> bool { true }
+// fn default_bool_true() -> bool { true }
 fn default_bool_false() -> bool { false }
 fn default_config_dir() -> String { String::from("/etc/vbackup") }
 fn default_save_dir() -> String { String::from("/var/vbackup") }
@@ -19,7 +19,7 @@ pub struct PathBase {
     #[serde(default="default_tmp_dir")]
     pub tmp_dir: String, // Directory for temporary files
     pub auth_data_file: Option<String>, // File containing shared authentication information
-    #[serde(default="default_bool_true")]
+    #[serde(default="default_bool_false")]
     pub savedata_in_store: bool,
     pub reporting_file: Option<String>,
     pub docker_images: Option<String>,

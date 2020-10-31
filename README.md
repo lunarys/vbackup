@@ -63,6 +63,7 @@ such that the backup server is not started for each sync separately and can prof
 - rsync (for rsync module)
 - sshpass (for rsync with password)
 - duplicati (for duplicati module)
+- 7z / p7zip-full on debian (for tar7zip backup)
 
 Note: this list is probably incomplete.
 
@@ -125,7 +126,7 @@ Default directory: `/etc/vbackup/volumes`. This is the configuration file for a 
 | source_path[].path | no | | Path to a directory / name of a docker volume to back up. |
 | source_path[].name | no | | Name for the backup up location (Used for example as a top-level directory in an archive). |
 | backup_path | no | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. Uses the backup directory and the name of the configuration by default.|
-| savedata_in_store | no | false | Wether to store the savedata file with the backup or not. Overwrites the global flag if set. |
+| savedata_in_store | no | false | Whether to store the savedata file with the backup or not. Overwrites the global flag if set. |
 | backup | no | | The backup configuration for this volume. |
 | sync | no | | The sync configuration for this volume. | 
 

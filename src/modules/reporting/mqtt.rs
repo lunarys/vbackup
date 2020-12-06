@@ -2,6 +2,7 @@ use crate::modules::traits::Reporting;
 use crate::util::objects::reporting::*;
 use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths};
+use crate::util::objects::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
 use crate::{try_result};
 
@@ -23,20 +24,6 @@ struct Configuration {
     base_topic: Option<String>,
     auth: Option<Value>
 }
-
-#[derive(Deserialize)]
-struct MqttConfiguration {
-    host: String,
-    #[serde(default="default_port")]
-    port: i32,
-    user: String,
-    password: Option<String>,
-    #[serde(default="default_qos")]
-    qos: i32
-}
-
-fn default_qos() -> i32 { 1 }
-fn default_port() -> i32 { 1883 }
 
 impl Reporting for Reporter {
     const MODULE_NAME: &'static str = "mqtt";

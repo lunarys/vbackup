@@ -91,14 +91,19 @@ pub fn move_file(from: &str, to: &str) -> Result<(),String> {
 
 pub fn checked_remove(file_name: &str) -> Result<bool, String> {
     let path = Path::new(file_name);
-    if path.exists() {
-        if let Err(err) = remove_file(path) {
-            return Err(format!("Could not remove file ({})", err.to_string()));
-        } else {
-            return Ok(true);
-        }
+    return if path.exists() {
+        remove(file_name).map(|_| true)
     } else {
-        return Ok(false);
+        Ok(false)
+    }
+}
+
+pub fn remove(file_name: &str) -> Result<(), String> {
+    let path = Path::new(file_name);
+    return if let Err(err) = remove_file(path) {
+        Err(format!("Could not remove file '{}' ({})", file_name, err.to_string()))
+    } else {
+        Ok(())
     }
 }
 

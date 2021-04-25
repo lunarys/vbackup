@@ -96,6 +96,8 @@ fn process_sync(config: &mut SyncUnit,
             info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.config.name.as_str());
             reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::SKIP);
             return Ok(());
+        } else {
+            debug!("Sync for '{}' is executed as there was a recent backup", config.config.name.as_str());
         }
     } else {
         debug!("Skipping check for sync after backup due to forced run");

@@ -114,6 +114,8 @@ impl BundleableRelay for ControllerBundle {
         }
         return result;
     }
+
+    fn did_start(&self) -> bool { self.begin_result.is_some() }
 }
 
 pub trait BundleableControllerRelay: ControllerRelay + BundleableRelay {

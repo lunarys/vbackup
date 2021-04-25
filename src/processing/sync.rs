@@ -1,5 +1,5 @@
 use crate::modules::sync::{SyncModule,SyncRelay};
-use crate::modules::controller::ControllerModule;
+use crate::modules::controller::{ControllerModule, BundleableRelay};
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::util::io::savefile::{time_format};
 use crate::util::objects::time::TimeEntry;
@@ -14,7 +14,7 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     let mut controller_module = controller_override.or(unit.controller.as_mut());
     let mut module = SyncModule::new(unit.sync_config.sync_type.as_str(), &unit.config.name, &unit.sync_config.config, unit.module_paths.clone(), args)?;
 
-    info!("Executing sync for '{}'", unit.config.name.as_str());
+    trace!("Initializing sync for '{}'", unit.config.name.as_str());
 
     // init controller module
     controller_helper::init(&mut controller_module)?;
@@ -26,9 +26,12 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     // Run controller (if there is one)
     if controller_module.is_some() {
         trace!("Invoking remote device controller");
+        let did_start = controller_module.as_ref().map_or(true, |module| !module.did_start());
         if controller_helper::start(&mut controller_module)? {
             // There is no controller or device is ready for sync
-            info!("Remote device is now available");
+            if did_start {
+                info!("Remote device is available, starting sync");
+            }
         } else {
             // Device did not start before timeout or is not available
             warn!("Remote device is not available, aborting sync");
@@ -37,7 +40,7 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     }
 
     // Run sync
-    trace!("Invoking sync module");
+    info!("Executing sync for '{}'", unit.config.name.as_str());
     let sync_result = module.sync();
 
     // Check result of sync and act accordingly

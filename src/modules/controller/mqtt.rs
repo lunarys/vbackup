@@ -92,7 +92,7 @@ impl Controller for MqttController {
     fn end(&mut self) -> Result<bool, String> {
         let connection = try_option!(self.connected.as_ref(), "MQTT controller could not end, as it is not connected... was the init step skipped?");
 
-        debug!("MQTT controller end run for device '{}'", self.config.device);
+        info!("MQTT controller end run for device '{}'", self.config.device);
 
         if !connection.is_controller_online {
             return Ok(false);

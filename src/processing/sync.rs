@@ -1,5 +1,5 @@
 use crate::modules::sync::{SyncModule,SyncRelay};
-use crate::modules::controller::ControllerModule;
+use crate::modules::controller::{ControllerModule, BundleableRelay};
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::util::io::savefile::{time_format};
 use crate::util::objects::time::TimeEntry;
@@ -26,10 +26,12 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     // Run controller (if there is one)
     if controller_module.is_some() {
         trace!("Invoking remote device controller");
+        let did_start = controller_module.as_ref().map_or(true, |module| !module.did_start());
         if controller_helper::start(&mut controller_module)? {
             // There is no controller or device is ready for sync
-            // TODO: check if bundle dummy call
-            info!("Remote device is available, starting sync");
+            if did_start {
+                info!("Remote device is available, starting sync");
+            }
         } else {
             // Device did not start before timeout or is not available
             warn!("Remote device is not available, aborting sync");

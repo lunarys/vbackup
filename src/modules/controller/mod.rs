@@ -105,16 +105,29 @@ impl ControllerRelay for ControllerModule {
 
 pub trait BundleableRelay {
     fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool,String>;
+    fn did_start(&self) -> bool;
 }
 
 impl<T: Bundleable> BundleableRelay for T {
     fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
         self.try_bundle(other_name, other)
     }
+
+    /*
+     * Only relevant if used as a bundle, and then this is handled by bundle::ControllerBundle
+     */
+    fn did_start(&self) -> bool { false }
 }
 
 impl BundleableRelay for ControllerModule {
     fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
         self.as_mut_bundleable()?.try_bundle(other_name, other)
+    }
+
+    fn did_start(&self) -> bool {
+        match self {
+            ControllerModule::Simple(_) => {false}
+            ControllerModule::Bundle(bundle) => {bundle.did_start()}
+        }
     }
 }

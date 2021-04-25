@@ -21,6 +21,8 @@ enum Type { Backup, Sync }
 
 pub fn check_sync_after_backup(timing: &ExecutionTiming, savedata: &SaveData, has_backup: bool) -> bool {
     if has_backup {
+        trace!("Checking if there was a backup run before this sync");
+
         // run sync only after backup
         if let Some(last_sync) = timing.last_run.as_ref() {
             return savedata.lastsave.values().any(|backup| backup.timestamp > last_sync.timestamp);

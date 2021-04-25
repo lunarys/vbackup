@@ -211,6 +211,9 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
         .for_each(|mut config| {
             let config_rc = Rc::new(config.config);
 
+            let has_sync = config.sync_config.is_some();
+            let has_backup = config.backup_config.is_some();
+
             if do_backup {
                 if let Some(backup_config) = config.backup_config.take() {
                     result.push(ConfigurationUnitBuilder::Backup(BackupUnitBuilder {
@@ -219,7 +222,7 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
                         check: None,
                         module_paths: config.backup_paths.unwrap(),
                         timeframes: None,
-                        has_sync: config.sync_config.is_some()
+                        has_sync
                     }))
                 }
             }
@@ -232,7 +235,7 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
                         check: None,
                         module_paths: config.sync_paths.unwrap(),
                         timeframes: None,
-                        has_backup: config.backup_config.is_some()
+                        has_backup
                     }))
                 }
             }

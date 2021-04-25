@@ -14,7 +14,7 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     let mut controller_module = controller_override.or(unit.controller.as_mut());
     let mut module = SyncModule::new(unit.sync_config.sync_type.as_str(), &unit.config.name, &unit.sync_config.config, unit.module_paths.clone(), args)?;
 
-    info!("Executing sync for '{}'", unit.config.name.as_str());
+    trace!("Initializing sync for '{}'", unit.config.name.as_str());
 
     // init controller module
     controller_helper::init(&mut controller_module)?;
@@ -28,7 +28,8 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
         trace!("Invoking remote device controller");
         if controller_helper::start(&mut controller_module)? {
             // There is no controller or device is ready for sync
-            info!("Remote device is now available");
+            // TODO: check if bundle dummy call
+            info!("Remote device is available, starting sync");
         } else {
             // Device did not start before timeout or is not available
             warn!("Remote device is not available, aborting sync");
@@ -37,7 +38,7 @@ pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, cont
     }
 
     // Run sync
-    trace!("Invoking sync module");
+    info!("Executing sync for '{}'", unit.config.name.as_str());
     let sync_result = module.sync();
 
     // Check result of sync and act accordingly

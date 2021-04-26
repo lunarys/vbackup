@@ -21,12 +21,12 @@ fi
 
 # Only one option makes sense, so just check $1
 SKIP_COMPILE=false
-if [[ "$1" == "--skip-compile" ]] || [[ "$1" == "--no-compile" ]]; then
+if [[ "$1" == "--skip-compile" ]] || [[ "$1" == "--no-compile" ]] || [[ "$2" == "--skip-compile" ]] || [[ "$2" == "--no-compile" ]]; then
 	SKIP_COMPILE=true
 fi
 
 UPDATE_ONLY=false
-if [[ "$1" == "--update" ]] || [[ "$1" == "-u" ]] || [[ "$1" == "--update-only" ]]; then
+if [[ "$1" == "--update" ]] || [[ "$1" == "-u" ]] || [[ "$1" == "--update-only" ]] || [[ "$2" == "--update" ]] || [[ "$2" == "-u" ]] || [[ "$2" == "--update-only" ]]; then
     UPDATE_ONLY=true
 fi
 

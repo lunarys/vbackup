@@ -6,7 +6,7 @@ use crate::{try_result,try_option,bool_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use rumqttc::{Client, Connection, MqttOptions, SecurityOptions, QoS, Publish, LastWill, Event, Packet};
+use rumqttc::{Client, MqttOptions, QoS, Publish, LastWill, Event, Packet};
 use std::time::{Duration, Instant};
 use std::rc::Rc;
 use std::cmp::max;
@@ -24,7 +24,7 @@ pub struct MqttController {
 }
 
 struct MqttConnection {
-    client: MqttClient,
+    client: Client,
     receiver: Receiver<Publish>,
     is_controller_online: bool
 }
@@ -50,11 +50,15 @@ pub struct MqttConfiguration {
     pub password: Option<String>,
 
     #[serde(default="default_qos")]
-    pub qos: u8
+    pub qos: u8,
+
+    #[serde(default="default_false")]
+    pub retain: bool
 }
 
 fn default_qos() -> u8 { 1 }
 fn default_port() -> u16 { 1883 }
+fn default_false() -> bool { false }
 
 impl Controller for MqttController {
     const MODULE_NAME: &'static str = "mqtt";
@@ -141,7 +145,7 @@ impl Controller for MqttController {
     fn clear(&mut self) -> Result<(), String> {
         let connection = try_option!(self.connected.as_mut(), "MQTT controller could not terminate, as it is not connected... was the init step skipped?");
 
-        try_result!(connection.client.shutdown(), "Disconnect from broker failed");
+        try_result!(connection.client.disconnect(), "Disconnect from broker failed");
 
         self.connected = None;
         return Ok(());
@@ -195,7 +199,7 @@ impl Bundleable for MqttController {
     }
 }
 
-fn get_controller_state(client: &mut Client, receiver: &Receiver<Notification>, topic: String, qos: QoS) -> Result<bool, String> {
+fn get_controller_state(client: &mut Client, receiver: &Receiver<Publish>, topic: String, qos: QoS) -> Result<bool, String> {
     debug!("Checking the mqtt controller state for availability of the remote device");
 
     // Subscribe to state topic
@@ -215,7 +219,7 @@ fn get_controller_state(client: &mut Client, receiver: &Receiver<Notification>, 
     return Ok(result);
 }
 
-fn start(client: &mut Client, receiver: &Receiver<Notification>, boot: bool, topic: String, qos: QoS) -> Result<bool, String> {
+fn start(client: &mut Client, receiver: &Receiver<Publish>, boot: bool, topic: String, qos: QoS) -> Result<bool, String> {
     let payload = if boot { "START_BOOT" } else { "START_RUN" };
 
     if let Err(err) = client.publish(topic.as_str(), qos, false, payload) {
@@ -268,7 +272,7 @@ fn start(client: &mut Client, receiver: &Receiver<Notification>, boot: bool, top
 }
 
 fn end(client: &mut Client, topic: String, qos: u8) -> Result<bool, String> {
-    let qos = try_result!(QoS::from_u8(qos), "Could not parse QoS value");
+    let qos = try_result!(rumqttc::qos(qos), "Could not parse QoS value");
     let result = client.publish(topic, qos, false, "DONE");
     return bool_result!(result.is_ok(), true, "Could not send end message");
 }
@@ -286,8 +290,8 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
 
     // Set last will in case of whatever failure that includes a interrupted connection
     let testament_topic = String::from(testament_topic);
-    let qos = try_result!(QoS::from_u8(mqtt_config.qos), "Could not parse QoS value");
-    let last_will = LastWill::new(testament_topic, qos, testament_payload);
+    let qos = try_result!(rumqttc::qos(mqtt_config.qos), "Could not parse QoS value");
+    let last_will = LastWill::new(testament_topic, testament_payload, qos, mqtt_config.retain);
 
     options.set_last_will(last_will);
 
@@ -298,21 +302,24 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
 
     // TODO: cap=10 ?? (taken from crate examples)
     let (client,mut connection) = Client::new(options, 10);
+
+    // create a channel that received messages are sent into, such that they can be received by the main thread
     let (sender, receiver) = unbounded();
 
     thread::spawn(move || {
-        for (i, notification) in connection.iter().enumerate() {
+        for (_i, notification) in connection.iter().enumerate() {
             match notification {
                 Ok(event) => {
                     match event {
                         Event::Incoming(packet) => {
                             match packet {
                                 Packet::Publish(publish) => {
-                                    sender.send(publish);
+                                    // TODO: unwrap will kill the process on error, is there a way to gracefully handle this?
+                                    sender.send(publish).unwrap();
                                 },
-                                Packet::ConnAck(conn_ack) => {
+                                /*Packet::ConnAck(conn_ack) => {
                                     // TODO: use this to wait for connected?
-                                }
+                                }*/
                                 _ => {}
                             }
                         }
@@ -330,20 +337,20 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
     return Ok((client, receiver));
 }
 
-fn wait_for_message(receiver: &Receiver<Notification>, on_topic: Option<&str>, timeout: Duration, expected: Option<String>) -> Result<String, String> {
+fn wait_for_message(receiver: &Receiver<Publish>, on_topic: Option<&str>, timeout: Duration, expected: Option<String>) -> Result<String, String> {
     let start_time = Instant::now();
 
     loop {
         let time_left = timeout - start_time.elapsed();
 
         let received_message = try_option!(wait_for_publish(receiver, time_left), "Timeout on receive operation");
-        let payload = decode_payload(&received_message.payload)?;
+        let payload = decode_payload(received_message.payload.as_ref())?;
 
         debug!("Received mqtt message '{}'", payload);
 
         if let Some(expected_topic) = on_topic {
-            trace!("Expected to receive message on '{}', received on '{}'", received_message.topic_name, expected_topic);
-            if received_message.topic_name != expected_topic {
+            trace!("Expected to receive message on '{}', received on '{}'", &received_message.topic, expected_topic);
+            if received_message.topic.as_str() != expected_topic {
                 debug!("Received message on topic other than the expected one, still waiting");
                 continue;
             }
@@ -361,26 +368,16 @@ fn wait_for_message(receiver: &Receiver<Notification>, on_topic: Option<&str>, t
     }
 }
 
-fn wait_for_publish(receiver: &Receiver<Notification>, timeout: Duration) -> Option<Publish> {
+fn wait_for_publish(receiver: &Receiver<Publish>, timeout: Duration) -> Option<Publish> {
     let start_time = Instant::now();
     loop {
         let time_left = timeout - start_time.elapsed();
 
-        if let Ok(notification) = receiver.recv_timeout(time_left) {
-            // TODO: Reconnect on connection loss
-            if let Notification::Publish(publish) = notification {
-                return Some(publish);
-            }
-
-            // TODO: ??
-            //  - None
-            //  - Other variants
-            //  Currently: loop continues
+        return if let Ok(notification) = receiver.recv_timeout(time_left) {
+            Some(notification)
         } else {
-            return None;
+            None
         }
-
-        //let received = try_result!(receiver.recv_timeout(time_left), "Timeout on receive operation");
     }
 }
 
@@ -398,12 +395,12 @@ fn get_controller_state_topic(config: &Configuration) -> String {
     return format!("device/{}/controller/status", config.device);
 }
 
-pub fn decode_payload(payload: &Vec<u8>) -> Result<String,String> {
+pub fn decode_payload(payload: &[u8]) -> Result<String,String> {
     return std::str::from_utf8(payload)
         .map(|s| s.to_owned())
         .map_err(|e| format!("Could not decode payload as UTF-8: {}", e));
 }
 
 pub fn qos_from_u8(input: u8) -> Result<QoS, String> {
-    return QoS::from_u8(input).map_err(|e| format!("Could not parse QoS: {}", e));
+    return rumqttc::qos(input).map_err(|e| format!("Could not parse QoS: {}", e));
 }

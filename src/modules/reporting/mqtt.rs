@@ -10,12 +10,12 @@ use serde_json::Value;
 use serde::{Deserialize};
 use std::ops::AddAssign;
 use std::rc::Rc;
-use rumqtt::{MqttClient};
+use rumqttc::{Client};
 
 pub struct Reporter {
     config: Configuration,
     mqtt_config: MqttConfiguration,
-    client: Option<MqttClient>
+    client: Option<Client>
 }
 
 #[derive(Deserialize)]
@@ -117,7 +117,7 @@ impl Reporting for Reporter {
 
     fn clear(&mut self) -> Result<(), String> {
         if let Some(client) = self.client.as_mut() {
-            try_result!(client.shutdown(), "Disconnect from broker failed");
+            try_result!(client.disconnect(), "Disconnect from broker failed");
         }
 
         return Ok(());

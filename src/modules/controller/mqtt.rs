@@ -316,6 +316,9 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
                 },
                 Err(error) => {
                     error!("Connection error in mqtt receiver: {}", error);
+
+                    // sleep after an error before triggering a reconnect through the event loop
+                    thread::sleep(Duration::from_secs(5))
                 }
             }
         }

@@ -91,10 +91,16 @@ fn process_sync(config: &mut SyncUnit,
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
 
-    if !timeframe_check::check_sync_after_backup(&config.timeframe, savedata, config.has_backup) {
-        info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.config.name.as_str());
-        reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::SKIP);
-        return Ok(());
+    if !args.force {
+        if !timeframe_check::check_sync_after_backup(&config.timeframe, savedata, config.has_backup) {
+            info!("Sync for '{}' is not executed as there is no new backup since the last sync", config.config.name.as_str());
+            reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::SKIP);
+            return Ok(());
+        } else {
+            debug!("Sync for '{}' is executed as there was a recent backup", config.config.name.as_str());
+        }
+    } else {
+        debug!("Skipping check for sync after backup due to forced run");
     }
 
     // Announce that this sync is starting

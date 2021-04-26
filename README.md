@@ -56,6 +56,17 @@ such that the backup server is not started for each sync separately and can prof
 | --no-reporting | yes | false | Disable reporting for this run. |
 | --override-disabled, --run-disabled | yes | false | Ignore the disabled status on configurations. |
 
+## Requirements
+### Docker mode
+- docker
+### No docker mode
+- rsync (for rsync module)
+- sshpass (for rsync with password)
+- duplicati (for duplicati module)
+- 7z / p7zip-full on debian (for tar7zip backup)
+
+Note: this list is probably incomplete.
+
 ## Configuration
 ### Base configuration
 Default file: `/etc/vbackup/config.json`
@@ -115,7 +126,7 @@ Default directory: `/etc/vbackup/volumes`. This is the configuration file for a 
 | source_path[].path | no | | Path to a directory / name of a docker volume to back up. |
 | source_path[].name | no | | Name for the backup up location (Used for example as a top-level directory in an archive). |
 | backup_path | no | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. Uses the backup directory and the name of the configuration by default.|
-| savedata_in_store | no | false | Wether to store the savedata file with the backup or not. Overwrites the global flag if set. |
+| savedata_in_store | no | false | Whether to store the savedata file with the backup or not. Overwrites the global flag if set. |
 | backup | no | | The backup configuration for this volume. |
 | sync | no | | The sync configuration for this volume. | 
 
@@ -258,6 +269,8 @@ Send the backup to a remote destination using rsync over ssh.
 | path_prefix | no | | Prefix for the remote path. Treated as a path relative to the home directory unless there is a '/' as the first character. |
 | dirname | yes | | Directory to sync to on the server. Should be only the name of the directory, not the path. |
 | detect_renamed | no | false | Enable the rsync detect-renamed patch. Only works if the patch is installed on client and server. If running with docker a patched version is used automatically. |
+| detect_renamed_lax | no | false | Enable the rsync detect-renamed-lax patch. Same notes as for detect_renamed. |
+| detect_moved | no | false | Enable the rsync detect-moved patch. Same notes as for detect_renamed. |
 | chmod_perms | no | D0775,F0664 | File and directory modes to apply to written files and directories, according to the '--chmod' option of rsync. |
 | local_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the local filesystem. |
 | remote_chmod | no | $chmod_perms | Overwrite value for 'chmod_perms' when syncing to the remote filesystem. |
@@ -265,6 +278,9 @@ Send the backup to a remote destination using rsync over ssh.
 | filter | no | | Set a list of filter rules according to rsync 'FILTER RULES'. Paths anchored at the root need to be prefixed with the dirname and a leading '/'. Same for in-/exclude. |
 | include | no | | Include only the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. As a side-effect does not copy empty directories. Uses filter rules internally. |
 | exclude | no | | Exclude the list of specified files according to rsync 'INCLUDE/EXCLUDE PATTERN RULES'. Uses filter rules internally. |
+| local_rsync | no | rsync | Path to the local rsync executable. When using docker:  A different image is built for detect-renamed(-lax)/detect-moved where '/usr/bin/rsync' is standard rsync and 'rsync' is the patched version. |
+| remote_rsync | no | | Path to the remote rsync executable. Default is set by rsync. |
+| additional_args | no | | Additional arguments for rsync. |
 | host_reference | depends | | Reference to ssh server information in the shared authentication store. |
 | host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
 | host.hostname | yes | | Hostname of the server. |
@@ -283,9 +299,13 @@ Send the backup to a remote destination using rsync over ssh.
   "detect_renamed": true,
   "local_chmod": "0000,Dug+rwx,Fug+rw,o-rwx",
   "local_chown": "1000:1000",
+  "local_rsync": "/path/to/executable/rsync",
   "include": [
     "/my-backup-dir/some-dir-in-sync-root/***",
     "*.txt"
+  ],
+  "additional_args": [
+    "--omit-dir-times"
   ],
   "host": {
     "hostname": "my-ssh-server.local",

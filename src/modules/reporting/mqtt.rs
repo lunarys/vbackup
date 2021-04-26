@@ -2,9 +2,10 @@ use crate::modules::traits::Reporting;
 use crate::util::objects::reporting::*;
 use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths};
+use crate::util::objects::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
 use crate::{try_result};
-use crate::modules::controller::mqtt::{MqttConfiguration,get_client,qos_from_u8};
+use crate::modules::controller::mqtt::{get_client,qos_from_u8};
 
 use serde_json::Value;
 use serde::{Deserialize};

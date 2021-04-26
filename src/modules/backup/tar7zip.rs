@@ -24,8 +24,12 @@ pub struct Tar7Zip {
 
 #[derive(Deserialize)]
 struct Configuration {
-    encryption_key: Option<String>
+    encryption_key: Option<String>,
+    #[serde(default="default_7z_executable")]
+    executable: String
 }
+
+fn default_7z_executable() -> String { String::from("/usr/lib/p7zip/7z") }
 
 impl Backup for Tar7Zip {
     const MODULE_NAME: &'static str = "tar7zip";
@@ -94,6 +98,12 @@ impl Backup for Tar7Zip {
             format!("/savedir/{}", tmp_file_name)
         };
 
+        // if the temporary file already exists (e.g. from a failed / interrupted run) delete it
+        if file::exists(tmp_backup_file_actual.as_str()) {
+            file::remove(tmp_backup_file_actual.as_str())?;
+            debug!("Deleted leftover temporary archive");
+        }
+
         // Store the password option for 7zip, if there is no password set it to an empty String
         let password_option = if let Some(encryption_key) = self.config.encryption_key.as_ref() {
             cmd.env("ENCRYPTION_KEY", encryption_key);
@@ -103,7 +113,7 @@ impl Backup for Tar7Zip {
         };
 
         //  Use full path to 7z executable to avoid additional forking without the password being replaced in the process overview
-        let command_actual = format!("tar -cf - -C '{}' . | /usr/lib/p7zip/7z a -si -mhe=on {}'{}'", save_path, password_option, tmp_backup_file);
+        let command_actual = format!("tar -cf - -C '{}' . | {} a -si -mhe=on {}'{}'", save_path, self.config.executable.as_str(), password_option, tmp_backup_file);
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file
@@ -148,7 +158,7 @@ impl Backup for Tar7Zip {
         }
 
         // Clear temporary file if still exists for some reason
-        if file::exists(tmp_backup_file.as_str()) {
+        if file::exists(tmp_backup_file_actual.as_str()) {
             if let Err(err) = remove_file(tmp_backup_file_actual) {
                 error!("Could not remove temporary backup file ({})", err);
             }

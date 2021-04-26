@@ -47,18 +47,31 @@ struct Configuration {
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
 
+    // Configuration option for rsync executable
+    #[serde(default="default_rsync")]
+    local_rsync: String,
+    remote_rsync: Option<String>,
+
     host: Option<Value>,
     host_reference: Option<String>,
+
+    // Option to inject additional arguments
+    additional_args: Option<Vec<String>>,
 
     // detect-renamed activated would be the better options, but only works with patched servers
     //  so set it disabled by default
     #[serde(default="default_false")]
-    detect_renamed: bool
+    detect_renamed: bool,
+    #[serde(default="default_false")]
+    detect_renamed_lax: bool,
+    #[serde(default="default_false")]
+    detect_moved: bool
 }
 
 fn default_true() -> bool { true }
 fn default_false() -> bool { false }
 fn default_chmod_perms() -> String { String::from("D0775,F0664") }
+fn default_rsync() -> String { String::from("rsync") }
 
 #[derive(Deserialize)]
 struct SshConfig {
@@ -143,7 +156,11 @@ impl Sync for Rsync {
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image if missing
         if !self.no_docker {
-            docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
+            if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
+                docker::build_image_if_missing(&self.module_paths.base_paths, "rsync-patched.Dockerfile", "vbackup-rsync-patched")?;
+            } else {
+                docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
+            }
         }
 
         return Ok(());
@@ -154,6 +171,14 @@ impl Sync for Rsync {
 
         if self.config.detect_renamed {
             command.arg_str("--detect-renamed");
+        }
+
+        if self.config.detect_renamed_lax {
+            command.arg_str("--detect-renamed-lax");
+        }
+
+        if self.config.detect_moved {
+            command.arg_str("--detect-moved");
         }
 
         command.arg_string(format!("{}", &self.sync_paths.from))
@@ -218,14 +243,18 @@ impl Rsync {
             // Volume for authentication files
             command.arg_string(format!("--volume={}:{}", &self.module_paths.module_data_dir, "/module"));
 
-            // End docker command
-            command.arg_str("vbackup-rsync"); // Docker image name
+            // End docker command with docker image name
+            if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
+                command.arg_str("vbackup-rsync-patched");
+            } else {
+                command.arg_str("vbackup-rsync");
+            }
 
             // Start rsync command
-            command.arg_str("rsync");
+            command.arg_str(self.config.local_rsync.as_str());
             command
         } else {
-            CommandWrapper::new("rsync")
+            CommandWrapper::new(self.config.local_rsync.as_str())
         };
 
         // Authentication: password or private key
@@ -304,6 +333,10 @@ impl Rsync {
             }
         }
 
+        if let Some(rsync_path) = self.config.remote_rsync.as_ref() {
+            command.arg_string(format!("--rsync-path={}", rsync_path));
+        }
+
         if self.config.compress {
             command.arg_str("--compress");
         }
@@ -314,6 +347,12 @@ impl Rsync {
 
         if self.verbose {
             command.arg_str("--verbose");
+        }
+
+        if let Some(args) = self.config.additional_args.as_ref() {
+            for arg in args {
+                command.arg_str(arg.as_str());
+            }
         }
 
         return Ok(command);

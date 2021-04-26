@@ -1,6 +1,7 @@
 use crate::modules::traits::{Controller, Bundleable};
 use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths, ModulePaths};
+use crate::util::objects::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
 use crate::{try_result,try_option,bool_result,dry_run};
 
@@ -38,28 +39,6 @@ struct Configuration {
     topic_pub: Option<String>,
     auth: Option<Value>
 }
-
-#[derive(Deserialize)]
-pub struct MqttConfiguration {
-    pub host: String,
-
-    #[serde(default="default_port")]
-    pub port: u16,
-
-    pub user: String,
-    pub password: Option<String>,
-
-    #[serde(default="default_qos")]
-    pub qos: u8,
-
-    #[serde(default="default_false")]
-    pub retain: bool
-}
-
-fn default_qos() -> u8 { 1 }
-fn default_port() -> u16 { 1883 }
-fn default_false() -> bool { false }
-
 impl Controller for MqttController {
     const MODULE_NAME: &'static str = "mqtt";
 
@@ -122,7 +101,7 @@ impl Controller for MqttController {
     fn end(&mut self) -> Result<bool, String> {
         let connection = try_option!(self.connected.as_mut(), "MQTT controller could not end, as it is not connected... was the init step skipped?");
 
-        debug!("MQTT controller end run for device '{}'", self.config.device);
+        info!("MQTT controller end run for device '{}'", self.config.device);
 
         if !connection.is_controller_online {
             return Ok(false);

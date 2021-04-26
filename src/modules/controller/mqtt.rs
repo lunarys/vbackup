@@ -6,7 +6,7 @@ use crate::{try_result,try_option,bool_result,dry_run};
 
 use serde_json::Value;
 use serde::{Deserialize};
-use rumqttc::{Client, MqttOptions, QoS, Publish, LastWill, Event, Packet};
+use rumqttc::{Client, MqttOptions, QoS, Publish, LastWill, Event, Packet, Outgoing};
 use std::time::{Duration, Instant};
 use std::rc::Rc;
 use std::cmp::max;
@@ -317,13 +317,22 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
                                     // TODO: unwrap will kill the process on error, is there a way to gracefully handle this?
                                     sender.send(publish).unwrap();
                                 },
-                                /*Packet::ConnAck(conn_ack) => {
-                                    // TODO: use this to wait for connected?
-                                }*/
+                                Packet::Disconnect => {
+                                  // if not terminated from outgoing disconnect, terminate now
+                                    break;
+                                },
                                 _ => {}
                             }
                         }
-                        Event::Outgoing(_) => {}
+                        Event::Outgoing(packet) => {
+                            match packet {
+                                Outgoing::Disconnect => {
+                                    // Terminate the receiver loop (and thus thread) on disconnect
+                                    break;
+                                },
+                                _ => {}
+                            }
+                        }
                     }
                 },
                 Err(error) => {

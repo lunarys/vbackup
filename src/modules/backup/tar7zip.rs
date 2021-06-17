@@ -26,7 +26,8 @@ pub struct Tar7Zip {
 struct Configuration {
     encryption_key: Option<String>,
     #[serde(default="default_7z_executable")]
-    executable: String
+    executable: String,
+    exclude: Option<Vec<String>>
 }
 
 fn default_7z_executable() -> String { String::from("/usr/lib/p7zip/7z") }
@@ -112,8 +113,22 @@ impl Backup for Tar7Zip {
             String::new()
         };
 
+        // Build to command for tar with exclude options
+        let tar_exclude = self.config.exclude.as_ref().map(|exclude_list| {
+            exclude_list.iter()
+                .map(|exclude_part| format!("--exclude='{}'", exclude_part))
+                .collect::<Vec<String>>()
+                .join(" ")
+        });
+
+        let tar_command = format!("tar -cf - -C '{}' {} .", save_path, tar_exclude.as_deref().unwrap_or(""));
+
+        // Build the command for 7zip
         //  Use full path to 7z executable to avoid additional forking without the password being replaced in the process overview
-        let command_actual = format!("tar -cf - -C '{}' . | {} a -si -mhe=on {}'{}'", save_path, self.config.executable.as_str(), password_option, tmp_backup_file);
+        let zip_command = format!("{} a -si -mhe=on {}'{}'", self.config.executable.as_str(), password_option, tmp_backup_file);
+
+        // Combine the tar and the 7zip command parts
+        let command_actual = format!("{} | {}", tar_command, zip_command);
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file

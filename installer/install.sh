@@ -72,8 +72,9 @@ if ! ${UPDATE_ONLY}; then
     mkdir "${CONFIG_DIR}/volumes"
     cp -r ../resources/images ../resources/config.json ../resources/reporting.json ../resources/auth_data.json ../resources/timeframes.json ${CONFIG_DIR}
 else
-    # Update timeframes config only
-    cp ../resources/timeframes.json ${CONFIG_DIR}/timeframes.json
+    # Update timeframes config and docker images only
+    cp ../resources/timeframes.json "${CONFIG_DIR}/timeframes.json"
+	cp ../resources/images/* "${CONFIG_DIR}/images"
     chown root:root ${CONFIG_DIR}/timeframes.json
     chmod u+rwX,go-rwx ${CONFIG_DIR}/timeframes.json
 fi

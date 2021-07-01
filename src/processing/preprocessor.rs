@@ -13,6 +13,7 @@ use crate::processing::{timeframe_check,controller_bundler};
 
 use std::rc::Rc;
 use core::borrow::Borrow;
+use std::borrow::BorrowMut;
 
 pub enum ConfigurationUnit {
     Backup(BackupUnit),
@@ -367,7 +368,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     return configurations
         .drain(..)
         .filter_map(|configuration| {
-            fn filter_timeframes(run_type: RunType, name: &String, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &ReportingModule) -> Option<Vec<ExecutionTiming>> {
+            fn filter_timeframes(run_type: RunType, name: &String, check: &mut Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &ReportingModule) -> Option<Vec<ExecutionTiming>> {
                 if check.is_none() {
                     debug!("There is no additional check for '{}' {}, only using the interval checks", name, run_type);
                     return timeframes;
@@ -410,7 +411,13 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
 
             match configuration {
                 ConfigurationUnitBuilder::Backup(mut backup) => {
-                    backup.timeframes = filter_timeframes(RunType::BACKUP, backup.config.name.borrow(), &backup.check, backup.timeframes, reporter);
+                    backup.timeframes = filter_timeframes(
+                        RunType::BACKUP,
+                        backup.config.name.borrow(),
+                        backup.check.borrow_mut(),
+                        backup.timeframes,
+                        reporter
+                    );
 
                     if backup.timeframes.is_none() {
                         return None;
@@ -419,7 +426,13 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                     }
                 },
                 ConfigurationUnitBuilder::Sync(mut sync) => {
-                    sync.timeframes = filter_timeframes(RunType::SYNC, sync.config.name.borrow(), &sync.check, sync.timeframes, reporter);
+                    sync.timeframes = filter_timeframes(
+                        RunType::SYNC,
+                        sync.config.name.borrow(),
+                        sync.check.borrow_mut(),
+                        sync.timeframes,
+                        reporter
+                    );
 
                     if sync.timeframes.is_none() {
                         return None;

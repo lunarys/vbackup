@@ -50,7 +50,7 @@ impl Check for Usetime {
         return Ok(());
     }
 
-    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
+    fn check(&mut self, timing: &ExecutionTiming) -> Result<bool, String> {
         if timing.last_run.is_some() {
             let backup_info = self.read_backupinfo()?;
             let test_result = self.config.targeted_usetime < backup_info.usetime;

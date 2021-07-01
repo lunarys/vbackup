@@ -250,12 +250,17 @@ Create a compressed backup in a `.tar.7z` archive.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| encryption_key | false | | Encrypt archives with this key. | 
+| encryption_key | false | | Encrypt archives with this key. |
+| exclude[] | false | | Exclude files from the archive. Uses `tar --exclude`, e.g. `./foo` refers to a directory named `foo` in the root of the saved path. If multiple locations on the host system are mapped with docker refer to those via `./name/foo`. |
 
 ```json
 {
   "type": "tar7zip",
-  "encryption_key": "passw0rd"
+  "encryption_key": "passw0rd",
+  "exclude": [
+    "./some/path/to/exclude",
+    "last/part/of/path/to/file.txt"
+  ]
 }
 ```
 
@@ -374,10 +379,15 @@ Can prevent backup and sync runs on unchanged data.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
+| exclude[] | false | | Exclude files from the check. Uses `grep -F` to mimic basic functionality of `tar --exclude` to be somewhat compatible with `tar7zip` backup. This means input is not interpreted as a regular expression and only as a string. `./` matches the root of the checked path. |  
 
 ```json
 {
-  "type": "file-age"
+  "type": "file-age",
+  "exclude": [
+    "./some/path/to/exclude",
+    "last/part/of/path/to/file.txt"
+  ]
 }
 ```
 

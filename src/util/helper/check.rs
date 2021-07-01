@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::rc::Rc;
 
 pub fn init(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, check_config: &Option<Value>, reference: Reference) -> Result<Option<CheckModule>,String> {
-    if check_config.is_some() {
+    return if check_config.is_some() {
         let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
         let module_paths = ModulePaths::for_check_module(paths, "check", &config, reference);
 
@@ -23,15 +23,15 @@ pub fn init(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, check_c
         )?;
         module.init()?;
 
-        return Ok(Some(module));
+        Ok(Some(module))
     } else {
-        return Ok(None);
+        Ok(None)
     }
 }
 
-pub fn run(module: &Option<CheckModule>, timing: &ExecutionTiming) -> Result<bool,String> {
-    if module.is_some() {
-        let result = module.as_ref().unwrap().check(timing)?;
+pub fn run(module: &mut Option<CheckModule>, timing: &ExecutionTiming) -> Result<bool,String> {
+    if let Some(check_module) = module {
+        let result = check_module.check(timing)?;
         /*if result {
             debug!("TODO: check_helper debug");
         } else {
@@ -44,16 +44,16 @@ pub fn run(module: &Option<CheckModule>, timing: &ExecutionTiming) -> Result<boo
 }
 
 pub fn update(module: &mut Option<CheckModule>, timing: &ExecutionTiming) -> Result<(),String> {
-    if module.is_some() {
-        module.as_mut().unwrap().update(timing)?;
+    if let Some(check_module) = module {
+        check_module.update(timing)?;
     }
 
     return Ok(());
 }
 
 pub fn clear(module: &mut Option<CheckModule>) -> Result<(),String> {
-    if module.is_some() {
-        module.as_mut().unwrap().clear()?;
+    if let Some(check_module) = module {
+        check_module.clear()?;
     }
 
     return Ok(());

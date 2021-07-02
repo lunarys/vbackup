@@ -9,17 +9,25 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  create-release:
+    name: Create a release with changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Create a release
+        uses: fregante/release-with-changelog@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Publish for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             artifact_name: vbackup
             asset_name: vbackup-linux-amd64
-
     steps:
       - uses: actions/checkout@v2
       - name: Build

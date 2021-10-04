@@ -9,6 +9,10 @@
     "interval": 85800,
     "comment": "10min tolerance substracted here"
   },
+  "2DAILY": {
+    "identifier": "2DAILY",
+    "interval": 171600
+  },
   "SEMIWEEKLY": {
     "identifier": "SEMIWEEKLY",
     "interval": 302400

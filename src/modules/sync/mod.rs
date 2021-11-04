@@ -6,6 +6,7 @@ use serde_json::Value;
 
 mod duplicati;
 mod rsync;
+mod ssh_gpg;
 
 pub struct SyncModule {
     module: Box<dyn SyncRelay>
@@ -16,6 +17,7 @@ impl SyncModule {
         let module: Box<dyn SyncRelay> = match sync_type.to_lowercase().as_str() {
             duplicati::Duplicati::MODULE_NAME => duplicati::Duplicati::new(name, config_json, paths, args)?,
             rsync::Rsync::MODULE_NAME => rsync::Rsync::new(name, config_json, paths, args)?,
+            ssh_gpg::SshGpg::MODULE_NAME => ssh_gpg::SshGpg::new(name, config_json, paths, args)?,
             unknown => {
                 let msg = format!("Unknown sync module: '{}'", unknown);
                 error!("{}", msg);

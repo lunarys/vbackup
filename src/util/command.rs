@@ -7,7 +7,8 @@ pub struct CommandWrapper {
     command: Command,
     base: String,
     args: Vec<String>,
-    envs: Vec<String>
+    envs: Vec<String>,
+    wrapped: Option<Vec<String>>
 }
 
 impl CommandWrapper {
@@ -16,7 +17,8 @@ impl CommandWrapper {
             command: Command::new(cmd),
             base: cmd.to_string(),
             args: vec![],
-            envs: vec![]
+            envs: vec![],
+            wrapped: None
         }
     }
 
@@ -43,7 +45,8 @@ impl CommandWrapper {
             command: Command::new(executable),
             base: String::from(executable),
             args: vec![],
-            envs: vec![]
+            envs: vec![],
+            wrapped: None
         };
 
         cmd.arg_str("run");
@@ -68,21 +71,35 @@ impl CommandWrapper {
         return cmd;
     }
 
+    pub fn wrap(&mut self) -> &mut CommandWrapper {
+        if let Some(wrapped) = self.wrapped.take() {
+            self.arg_string(wrapped.join(" "));
+        } else {
+            self.wrapped = Some(vec![])
+        }
+
+        return self;
+    }
+
     pub fn arg_str(&mut self, arg: &str) -> &mut CommandWrapper {
         self.arg_string(arg.to_string())
     }
 
     pub fn arg_string(&mut self, option: String) -> &mut CommandWrapper {
-        let this = option;
-        self.command.arg(&this);
-        self.args.push(this);
-        self
+        if let Some(wrapped) = self.wrapped.as_mut() {
+            wrapped.push(option);
+        } else {
+            self.command.arg(&option);
+            self.args.push(option);
+        }
+
+        return self;
     }
 
     pub fn add_docker_volume_mapping(&mut self, source_path: &SourcePath, name: &str) -> &mut CommandWrapper {
         match source_path {
             SourcePath::Single(path) => {
-                self.arg_string(format!("--volume={}:/{}", path, name));
+                self.arg_string(format!("--volume={}:{}{}", path, if name.starts_with('/') { "" } else { "/" }, name));
             },
             SourcePath::Multiple(paths) => {
                 for path in paths {
@@ -202,7 +219,9 @@ impl ToString for CommandWrapper {
         result.push_str(self.base.as_str());
         result.push_str(" ");
         for arg in self.args.iter() {
+            result.push('"');
             result.push_str(arg.as_str());
+            result.push('"');
             result.push_str(" ");
         }
         return result;

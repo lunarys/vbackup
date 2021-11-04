@@ -229,7 +229,7 @@ impl Rsync {
         command.arg_str("-e");
 
         // set up the ssh command
-        command.append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker)?;
+        command.append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, false)?;
 
         // Default sync options
         command.arg_str("--archive")

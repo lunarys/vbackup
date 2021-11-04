@@ -95,7 +95,10 @@ impl Sync for SshGpg {
             return Ok(());
         }
 
-        // TODO: could theoretically be optimized into one container run...
+        let mut cmd = self.get_base_cmd();
+        let mut cmd_has_first = false;
+
+        cmd.arg_str("sh").arg_str("-c").wrap();
 
         if !deleted_files.is_empty() {
             let deleted_files_string: String = deleted_files
@@ -108,56 +111,46 @@ impl Sync for SshGpg {
 
             debug!("Files <{}> on the remote server are going to be deleted", deleted_files_string);
 
-            self.get_base_cmd()
-                .arg_str("sh")
-                .arg_str("-c")
-                .wrap()
-                .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker)?
+            cmd.append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
                 .arg_string(
                     format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                 )
                 .arg_string(
                     format!("\"cd '{}' && rm {}\"", self.config.remote_path, deleted_files_string)
-                )
-                .wrap()
-                .run_configuration(self.print_command, self.dry_run)?;
+                );
 
-            trace!("Deleted files on the remote server");
+            cmd_has_first = true;
         }
 
         if !new_files.is_empty() {
             debug!("Files <{}> are going to be transferred to the remote server", new_files.join(" "));
 
             for new_file in new_files.as_slice() {
-                trace!("Starting transfer for {}", new_file);
+                if cmd_has_first {
+                    cmd.arg_str("&&");
+                }
 
-                self.get_base_cmd().arg_str("sh")
-                    .arg_str("-c")
-                    .wrap()
-                    .arg_string(
+                cmd.arg_string(
                         format!("cat '{}/{}' |", self.local_path, new_file)
                     )
                     .arg_string(
                         format!("gpg -c --passphrase-file '{}' --batch |", self.passphrase_file)
                     )
-                    .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker)?
+                    .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
                     .arg_string(
                         format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                     )
                     .arg_string(
                         format!("\"cat > '{}/{}{}'\"", self.config.remote_path, new_file, self.file_extension)
-                    )
-                    .wrap()
-                    .run_configuration(self.print_command, self.dry_run)?;
+                    );
 
-                trace!("Finished transfer");
+                if !cmd_has_first {
+                    cmd_has_first = true;
+                }
             }
 
-            trace!("All files have been transferred");
-
+            // change file mode
             if let Some(chmod) = self.config.remote_chmod.as_ref() {
-                debug!("Setting access permissions on transferred files");
-
                 let remote_files_string = new_files
                     .into_iter()
                     .map(|file| {
@@ -166,25 +159,18 @@ impl Sync for SshGpg {
                     .collect::<Vec<String>>()
                     .join(" ");
 
-                self.get_base_cmd()
-                    .arg_str("sh")
-                    .arg_str("-c")
-                    .wrap()
-                    .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker)?
+                cmd.arg_str("&&")
+                    .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
                     .arg_string(
                         format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                     )
                     .arg_string(
                         format!("\"cd '{}' && chmod {} {}\"", self.config.remote_path, chmod, remote_files_string)
-                    )
-                    .wrap()
-                    .run_configuration(self.print_command, self.dry_run)?;
-
-                trace!("Successfully set access permissions");
+                    );
             }
         }
 
-        return Ok(());
+        return cmd.wrap().run_configuration(self.print_command, self.dry_run);
     }
 
     fn restore(&self) -> Result<(), String> {
@@ -201,29 +187,32 @@ impl Sync for SshGpg {
             return Ok(());
         }
 
+        let mut cmd = self.get_base_cmd();
+        let mut cmd_has_first = false;
+
+        cmd.arg_str("sh").arg_str("-c").wrap();
+
         debug!("Files <{}> are going to be restored from the remote server", missing_files.join(" "));
 
         for file in missing_files.as_slice() {
-            trace!("Starting transfer for {}", file);
+            if cmd_has_first {
+                cmd.arg_str("&&");
+            }
 
-            self.get_base_cmd()
-                .arg_str("sh")
-                .arg_str("-c")
-                .wrap()
-                .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker)?
+            cmd.append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
                 .arg_string(
                     format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                 )
                 .arg_string(
                     format!("cat '{}/{}{}'", self.config.remote_path, file, self.file_extension)
                 )
-                .wrap()
                 .arg_string(
                     format!("| gpg -d --passphrase-file '{}' --batch --output '{}/{}'", self.passphrase_file, self.local_path, file)
-                )
-                .run_configuration(self.print_command, self.dry_run)?;
+                );
 
-            trace!("Finished transfer");
+            if !cmd_has_first {
+                cmd_has_first = true;
+            }
         }
 
         trace!("All files have been restored");
@@ -237,18 +226,15 @@ impl Sync for SshGpg {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            self.get_base_cmd()
-                .arg_str("sh")
-                .arg_str("-c")
+            cmd.arg_str("&&")
                 .arg_string(
                     format!("cd '{}' && chmod {} {}", self.local_path, chmod, files_string)
-                )
-                .run_configuration(self.print_command, self.dry_run)?;
+                );
 
             trace!("Successfully set access permissions");
         }
 
-        return Ok(());
+        return cmd.wrap().run_configuration(self.print_command, self.dry_run);
     }
 
     fn clear(&mut self) -> Result<(), String> {
@@ -288,7 +274,7 @@ impl SshGpg {
 
         cmd.arg_str("sh").arg_str("-c")
             .wrap()
-            .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker)?
+            .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, false)?
             .arg_string(format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname));
 
         self.list_helper(cmd, self.config.remote_path.as_str(), false)

@@ -1,4 +1,4 @@
-use crate::util::objects::paths::SourcePath;
+use crate::util::objects::paths::{SourcePath, ModulePaths};
 use crate::{change_error, try_result, dry_run};
 
 use std::process::{Command, Child, ExitStatus};
@@ -18,6 +18,54 @@ impl CommandWrapper {
             args: vec![],
             envs: vec![]
         }
+    }
+
+    pub fn new_with_args(cmd: &str, args: Vec<&str>) -> CommandWrapper {
+        let mut result = Self::new(cmd);
+
+        for arg in args {
+            result.arg_str(arg);
+        }
+
+        return result;
+    }
+
+    pub fn new_docker(
+        container_name: &str,
+        image_name: &str,
+        command: Option<&str>,
+        module_paths: &ModulePaths,
+        volume_mapping: (&SourcePath, &str),
+        options: Option<Vec<&str>>
+    ) -> CommandWrapper {
+        let executable = "docker";
+        let mut cmd = CommandWrapper {
+            command: Command::new(executable),
+            base: String::from(executable),
+            args: vec![],
+            envs: vec![]
+        };
+
+        cmd.arg_str("run");
+        cmd.arg_str("--rm");
+        cmd.arg_string(format!("--name={}", container_name));
+        cmd.arg_string(format!("--volume={}:{}", module_paths.module_data_dir, "/module"));
+
+        cmd.add_docker_volume_mapping(volume_mapping.0, volume_mapping.1);
+
+        if let Some(options) = options {
+            for option in options {
+                cmd.arg_str(option);
+            }
+        }
+
+        cmd.arg_str(image_name);
+
+        if let Some(command) = command {
+            cmd.arg_str(command);
+        }
+
+        return cmd;
     }
 
     pub fn arg_str(&mut self, arg: &str) -> &mut CommandWrapper {

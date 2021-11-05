@@ -3,7 +3,7 @@ use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
 use crate::util::objects::paths::{ModulePaths,SourcePath};
-use crate::util::objects::shared::ssh::SshConfig;
+use crate::util::objects::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
 use crate::Arguments;
 
 use serde_json::Value;
@@ -154,6 +154,9 @@ impl Sync for Rsync {
             }
         }
 
+        write_known_hosts(&self.ssh_config, &self.module_paths, self.dry_run)?;
+        write_identity_file(&self.ssh_config, &self.module_paths, self.dry_run)?;
+
         return Ok(());
     }
 
@@ -229,7 +232,7 @@ impl Rsync {
         command.arg_str("-e");
 
         // set up the ssh command
-        command.append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, false)?;
+        command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?;
 
         // Default sync options
         command.arg_str("--archive")

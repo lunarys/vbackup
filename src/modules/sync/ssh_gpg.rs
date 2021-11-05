@@ -3,7 +3,7 @@ use crate::util::objects::paths::{ModulePaths, SourcePath};
 use crate::Arguments;
 use crate::util::docker;
 use crate::util::io::{json, auth_data, file};
-use crate::util::objects::shared::ssh::SshConfig;
+use crate::util::objects::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
 use crate::util::command::CommandWrapper;
 use crate::{try_option,dry_run};
 
@@ -76,6 +76,10 @@ impl Sync for SshGpg {
 
         file::write_if_change(&self.passphrase_file, Some("600"), &self.config.encryption_key, true)?;
 
+        // prepare files for the SSH connection
+        write_known_hosts(&self.ssh_config, &self.module_paths, self.dry_run)?;
+        write_identity_file(&self.ssh_config, &self.module_paths, self.dry_run)?;
+
         // when using docker only the location inside the docker container is relevant from now on
         if !self.no_docker {
             self.passphrase_file = String::from("/module/passphrase.txt");
@@ -111,7 +115,7 @@ impl Sync for SshGpg {
 
             debug!("Files <{}> on the remote server are going to be deleted", deleted_files_string);
 
-            cmd.append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
+            cmd.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, cmd_has_first)?
                 .arg_string(
                     format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                 )
@@ -136,7 +140,7 @@ impl Sync for SshGpg {
                     .arg_string(
                         format!("gpg -c --passphrase-file '{}' --batch |", self.passphrase_file)
                     )
-                    .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
+                    .append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, cmd_has_first)?
                     .arg_string(
                         format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                     )
@@ -160,7 +164,7 @@ impl Sync for SshGpg {
                     .join(" ");
 
                 cmd.arg_str("&&")
-                    .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
+                    .append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, cmd_has_first)?
                     .arg_string(
                         format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                     )
@@ -199,7 +203,7 @@ impl Sync for SshGpg {
                 cmd.arg_str("&&");
             }
 
-            cmd.append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, cmd_has_first)?
+            cmd.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, cmd_has_first)?
                 .arg_string(
                     format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                 )
@@ -274,7 +278,7 @@ impl SshGpg {
 
         cmd.arg_str("sh").arg_str("-c")
             .wrap()
-            .append_ssh_command(&self.ssh_config, &self.module_paths, self.dry_run, !self.no_docker, false)?
+            .append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?
             .arg_string(format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname));
 
         self.list_helper(cmd, self.config.remote_path.as_str(), false)

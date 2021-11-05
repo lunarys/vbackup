@@ -167,7 +167,7 @@ impl Backup for Tar7Zip {
                         trace!("Amount of backups is below threshold, not removing anything");
                     }
                 } else {
-                    dry_run!("Removing oldest file from backup in timeframe")
+                    dry_run!("Removing oldest file from backup in timeframe");
                 }
             }
         }

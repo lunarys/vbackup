@@ -3,10 +3,12 @@ use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
 use crate::util::objects::paths::{ModulePaths,SourcePath};
+use crate::util::objects::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
 use crate::Arguments;
 
 use serde_json::Value;
 use serde::{Deserialize};
+use std::path::Path;
 
 pub struct Rsync {
     _name: String,
@@ -72,16 +74,6 @@ fn default_true() -> bool { true }
 fn default_false() -> bool { false }
 fn default_chmod_perms() -> String { String::from("D0775,F0664") }
 fn default_rsync() -> String { String::from("rsync") }
-
-#[derive(Deserialize)]
-struct SshConfig {
-    hostname: String,
-    port: i32,
-    user: String,
-    password: Option<String>,
-    ssh_key: Option<String>, // SSH private key (unencrypted)
-    host_key: String // SSH public key of host
-}
 
 impl Sync for Rsync {
     const MODULE_NAME: &'static str = "rsync-ssh";
@@ -163,6 +155,11 @@ impl Sync for Rsync {
             }
         }
 
+        file::create_path_dir_if_missing(Path::new(&self.module_paths.module_data_dir), true)?;
+
+        write_known_hosts(&self.ssh_config, &self.module_paths, self.dry_run)?;
+        write_identity_file(&self.ssh_config, &self.module_paths, self.dry_run)?;
+
         return Ok(());
     }
 
@@ -211,71 +208,35 @@ impl Rsync {
             file::create_dir_if_missing(self.module_paths.module_data_dir.as_str(), true)?;
         }
 
-        let known_hosts_file_actual = format!("{}/known_host", &self.module_paths.module_data_dir);
-        let identity_file_actual = format!("{}/identity", &self.module_paths.module_data_dir);
-
-        // Known host is required anyway, write it now
-        if !self.dry_run {
-            file::write_if_change(&known_hosts_file_actual,
-                                  Some("600"),
-                                  &self.ssh_config.host_key,
-                                  true)?;
-        }
-
-        // Store path of known_host and identity relative to docker
-        let (known_host_file, identity_file) = if self.no_docker {
-            (known_hosts_file_actual.as_str(), identity_file_actual.as_str())
-        } else {
-            ("/module/known_host", "/module/identity")
-        };
-
         // Distinguish run in docker and directly on the machine
         let mut command = if let Some(docker_paths) = self.sync_paths.volume.as_ref() {
-            let mut command = CommandWrapper::new("docker");
-            command.arg_str("run")
-                .arg_str("--rm")
-                .arg_str("--name=rsync-vbackup-tmp")
-                .arg_str("--env=SSHPASS");
-
-            // Volume(s) for the source files
-            command.add_docker_volume_mapping(docker_paths, &self.config.dirname);
-
-            // Volume for authentication files
-            command.arg_string(format!("--volume={}:{}", &self.module_paths.module_data_dir, "/module"));
-
             // End docker command with docker image name
-            if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
-                command.arg_str("vbackup-rsync-patched");
+            let image_name = if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
+                "vbackup-rsync-patched"
             } else {
-                command.arg_str("vbackup-rsync");
-            }
+                "vbackup-rsync"
+            };
 
-            // Start rsync command
-            command.arg_str(self.config.local_rsync.as_str());
-            command
+            CommandWrapper::new_docker(
+                "rsync-vbackup-tmp",
+                image_name,
+                Some(self.config.local_rsync.as_str()),
+                None,
+                &self.module_paths,
+                (docker_paths, &self.config.dirname),
+                Some(vec![
+                    "--env=SSHPASS"
+                ])
+            )
         } else {
             CommandWrapper::new(self.config.local_rsync.as_str())
         };
 
         // Authentication: password or private key
         command.arg_str("-e");
-        let ssh_option_end = format!("-oUserKnownHostsFile={} -oCheckHostIp=no -p {}", known_host_file, self.ssh_config.port);
-        if self.ssh_config.ssh_key.is_some() {
-            // SSH private key needs to be written to a file
-            if !self.dry_run {
-                file::write_if_change(&identity_file_actual,
-                                      Some("600"),
-                                      self.ssh_config.ssh_key.as_ref().unwrap(),
-                                      true)?;
-            }
 
-            // Now it can be used in the command
-            command.arg_string(format!("ssh -oIdentityFile={} {}", identity_file, ssh_option_end));
-        } else if self.ssh_config.password.is_some() {
-            // Use sshpass to read password as environment variable
-            command.arg_string(format!("sshpass -e ssh {}", ssh_option_end));
-            command.env("SSHPASS", self.ssh_config.password.as_ref().unwrap());
-        }
+        // set up the ssh command
+        command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?;
 
         // Default sync options
         command.arg_str("--archive")

@@ -104,14 +104,14 @@ fn main() {
 
 fn run(args: Arguments) {
     let operation = args.operation.clone();
+    let version = env!("CARGO_PKG_VERSION");
 
     if operation == "version" {
-        let version = env!("CARGO_PKG_VERSION");
         println!("vbackup v{}", version);
         exit(0);
     }
 
-    info!("Starting '{}'", operation.as_str());
+    info!("Starting '{}' (v{})", operation.as_str(), version);
 
     // Ensure only one instance of this executable is running
     let lock_file_result = OpenOptions::new()

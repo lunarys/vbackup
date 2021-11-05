@@ -218,6 +218,7 @@ impl Rsync {
                 "rsync-vbackup-tmp",
                 image_name,
                 Some(self.config.local_rsync.as_str()),
+                None,
                 &self.module_paths,
                 (docker_paths, &self.config.dirname),
                 Some(vec![

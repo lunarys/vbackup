@@ -104,7 +104,7 @@ impl Sync for SshGpg {
         let mut cmd = self.get_base_cmd();
         let mut cmd_has_first = false;
 
-        cmd.arg_str("sh").arg_str("-c").wrap();
+        cmd.wrap();
 
         if !deleted_files.is_empty() {
             let deleted_files_string: String = deleted_files
@@ -196,7 +196,7 @@ impl Sync for SshGpg {
         let mut cmd = self.get_base_cmd();
         let mut cmd_has_first = false;
 
-        cmd.arg_str("sh").arg_str("-c").wrap();
+        cmd.wrap();
 
         debug!("Files <{}> are going to be restored from the remote server", missing_files.join(" "));
 
@@ -278,8 +278,7 @@ impl SshGpg {
     fn list_remote(&self) -> Result<Vec<String>, String> {
         let mut cmd = self.get_base_cmd();
 
-        cmd.arg_str("sh").arg_str("-c")
-            .wrap()
+        cmd.wrap()
             .append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?
             .arg_string(format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname));
 
@@ -288,9 +287,7 @@ impl SshGpg {
     }
 
     fn list_local(&self) -> Result<Vec<String>, String> {
-        let mut cmd = self.get_base_cmd();
-
-        cmd.arg_str("sh").arg_str("-c");
+        let cmd = self.get_base_cmd();
 
         self.list_helper(cmd, self.local_path.as_str(), true)
             .map_err(|_| String::from("Getting a list of local files failed"))
@@ -340,7 +337,8 @@ impl SshGpg {
             CommandWrapper::new_docker(
                 "ssh-encrypt-vbackup-tmp",
                 &self.image,
-                None,
+                Some("sh"),
+                Some(vec!["-c"]),
                 &self.module_paths,
                 (&self.module_paths.source, &self.local_path.as_str()),
                 Some(vec![

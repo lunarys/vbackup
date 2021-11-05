@@ -36,6 +36,7 @@ impl CommandWrapper {
         container_name: &str,
         image_name: &str,
         command: Option<&str>,
+        args: Option<Vec<&str>>,
         module_paths: &ModulePaths,
         volume_mapping: (&SourcePath, &str),
         options: Option<Vec<&str>>
@@ -66,6 +67,12 @@ impl CommandWrapper {
 
         if let Some(command) = command {
             cmd.arg_str(command);
+        }
+
+        if let Some(args) = args {
+            for arg in args {
+                cmd.arg_str(arg);
+            }
         }
 
         return cmd;

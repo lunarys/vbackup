@@ -376,6 +376,7 @@ that are not encrypted. The local files remain unencrypted and managed by their 
 is encrypted and only updated when a new file is detected or an old file has been removed (only filename is checked).
 This module needs to be used with care:
  - Subdirectories are not handled. Any subdirectories in the local backup directory cause this sync to fail.
+ - Directory mapping is not supported. Mapped volumes would be included as directories. Only use a single local path.
  - Files with another file extension (not .gpg) in the remote directory are ignored and not removed.
  - Files in the remote directory are retrieved using `ls` over SSH, so access needs to work.
  - Access permissions (file mode) is only set on transferred files, not parent directories that may be created in the process.

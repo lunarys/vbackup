@@ -34,7 +34,8 @@ pub struct SshGpg {
     passphrase_file: String,
     no_docker: bool,
     dry_run: bool,
-    print_command: bool
+    print_command: bool,
+    tmp_file: String
 }
 
 impl Sync for SshGpg {
@@ -57,6 +58,7 @@ impl Sync for SshGpg {
             config,
             ssh_config,
             image: String::from("vbackup-gpg"),
+            tmp_file: String::from("transmitting.gpg.tmp"),
             local_path,
             file_extension: String::from(".gpg"),
             passphrase_file: format!("{}/passphrase.txt", paths.module_data_dir),
@@ -145,7 +147,7 @@ impl Sync for SshGpg {
                         format!("{}@{}", self.ssh_config.user, self.ssh_config.hostname)
                     )
                     .arg_string(
-                        format!("\"cat > '{}/{}{}'\"", self.config.remote_path, new_file, self.file_extension)
+                        format!("\"cat > '{0}/{1}' && mv '{0}/{1}' '{0}/{2}{3}'\"", self.config.remote_path, self.tmp_file, new_file, self.file_extension)
                     );
 
                 if !cmd_has_first {

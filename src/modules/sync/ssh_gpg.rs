@@ -10,6 +10,7 @@ use crate::{try_option,dry_run};
 use serde_json::Value;
 use serde::{Deserialize};
 use std::borrow::Borrow;
+use std::path::Path;
 
 #[derive(Deserialize)]
 struct Configuration {
@@ -75,6 +76,8 @@ impl Sync for SshGpg {
             // use the rsync image for sshpass
             docker::build_image_if_missing(&self.module_paths.base_paths, "gpg.Dockerfile", self.image.as_str())?;
         }
+
+        file::create_path_dir_if_missing(Path::new(&self.module_paths.module_data_dir), true)?;
 
         file::write_if_change(&self.passphrase_file, Some("600"), &self.config.encryption_key, true)?;
 

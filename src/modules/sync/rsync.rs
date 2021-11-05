@@ -8,6 +8,7 @@ use crate::Arguments;
 
 use serde_json::Value;
 use serde::{Deserialize};
+use std::path::Path;
 
 pub struct Rsync {
     _name: String,
@@ -153,6 +154,8 @@ impl Sync for Rsync {
                 docker::build_image_if_missing(&self.module_paths.base_paths, "rsync.Dockerfile", "vbackup-rsync")?;
             }
         }
+
+        file::create_path_dir_if_missing(Path::new(&self.module_paths.module_data_dir), true)?;
 
         write_known_hosts(&self.ssh_config, &self.module_paths, self.dry_run)?;
         write_identity_file(&self.ssh_config, &self.module_paths, self.dry_run)?;

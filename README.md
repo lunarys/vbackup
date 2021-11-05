@@ -398,6 +398,7 @@ This module needs to be used with care:
 
 ```json
 {
+  "type": "ssh-gpg",
   "encryption_key": "test12345",
   "remote_path": "/data/ssh-gpg",
   "remote_chmod": "0640",

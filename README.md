@@ -369,6 +369,48 @@ and [this guideline by the developers](https://www.duplicati.com/articles/Choosi
 }
 ```
 
+#### ssh-gpg
+Tunnel files from a local directory through SSH, encrypting them with GPG in the process.
+This is intended for transmitting files created by some external program, such as proxmox backups,
+that are not encrypted. The local files remain unencrypted and managed by their source, while the remote backup
+is encrypted and only updated when a new file is detected or an old file has been removed (only filename is checked).
+This module needs to be used with care:
+ - Subdirectories are not handled. Any subdirectories in the local backup directory cause this sync to fail.
+ - Files with another file extension (not .gpg) in the remote directory are ignored and not removed.
+ - Files in the remote directory are retrieved using `ls` over SSH, so access needs to work.
+ - Access permissions (file mode) is only set on transferred files, not parent directories that may be created in the process.
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| encryption_key | yes | | The passphrase for gpg to encrypt backed up files. |
+| remote_path | yes | | The remote directory to save backups in. |
+| remote_chmod | no | | The file mode to set on remote files. Anything that `chmod` accepts works. |
+| local_chmod | no | | The file mode to set on local files. Only used for the currently unavailable `restore` operation. Anything that `chmod` accepts works. |
+| host_reference | depends | | Reference to ssh server information in the shared authentication store. |
+| host | depends | | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided. | 
+| host.hostname | yes | | Hostname of the server. |
+| host.port | yes | | Port of the server. |
+| host.user | yes | | Username for login on the server. |
+| host.password | no | | Password for login on the server. |
+| host.ssh_key | no | | Unencrypted private key for login on the server. This will be preferred over the password if both are given. |
+| host.host_key | yes | | Public key of the host for host authentication. |
+
+```json
+{
+  "encryption_key": "test12345",
+  "remote_path": "/data/ssh-gpg",
+  "remote_chmod": "0640",
+  "host": {
+    "hostname": "my-ssh-server.local",
+    "port": 22,
+    "user": "foo",
+    "password": "bar",
+    "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...\n",
+    "host_key": "[my-ssh-server.local]:2222 ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMjDsazoYSf3uTT5G8YPqGJq3Hgx/YmUdCDdemWOWg+H"
+  }
+}
+```
+
 ### Conditions
 Additional conditions to check before creating a backup or running a sync.
 Those checks are always applied additionally to timeframes.

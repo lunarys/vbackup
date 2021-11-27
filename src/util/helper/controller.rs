@@ -1,4 +1,4 @@
-use crate::modules::controller::{ControllerModule, ControllerRelay};
+use crate::modules::controller::{ControllerModule, ControllerWrapper};
 
 pub fn init(module: &mut Option<&mut ControllerModule>) -> Result<(),String> {
     if let Some(module_mut) = module {

@@ -1,6 +1,6 @@
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::util::objects::reporting::{RunType,Status};
-use crate::modules::controller::{ControllerModule, BundleableRelay, ControllerRelay};
+use crate::modules::controller::{ControllerModule, BundleableWrapper, ControllerWrapper};
 use crate::modules::controller::bundle::ControllerBundle;
 use crate::modules::reporting::ReportingModule;
 use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, SyncUnit};

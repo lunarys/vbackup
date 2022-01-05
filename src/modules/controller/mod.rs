@@ -1,7 +1,7 @@
 use crate::modules::traits::{Controller, Bundleable};
 use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
-use bundle::BundleableControllerRelay;
+use bundle::BundleableControllerWrapper;
 
 use serde_json::Value;
 
@@ -10,13 +10,13 @@ mod mqtt;
 mod ping;
 
 pub enum ControllerModule {
-    Simple(Box<dyn ControllerRelay>),
+    Simple(Box<dyn ControllerWrapper>),
     Bundle(Box<bundle::ControllerBundle>)
 }
 
 impl ControllerModule {
     pub fn new(controller_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
-        let module: Box<dyn ControllerRelay> = match controller_type.to_lowercase().as_str() {
+        let module: Box<dyn ControllerWrapper> = match controller_type.to_lowercase().as_str() {
             mqtt::MqttController::MODULE_NAME => mqtt::MqttController::new(name, config_json, paths, args)?,
             ping::Ping::MODULE_NAME => ping::Ping::new(name, config_json, paths, args)?,
             unknown => {
@@ -29,29 +29,29 @@ impl ControllerModule {
         return Ok(ControllerModule::Simple(module))
     }
 
-    fn as_mut_controller(&mut self) -> &mut dyn ControllerRelay {
+    fn as_mut_controller(&mut self) -> &mut dyn ControllerWrapper {
         match self {
-            ControllerModule::Simple(relay) => relay.as_mut(),
-            ControllerModule::Bundle(relay) => relay.as_mut_controller()
+            ControllerModule::Simple(wrapper) => wrapper.as_mut(),
+            ControllerModule::Bundle(wrapper) => wrapper.as_mut_controller()
         }
     }
 
-    fn as_controller(&self) -> &dyn ControllerRelay {
+    fn as_controller(&self) -> &dyn ControllerWrapper {
         match self {
-            ControllerModule::Simple(relay) => relay.as_ref(),
-            ControllerModule::Bundle(relay) => relay.as_ref_controller()
+            ControllerModule::Simple(wrapper) => wrapper.as_ref(),
+            ControllerModule::Bundle(wrapper) => wrapper.as_ref_controller()
         }
     }
 
-    fn as_mut_bundleable(&mut self) -> Result<&mut dyn BundleableRelay, String> {
+    fn as_mut_bundleable(&mut self) -> Result<&mut dyn BundleableWrapper, String> {
         match self {
             ControllerModule::Simple(_) => Err(String::from("Controller module does not support bundle operations")),
-            ControllerModule::Bundle(relay) => Ok(relay.as_mut_bundleable())
+            ControllerModule::Bundle(wrapper) => Ok(wrapper.as_mut_bundleable())
         }
     }
 }
 
-pub trait ControllerRelay {
+pub trait ControllerWrapper {
     fn init(&mut self) -> Result<(), String>;
     fn begin(&mut self) -> Result<bool, String>;
     fn end(&mut self) -> Result<bool, String>;
@@ -59,7 +59,7 @@ pub trait ControllerRelay {
     fn get_module_name(&self) -> &str;
 }
 
-impl<T: Controller> ControllerRelay for T {
+impl<T: Controller> ControllerWrapper for T {
     fn init(&mut self) -> Result<(), String> {
         Controller::init(self)
     }
@@ -81,7 +81,7 @@ impl<T: Controller> ControllerRelay for T {
     }
 }
 
-impl ControllerRelay for ControllerModule {
+impl ControllerWrapper for ControllerModule {
     fn init(&mut self) -> Result<(), String> {
         self.as_mut_controller().init()
     }
@@ -103,12 +103,12 @@ impl ControllerRelay for ControllerModule {
     }
 }
 
-pub trait BundleableRelay {
+pub trait BundleableWrapper {
     fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool,String>;
     fn did_start(&self) -> bool;
 }
 
-impl<T: Bundleable> BundleableRelay for T {
+impl<T: Bundleable> BundleableWrapper for T {
     fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
         self.try_bundle(other_name, other)
     }
@@ -119,7 +119,7 @@ impl<T: Bundleable> BundleableRelay for T {
     fn did_start(&self) -> bool { false }
 }
 
-impl BundleableRelay for ControllerModule {
+impl BundleableWrapper for ControllerModule {
     fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
         self.as_mut_bundleable()?.try_bundle(other_name, other)
     }

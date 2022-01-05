@@ -9,12 +9,12 @@ mod rsync;
 mod ssh_gpg;
 
 pub struct SyncModule {
-    module: Box<dyn SyncRelay>
+    module: Box<dyn SyncWrapper>
 }
 
 impl SyncModule {
     pub fn new(sync_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
-        let module: Box<dyn SyncRelay> = match sync_type.to_lowercase().as_str() {
+        let module: Box<dyn SyncWrapper> = match sync_type.to_lowercase().as_str() {
             duplicati::Duplicati::MODULE_NAME => duplicati::Duplicati::new(name, config_json, paths, args)?,
             rsync::Rsync::MODULE_NAME => rsync::Rsync::new(name, config_json, paths, args)?,
             ssh_gpg::SshGpg::MODULE_NAME => ssh_gpg::SshGpg::new(name, config_json, paths, args)?,
@@ -29,7 +29,7 @@ impl SyncModule {
     }
 }
 
-impl SyncRelay for SyncModule {
+impl SyncWrapper for SyncModule {
     fn init(&mut self) -> Result<(), String> {
         self.module.init()
     }
@@ -51,7 +51,7 @@ impl SyncRelay for SyncModule {
     }
 }
 
-pub trait SyncRelay {
+pub trait SyncWrapper {
     fn init(&mut self) -> Result<(), String>;
     fn sync(&self) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
@@ -59,7 +59,7 @@ pub trait SyncRelay {
     fn get_module_name(&self) -> &str;
 }
 
-impl<T: Sync> SyncRelay for T {
+impl<T: Sync> SyncWrapper for T {
     fn init(&mut self) -> Result<(), String> {
         Sync::init(self)
     }

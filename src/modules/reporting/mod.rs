@@ -9,7 +9,7 @@ use serde_json::Value;
 mod mqtt;
 
 pub struct ReportingModule {
-    modules: Vec<Box<dyn ReportingRelay>>
+    modules: Vec<Box<dyn ReportingWrapper>>
 }
 
 use std::ops::Add;
@@ -27,7 +27,7 @@ impl ReportingModule {
             vec![config_json]
         };
 
-        let mut modules: Vec<Result<Box<dyn ReportingRelay>, String>> = vec![];
+        let mut modules: Vec<Result<Box<dyn ReportingWrapper>, String>> = vec![];
 
         for (index,value) in array.iter().enumerate() {
             let mut parser_error = false;
@@ -37,7 +37,7 @@ impl ReportingModule {
                         match name.to_lowercase().as_str() {
                             mqtt::Reporter::MODULE_NAME => {
                                 modules.push(mqtt::Reporter::new(value, paths, args)
-                                    .map(|boxed| boxed as Box<dyn ReportingRelay>)
+                                    .map(|boxed| boxed as Box<dyn ReportingWrapper>)
                                     .map_err(|err| format!("Error in reporter {}: {}", index, err)));
                             },
                             unknown => {
@@ -99,7 +99,7 @@ impl ReportingModule {
     }
 }
 
-impl ReportingRelay for ReportingModule {
+impl ReportingWrapper for ReportingModule {
     fn init(&mut self) -> Result<(), String> {
         let result = self.modules.iter_mut().map(|module| {
             module.init()
@@ -150,13 +150,13 @@ fn accumulate<T>(input: Vec<Result<T,String>>) -> Result<Vec<T>,String> {
     }
 }
 
-pub trait ReportingRelay {
+pub trait ReportingWrapper {
     fn init(&mut self) -> Result<(),String>;
     fn report(&self, event: ReportEvent) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }
 
-impl<T: Reporting> ReportingRelay for T {
+impl<T: Reporting> ReportingWrapper for T {
     fn init(&mut self) -> Result<(), String> {
         Reporting::init(self)
     }

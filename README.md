@@ -398,6 +398,7 @@ This module needs to be used with care:
 
 ```json
 {
+  "type": "ssh-gpg",
   "encryption_key": "test12345",
   "remote_path": "/data/ssh-gpg",
   "remote_chmod": "0640",
@@ -440,15 +441,16 @@ Used for creating backups of game servers like minecraft and factorio.
 Checks the time players have spent on the server by reading the usetime from a file 
 updated by an external program, like a server plugin.
 
-| Key | Required | Default | Description |
-|-----|----------|---------|-------------|
-| backup_info | no | backupinfo/props.info | The path to the file containing the backup information (usetime) relative to the volume location. |
-| targeted_usetime | yes | | The time in seconds the server has to be in use before a backup is run. |  
+| Key              | Required | Default | Description                                                                                                                       |
+|------------------|----------|---------|-----------------------------------------------------------------------------------------------------------------------------------|
+| json             | no       | true    | Use json format. Json should contain a property 'usetime'. Alternatively the file is expected to contain lines like 'usetime=10'. |
+| file             | yes      |         | The path to the file containing the backup information (usetime).                                                                 |
+| targeted_usetime | yes      |         | The time in seconds the server has to be in use before a backup is run.                                                           |  
 
 ```json
 {
   "type": "usetime",
-  "backup_info": "backupinfo/props.info",
+  "backup_info": "/var/servermanager/usetime.json",
   "targeted_usetime": 3600
 }
 ```

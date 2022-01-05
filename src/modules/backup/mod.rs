@@ -8,12 +8,12 @@ use serde_json::Value;
 mod tar7zip;
 
 pub struct BackupModule {
-    module: Box<dyn BackupRelay>
+    module: Box<dyn BackupWrapper>
 }
 
 impl BackupModule {
     pub fn new(backup_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self, String> {
-        let module: Box<dyn BackupRelay> = match backup_type.to_lowercase().as_str() {
+        let module: Box<dyn BackupWrapper> = match backup_type.to_lowercase().as_str() {
             tar7zip::Tar7Zip::MODULE_NAME => tar7zip::Tar7Zip::new(name, config_json, paths, args)?,
             unknown => {
                 let msg = format!("Unknown backup module: '{}'", unknown);
@@ -26,7 +26,7 @@ impl BackupModule {
     }
 }
 
-impl BackupRelay for BackupModule {
+impl BackupWrapper for BackupModule {
     fn init(&mut self) -> Result<(), String> {
         self.module.init()
     }
@@ -48,7 +48,7 @@ impl BackupRelay for BackupModule {
     }
 }
 
-pub trait BackupRelay {
+pub trait BackupWrapper {
     fn init(&mut self) -> Result<(), String>;
     fn backup(&self, time_frames: &Vec<ExecutionTiming>) -> Result<(), String>;
     fn restore(&self) -> Result<(), String>;
@@ -56,7 +56,7 @@ pub trait BackupRelay {
     fn get_module_name(&self) -> &str;
 }
 
-impl<T: Backup> BackupRelay for T {
+impl<T: Backup> BackupWrapper for T {
     fn init(&mut self) -> Result<(), String> {
         Backup::init(self)
     }

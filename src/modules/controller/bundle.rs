@@ -1,4 +1,4 @@
-use crate::modules::controller::{ControllerModule, ControllerRelay, BundleableRelay};
+use crate::modules::controller::{ControllerModule, ControllerWrapper, BundleableWrapper};
 use crate::modules::controller::mqtt::MqttController;
 use crate::modules::traits::{Controller,Bundleable};
 use crate::util::objects::paths::Paths;
@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::rc::Rc;
 
 pub struct ControllerBundle {
-    controller: Box<dyn BundleableControllerRelay>,
+    controller: Box<dyn BundleableControllerWrapper>,
     init_result: Option<Result<(),String>>,
     begin_result: Option<Result<bool,String>>,
     bundled: bool
@@ -16,7 +16,7 @@ pub struct ControllerBundle {
 
 impl ControllerBundle {
     pub fn new(controller_type: &str, name: &str, config: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<ControllerBundle,String> {
-        let module: Box<dyn BundleableControllerRelay> = match controller_type.to_lowercase().as_str() {
+        let module: Box<dyn BundleableControllerWrapper> = match controller_type.to_lowercase().as_str() {
             MqttController::MODULE_NAME => {
                 MqttController::new_bundle(name, config, paths, args)?
             },
@@ -69,7 +69,7 @@ impl ControllerBundle {
     }
 }
 
-impl ControllerRelay for ControllerBundle {
+impl ControllerWrapper for ControllerBundle {
     fn init(&mut self) -> Result<(), String> {
         if let Some(result) = self.init_result.as_ref() {
             return result.clone();
@@ -106,7 +106,7 @@ impl ControllerRelay for ControllerBundle {
     }
 }
 
-impl BundleableRelay for ControllerBundle {
+impl BundleableWrapper for ControllerBundle {
     fn try_bundle(&mut self, other_name: &str, other: &Value) -> Result<bool, String> {
         let result = self.controller.as_mut_bundleable().try_bundle(other_name, other);
         if let Ok(bool_result) = result {
@@ -118,19 +118,19 @@ impl BundleableRelay for ControllerBundle {
     fn did_start(&self) -> bool { self.begin_result.is_some() }
 }
 
-pub trait BundleableControllerRelay: ControllerRelay + BundleableRelay {
-    fn into_controller(self: Box<Self>) -> Box<dyn ControllerRelay>;
-    fn as_ref_controller(&self) -> &dyn ControllerRelay;
-    fn as_mut_controller(&mut self) -> &mut dyn ControllerRelay;
-    fn as_ref_bundleable(&self) -> &dyn BundleableRelay;
-    fn as_mut_bundleable(&mut self) -> &mut dyn BundleableRelay;
+pub trait BundleableControllerWrapper: ControllerWrapper + BundleableWrapper {
+    fn into_controller(self: Box<Self>) -> Box<dyn ControllerWrapper>;
+    fn as_ref_controller(&self) -> &dyn ControllerWrapper;
+    fn as_mut_controller(&mut self) -> &mut dyn ControllerWrapper;
+    fn as_ref_bundleable(&self) -> &dyn BundleableWrapper;
+    fn as_mut_bundleable(&mut self) -> &mut dyn BundleableWrapper;
 }
 
 // TODO: requires static lifetime...?
-impl<T: ControllerRelay+BundleableRelay> BundleableControllerRelay for T where T: Sized + 'static {
-    fn into_controller(self: Box<Self>) -> Box<dyn ControllerRelay> { self }
-    fn as_ref_controller(&self) -> &dyn ControllerRelay { self }
-    fn as_mut_controller(&mut self) -> &mut dyn ControllerRelay { self }
-    fn as_ref_bundleable(&self) -> &dyn BundleableRelay { self }
-    fn as_mut_bundleable(&mut self) -> &mut dyn BundleableRelay { self }
+impl<T: ControllerWrapper + BundleableWrapper> BundleableControllerWrapper for T where T: Sized + 'static {
+    fn into_controller(self: Box<Self>) -> Box<dyn ControllerWrapper> { self }
+    fn as_ref_controller(&self) -> &dyn ControllerWrapper { self }
+    fn as_mut_controller(&mut self) -> &mut dyn ControllerWrapper { self }
+    fn as_ref_bundleable(&self) -> &dyn BundleableWrapper { self }
+    fn as_mut_bundleable(&mut self) -> &mut dyn BundleableWrapper { self }
 }

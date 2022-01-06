@@ -2,7 +2,7 @@ use crate::modules::traits::Reporting;
 use crate::util::objects::reporting::*;
 use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths};
-use crate::util::objects::shared::mqtt::MqttConfiguration;
+use crate::modules::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
 use crate::{try_result};
 

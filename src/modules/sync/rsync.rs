@@ -3,7 +3,7 @@ use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
 use crate::util::objects::paths::{ModulePaths,SourcePath};
-use crate::util::objects::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
+use crate::modules::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
 use crate::Arguments;
 
 use serde_json::Value;

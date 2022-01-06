@@ -5,3 +5,4 @@ pub mod controller;
 pub mod reporting;
 
 pub mod traits;
+pub mod shared;

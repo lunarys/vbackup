@@ -1,9 +1,7 @@
 use crate::Arguments;
 use crate::modules::reporting::ReportingModule;
-use crate::util::io::file;
 use crate::util::objects::savedata::{SaveDataCollection};
-use crate::util::objects::reporting::{SizeType,RunType,Status};
-use crate::util::objects::paths::SourcePath;
+use crate::util::objects::reporting::{RunType,Status};
 use crate::processing::backup::backup;
 use crate::processing::sync::sync;
 use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, SyncUnit, BackupUnit};
@@ -56,10 +54,6 @@ fn process_backup(config: &mut BackupUnit,
                   savedata_collection: &mut SaveDataCollection,
                   args: &Arguments,
                   reporter: &ReportingModule) -> Result<(), String> {
-    // Save those paths for later, as the ModulePaths will be moved
-    let original_path = config.module_paths.source.clone();
-    let store_path = config.module_paths.destination.clone();
-
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
@@ -80,12 +74,6 @@ fn process_backup(config: &mut BackupUnit,
     // run after
     try_result!(run_after(config.backup_config.setup.as_ref(), args.dry_run), "Script after backup failed");
 
-    // Calculate and report the size of the original files
-    size_reporter(RunType::BACKUP, SizeType::ORIGINAL, original_path.borrow(), config.config.name.borrow(), reporter, args);
-
-    // Calculate and report the size of the backup files
-    size_reporter(RunType::BACKUP, SizeType::BACKUP, &SourcePath::Single(store_path.clone()), config.config.name.borrow(), reporter, args);
-
     return Ok(());
 }
 
@@ -94,9 +82,6 @@ fn process_sync(config: &mut SyncUnit,
                 args: &Arguments,
                 reporter: &ReportingModule,
                 controller_override: Option<&mut ControllerModule>) -> Result<(), String> {
-    // Save owned objects of configuration and path
-    let store_path = config.module_paths.source.clone();
-
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
@@ -127,10 +112,6 @@ fn process_sync(config: &mut SyncUnit,
 
     // run after
     try_result!(run_after(config.sync_config.setup.as_ref(), args.dry_run), "Script after sync failed");
-
-    // Calculate and report size of the synced files
-    // TODO: Current implementation just takes the size of the local files...
-    size_reporter(RunType::SYNC, SizeType::SYNC, store_path.borrow(), config.config.name.borrow(), reporter, args);
 
     return Ok(());
 }
@@ -218,22 +199,6 @@ fn result_reporter(run_type: RunType,
         Err(err) => {
             error!("{} for '{}' failed: {}", run_type, config_name, err);
             reporter.report_status(run_type, Some(config_name.clone()), Status::ERROR);
-        }
-    }
-}
-
-fn size_reporter(run_type: RunType,
-                 directory_type: SizeType,
-                 path: &SourcePath,
-                 config_name: &String,
-                 reporter: &ReportingModule,
-                 args: &Arguments) {
-    match file::size(path, args.no_docker) {
-        Ok(curr_size) => {
-            reporter.report_size(run_type, directory_type, Some(config_name.clone()), curr_size);
-        },
-        Err(err) => {
-            error!("Could not read size of the {} files: {}", directory_type, if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() });
         }
     }
 }

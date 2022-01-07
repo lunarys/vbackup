@@ -82,17 +82,6 @@ impl ReportingModule {
         log_error!(result);
     }
 
-    pub fn report_size(&self, run_type: RunType, size_type: SizeType, name: Option<String>, size: u64) {
-        let result = self.report(ReportEvent::Size(SizeReport {
-            module: name.map(|input| String::from(input)),
-            size,
-            run_type,
-            size_type
-        }));
-
-        log_error!(result);
-    }
-
     pub fn report_operation(&self, operation: OperationStatus) {
         let result = self.report(ReportEvent::Operation(operation));
         log_error!(result);

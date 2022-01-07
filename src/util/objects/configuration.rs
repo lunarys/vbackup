@@ -7,6 +7,13 @@ use serde::{Deserialize};
 fn default_bool_false() -> bool { false }
 
 #[derive(Deserialize,Clone)]
+pub struct StrategyConfiguration {
+    pub containers: Option<Vec<String>>,
+    pub before: Option<Vec<String>>,
+    pub after: Option<Vec<String>>
+}
+
+#[derive(Deserialize,Clone)]
 pub struct Configuration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
@@ -15,7 +22,8 @@ pub struct Configuration {
     pub source_path: SourcePath,
     pub backup_path: Option<String>,
     pub backup: Option<BackupConfiguration>,
-    pub sync: Option<SyncConfiguration>
+    pub sync: Option<SyncConfiguration>,
+    pub setup: Option<StrategyConfiguration>
 }
 
 #[derive(Deserialize,Clone)]
@@ -26,7 +34,8 @@ pub struct BackupConfiguration {
     pub backup_type: String,
     pub config: Value,
     pub check: Option<Value>,
-    pub timeframes: Vec<TimeFrameReference>
+    pub timeframes: Vec<TimeFrameReference>,
+    pub setup: Option<StrategyConfiguration>
 }
 
 #[derive(Deserialize,Clone)]
@@ -38,5 +47,6 @@ pub struct SyncConfiguration {
     pub interval: TimeFrameReference,
     pub config: Value,
     pub check: Option<Value>,
-    pub controller: Option<Value>
+    pub controller: Option<Value>,
+    pub setup: Option<StrategyConfiguration>
 }

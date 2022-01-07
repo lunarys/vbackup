@@ -10,10 +10,12 @@ use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, S
 use crate::processing::timeframe_check;
 use crate::modules::controller::ControllerModule;
 
-use crate::{log_error};
+use crate::{log_error,try_result};
 
 use core::borrow::{BorrowMut, Borrow};
 use chrono::{DateTime, Local};
+use crate::util::objects::configuration::StrategyConfiguration;
+use crate::util::command::CommandWrapper;
 
 pub fn process_configurations(args: &Arguments,
                               reporter: &ReportingModule,
@@ -65,10 +67,18 @@ fn process_backup(config: &mut BackupUnit,
     // Announce that this backup is starting
     reporter.report_status(RunType::BACKUP, Some(config.config.name.clone()), Status::START);
 
+    // run before
+    let setup_result = run_before(config.backup_config.setup.as_ref(), args.dry_run);
+
     // TODO: Pass paths by reference
     // Run the backup and report the result
-    let result = backup(args, config, savedata);
+    let result = setup_result.and_then(|()| {
+        backup(args, config, savedata)
+    });
     result_reporter(RunType::BACKUP, result, config.config.name.borrow(), reporter);
+
+    // run after
+    try_result!(run_after(config.backup_config.setup.as_ref(), args.dry_run), "Script after backup failed");
 
     // Calculate and report the size of the original files
     size_reporter(RunType::BACKUP, SizeType::ORIGINAL, original_path.borrow(), config.config.name.borrow(), reporter, args);
@@ -106,9 +116,17 @@ fn process_sync(config: &mut SyncUnit,
     // Announce that this sync is starting
     reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::START);
 
-    // Run the sync and report the result
-    let result = sync(args, config, savedata, controller_override);
+    // run before
+    let setup_result = run_before(config.sync_config.setup.as_ref(), args.dry_run);
+
+    // Run the sync and report the result (if before script was successful)
+    let result = setup_result.and_then(|()| {
+        sync(args, config, savedata, controller_override)
+    });
     result_reporter(RunType::SYNC, result, config.config.name.borrow(), reporter);
+
+    // run after
+    try_result!(run_after(config.sync_config.setup.as_ref(), args.dry_run), "Script after sync failed");
 
     // Calculate and report size of the synced files
     // TODO: Current implementation just takes the size of the local files...
@@ -140,6 +158,42 @@ fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBun
 }
 
 // ############################ Helper functions ############################
+fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result<(), String> {
+    if let Some(setup) = setup_opt {
+        if let Some(before) = setup.before.as_ref() {
+            for script in before {
+                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration(false, dry_run)?;
+            }
+        }
+
+        if let Some(containers) = setup.containers.as_ref() {
+            for container in containers {
+                CommandWrapper::new_with_args("docker", vec!["stop", container]).run_configuration(false, dry_run)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result<(), String> {
+    if let Some(setup) = setup_opt {
+        if let Some(containers) = setup.containers.as_ref() {
+            for container in containers.iter().rev() {
+                CommandWrapper::new_with_args("docker", vec!["start", container]).run_configuration(false, dry_run)?;
+            }
+        }
+
+        if let Some(after) = setup.after.as_ref() {
+            for script in after {
+                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration(false, dry_run)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn result_reporter(run_type: RunType,
                    result: Result<bool,String>,
                    config_name: &String,

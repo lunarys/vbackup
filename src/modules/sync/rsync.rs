@@ -239,7 +239,7 @@ impl Rsync {
         command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?;
 
         // Default sync options
-        command.arg_str("--archive")
+        command.arg_str("-rlptD")// nearly the same as --archive mode, but without -g and -o flag to preserve group and owner
             .arg_str("--delete")
             .arg_str("--partial");
 

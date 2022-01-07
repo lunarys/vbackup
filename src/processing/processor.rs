@@ -167,9 +167,13 @@ fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Resul
         }
 
         if let Some(containers) = setup.containers.as_ref() {
-            for container in containers {
-                CommandWrapper::new_with_args("docker", vec!["stop", container]).run_configuration(false, dry_run)?;
-            }
+            let mut cmd_args = vec!["stop"];
+
+            containers.iter().for_each(|container| {
+                cmd_args.push(container);
+            });
+
+            CommandWrapper::new_with_args("docker", cmd_args).run_configuration(false, dry_run)?;
         }
     }
 
@@ -179,9 +183,13 @@ fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Resul
 fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result<(), String> {
     if let Some(setup) = setup_opt {
         if let Some(containers) = setup.containers.as_ref() {
-            for container in containers.iter().rev() {
-                CommandWrapper::new_with_args("docker", vec!["start", container]).run_configuration(false, dry_run)?;
-            }
+            let mut cmd_args = vec!["start"];
+
+            containers.iter().rev().for_each(|container| {
+                cmd_args.push(container)
+            });
+
+            CommandWrapper::new_with_args("docker", cmd_args).run_configuration(false, dry_run)?;
         }
 
         if let Some(after) = setup.after.as_ref() {

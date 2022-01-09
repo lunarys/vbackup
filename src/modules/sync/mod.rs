@@ -7,7 +7,7 @@ use serde_json::Value;
 mod duplicati;
 mod rsync;
 mod ssh_gpg;
-mod borg;
+pub mod borg;
 
 pub struct SyncModule {
     module: Box<dyn SyncWrapper>
@@ -25,8 +25,8 @@ impl SyncModule {
             ssh_gpg::SshGpg::MODULE_NAME => {
                 ssh_gpg::SshGpg::new(name, config_json, paths, args)?
             },
-            borg::Borg::MODULE_NAME => {
-                borg::Borg::new(name, config_json, paths, args)?
+            <borg::Borg as Sync>::MODULE_NAME => {
+                <borg::Borg as Sync>::new(name, config_json, paths, args)?
             },
             unknown => {
                 let msg = format!("Unknown sync module: '{}'", unknown);

@@ -18,8 +18,8 @@ impl BackupModule {
             tar7zip::Tar7Zip::MODULE_NAME => {
                 tar7zip::Tar7Zip::new(name, config_json, paths, args)?
             },
-            borg::Borg::MODULE_NAME => {
-                borg::Borg::new(name, config_json, paths, args)?
+            <borg::Borg as Backup>::MODULE_NAME => {
+                <borg::Borg as Backup>::new(name, config_json, paths, args)?
             },
             unknown => {
                 let msg = format!("Unknown backup module: '{}'", unknown);

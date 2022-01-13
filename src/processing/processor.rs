@@ -142,6 +142,7 @@ fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBun
 fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result<(), String> {
     if let Some(setup) = setup_opt {
         if let Some(before) = setup.before.as_ref() {
+            debug!("Running custom before scripts");
             for script in before {
                 CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration(false, dry_run)?;
             }
@@ -154,6 +155,7 @@ fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Resul
                 cmd_args.push(container);
             });
 
+            debug!("Stopping related containers: {}", containers.join(", "));
             CommandWrapper::new_with_args("docker", cmd_args).run_configuration(false, dry_run)?;
         }
     }
@@ -170,10 +172,12 @@ fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result
                 cmd_args.push(container)
             });
 
+            debug!("Starting related containers: {}", containers.join(", "));
             CommandWrapper::new_with_args("docker", cmd_args).run_configuration(false, dry_run)?;
         }
 
         if let Some(after) = setup.after.as_ref() {
+            debug!("Running custom after scripts");
             for script in after {
                 CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration(false, dry_run)?;
             }

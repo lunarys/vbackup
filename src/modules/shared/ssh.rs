@@ -48,7 +48,14 @@ impl CommandWrapper {
 
 pub fn write_known_hosts(ssh_config: &SshConfig, module_paths: &ModulePaths, dry_run: bool) -> Result<(), String> {
     if !dry_run {
-        file::write_if_change(get_actual_known_hosts_filename(module_paths).as_str(), Some("600"), ssh_config.host_key.as_str(), true)?;
+        // backwards compatibility (to some degree): check whether the hostname/ip combo is prepended
+        let to_write = if ssh_config.host_key.starts_with("[") {
+            ssh_config.host_key.clone()
+        } else {
+            format!("[{}]:{} {}", ssh_config.hostname, ssh_config.port, ssh_config.host_key)
+        };
+
+        file::write_if_change(get_actual_known_hosts_filename(module_paths).as_str(), Some("600"), to_write.as_str(), true)?;
     }
 
     Ok(())

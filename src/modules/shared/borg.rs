@@ -7,6 +7,7 @@ use crate::util::command::CommandWrapper;
 use std::borrow::Borrow;
 use crate::modules::sync::borg::BorgSyncConfig;
 use crate::util::docker;
+use crate::modules::shared::ssh::{write_known_hosts, write_identity_file};
 
 #[derive(Deserialize)]
 struct BorgKeepConfig {
@@ -84,6 +85,11 @@ impl Borg {
             docker::build_image_if_missing(&self.paths.base_paths, "borg.Dockerfile", "vbackup-borg")?;
         }
 
+        if let Some(sync_config) = self.sync_config.as_ref() {
+            write_known_hosts(sync_config.ssh_config.borrow(), &self.paths, self.dry_run)?;
+            write_identity_file(sync_config.ssh_config.borrow(), &self.paths, self.dry_run)?;
+        }
+
         Ok(())
     }
 
@@ -94,9 +100,8 @@ impl Borg {
     }
 
     fn run_init(&self) -> Result<(), String> {
-        let mut command = self.get_base_cmd()?;
+        let mut command = self.get_base_cmd("init")?;
 
-        command.arg_str("init");
         command.arg_str("--encryption");
 
         if self.config.encryption_key.is_some() {
@@ -130,9 +135,7 @@ impl Borg {
     }
 
     fn run_prune(&self) -> Result<(), String> {
-        let mut command = self.get_base_cmd()?;
-
-        command.arg_str("prune");
+        let mut command = self.get_base_cmd("prune")?;
 
         /*
          * limit to proper prefix
@@ -204,9 +207,7 @@ impl Borg {
         /*
          * Start backup command
          */
-        let mut command = self.get_base_cmd()?;
-
-        command.arg_str("create");
+        let mut command = self.get_base_cmd("create")?;
 
         /*
          * add options
@@ -283,7 +284,7 @@ impl Borg {
         todo!()
     }
 
-    fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
+    fn get_base_cmd(&self, operation: &str) -> Result<CommandWrapper,String> {
         let mut command;
         if self.no_docker {
             command = CommandWrapper::new("borg");
@@ -292,7 +293,8 @@ impl Borg {
         } else {
             let mut options = vec![
                 "--env=BORG_BASE_DIR",
-                "--env=BORG_PASSPHRASE"
+                "--env=BORG_PASSPHRASE",
+                "--env=SSHPASS"
             ];
 
             let volume_mount_arg;
@@ -305,7 +307,7 @@ impl Borg {
                 "borg-vbackup-tmp",
                 "vbackup-borg",
                 Some("borg"),
-                None,
+                Some(vec![operation]),
                 &self.paths,
                 (self.paths.source.borrow(), "/volume"),
                 Some(options)
@@ -320,11 +322,13 @@ impl Borg {
 
         // configure ssh connection
         if let Some(borg_sync) = self.sync_config.as_ref() {
-            command.wrap();
-            command.arg_str("--rsh");
-            command.append_ssh_command(&borg_sync.ssh_config, &self.paths, !self.no_docker, false)?;
-            command.wrap();
+            let ssh_command = command.build_ssh_command(&borg_sync.ssh_config, &self.paths, !self.no_docker, false);
+            command.arg_string(format!("--rsh={}", ssh_command));
         }
+
+        /*if self.verbose {
+            command.arg_str("--debug");
+        }*/
 
         return Ok(command);
     }

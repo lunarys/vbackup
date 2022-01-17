@@ -118,17 +118,21 @@ Default file: `/etc/vbackup/timeframes.json`
 ### Volumes
 Default directory: `/etc/vbackup/volumes`. This is the configuration file for a source to back up.
 
-| Key                | Required | Default         | Description                                                                                                                                                        |
-|--------------------|----------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| name               | yes      |                 | A unique name for this configuration. Filename is recommended.                                                                                                     |
-| disabled           | no       | false           | Flag to disable this configuration.                                                                                                                                |
-| source_path        | yes      |                 | Path of the directory or name of the docker volume to back up, alternatively a list of paths with name mappings.                                                   |
-| source_path[].path | no       |                 | Path to a directory / name of a docker volume to back up.                                                                                                          |
-| source_path[].name | no       |                 | Name for the backup up location (Used for example as a top-level directory in an archive).                                                                         |
-| backup_path        | no       | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. Uses the backup directory and the name of the configuration by default. |
-| savedata_in_store  | no       | false           | Whether to store the savedata file with the backup or not. Overwrites the global flag if set.                                                                      |
-| backup             | no       |                 | The backup configuration for this volume.                                                                                                                          |
-| sync               | no       |                 | The sync configuration for this volume.                                                                                                                            | 
+| Key                | Required | Default         | Description                                                                                                                                                            |
+|--------------------|----------|-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| name               | yes      |                 | A unique name for this configuration. Filename is recommended.                                                                                                         |
+| disabled           | no       | false           | Flag to disable this configuration.                                                                                                                                    |
+| source_path        | yes      |                 | Path of the directory or name of the docker volume to back up, alternatively a list of paths with name mappings.                                                       |
+| source_path[].path | no       |                 | Path to a directory / name of a docker volume to back up.                                                                                                              |
+| source_path[].name | no       |                 | Name for the backup up location (Used for example as a top-level directory in an archive).                                                                             |
+| backup_path        | no       | $save_dir/$name | Path to store backups in. This path will be synced if both backup and sync are configured. Uses the backup directory and the name of the configuration by default.     |
+| savedata_in_store  | no       | false           | Whether to store the savedata file with the backup or not. Overwrites the global flag if set.                                                                          |
+| backup             | no       |                 | The backup configuration for this volume.                                                                                                                              |
+| sync               | no       |                 | The sync configuration for this volume.                                                                                                                                |
+| setup              | no       |                 | Options to prepare the run. Used for backup if given, else for sync, as the sync after a backup is expected to not be related to live data but already backed up data. |
+| setup.containers   | no       | []              | Stop these containers before the run and restart them afterwards. Stop in the given order and start in reverse order.                                                  |
+| setup.before       | no       | []              | Execute these scripts before the run. Passed to `sh -c`                                                                                                                |
+| setup.after        | no       | []              | Execute these scripts after the run. Passed to `sh -c`                                                                                                                 |
 
 ```json
 {
@@ -158,15 +162,19 @@ Default directory: `/etc/vbackup/volumes`. This is the configuration file for a 
 ```
 
 #### Backup
-| Key                 | Required | Default | Description                                                         |
-|---------------------|----------|---------|---------------------------------------------------------------------|
-| disabled            | no       | false   | Flag to disable the backup configuration.                           | 
-| type                | yes      |         | The type of this backup configuration / which backup module to use. |
-| config              | yes      |         | The module specific backup configuration.                           |
-| check               | no       |         | Configuration of an additional check for this backup.               |
-| timeframes          | yes      |         | Timeframes in which to run this backup.                             |
-| timeframes[].frame  | yes      |         | Identifier of the referenced timeframe.                             |
-| timeframes[].amount | no       | 1       | The number of backups to keep for this timeframe.                   |
+| Key                 | Required | Default | Description                                                                                                              |
+|---------------------|----------|---------|--------------------------------------------------------------------------------------------------------------------------|
+| disabled            | no       | false   | Flag to disable the backup configuration.                                                                                | 
+| type                | yes      |         | The type of this backup configuration / which backup module to use.                                                      |
+| config              | yes      |         | The module specific backup configuration.                                                                                |
+| check               | no       |         | Configuration of an additional check for this backup.                                                                    |
+| timeframes          | yes      |         | Timeframes in which to run this backup.                                                                                  |
+| timeframes[].frame  | yes      |         | Identifier of the referenced timeframe.                                                                                  |
+| timeframes[].amount | no       | 1       | The number of backups to keep for this timeframe.                                                                        |
+| setup               | no       |         | Options to prepare the backup run. Overwrites the general configuration.                                                 |
+| setup.containers    | no       | []      | Stop these containers before the backup and restart them afterwards. Stop in the given order and start in reverse order. |
+| setup.before        | no       | []      | Execute these scripts before the backup. Passed to `sh -c`                                                               |
+| setup.after         | no       | []      | Execute these scripts after the backup. Passed to `sh -c`                                                                |
 
 ```json
 {
@@ -183,15 +191,19 @@ Default directory: `/etc/vbackup/volumes`. This is the configuration file for a 
 }
 ```
 #### Sync
-| Key            | Required | Default | Description                                                     |
-|----------------|----------|---------|-----------------------------------------------------------------|
-| disabled       | no       | false   | Flag to disable the sync configuration.                         |
-| type           | yes      |         | The type of this sync configuration / which sync module to use. |
-| config         | yes      |         | The module specific sync configuration.                         |
-| check          | no       |         | Configuration of an additional check for this sync.             |
-| controller     | no       |         | Configuration of an controller for the remote device.           |
-| interval       | yes      |         | The timeframe to run this sync in.                              |
-| interval.frame | yes      |         | The identifier of the referenced timeframe.                     | 
+| Key              | Required | Default | Description                                                                                                            |
+|------------------|----------|---------|------------------------------------------------------------------------------------------------------------------------|
+| disabled         | no       | false   | Flag to disable the sync configuration.                                                                                |
+| type             | yes      |         | The type of this sync configuration / which sync module to use.                                                        |
+| config           | yes      |         | The module specific sync configuration.                                                                                |
+| check            | no       |         | Configuration of an additional check for this sync.                                                                    |
+| controller       | no       |         | Configuration of an controller for the remote device.                                                                  |
+| interval         | yes      |         | The timeframe to run this sync in.                                                                                     |
+| interval.frame   | yes      |         | The identifier of the referenced timeframe.                                                                            |
+| setup            | no       |         | Options to prepare the sync run. Overwrites the general configuration.                                                 |
+| setup.containers | no       | []      | Stop these containers before the sync and restart them afterwards. Stop in the given order and start in reverse order. |
+| setup.before     | no       | []      | Execute these scripts before the sync. Passed to `sh -c`                                                               |
+| setup.after      | no       | []      | Execute these scripts after the sync. Passed to `sh -c`                                                                |
 
 ```json
 {
@@ -267,27 +279,32 @@ Create a compressed backup in a `.tar.7z` archive.
 #### borg
 Create a backup in a local directory using borg. The backup repository can be initiated on first run and pruned afterwards.
 The backup is written to the default or specified backup path from the main backup configuration.
+If init fails for some reason remove the `init-marker` file in the module data directory, which can be found be default in
+`/var/vbackup/.module-data/$name/backup`.
+If you want to reset the repository entirely remove the module data directory and the backup path, which usually is
+`/var/vbackup/$name`.
 
-| Key                | Required | Default | Description                                                                                                                 |
-|--------------------|----------|---------|-----------------------------------------------------------------------------------------------------------------------------|
-| encryption_key     | no       |         | Use this passphrase for encryption.                                                                                         |
-| authentication_key | no       |         | Use this passphrase for authentication. Not used if encryption_key is set.                                                  |
-| blake2             | no       | false   | Use BLAKE2b for hashing / encryption instead of SHA256. See borg documentation for details. Speed depends on the processor. |
-| quota              | no       |         | Set the storage quota when initializing the borg repo.                                                                      |
-| no_init            | no       | false   | Do not initialize the borg repo. Make sure the repo is initialized and the metadata is present.                             |
-| append_only        | no       | false   | Initialize repo in append-only mode.                                                                                        |
-| exclude            | no       | []      | Exclude these patterns from the backup. See the borg documentation for details.                                             | 
-| additional_options | no       | []      | Pass additional options to the borg create command.                                                                         | 
-| disable_prune      | no       | false   | Do not prune the repo after creating a backup.                                                                              |
-| keep               | yes      |         | Configure prune behaviour. At least one of these options is required.                                                       |
-| keep.within        | no       |         | Keep all archives within this time interval. E.g. 10d for ten days.                                                         |
-| keep.secondly      | no       |         | Number of secondly backups to keep.                                                                                         |
-| keep.minutely      | no       |         | Number of minutely backups to keep.                                                                                         |
-| keep.hourly        | no       |         | Number of hourly backups to keep.                                                                                           |
-| keep.daily         | no       |         | Number of daily backups to keep.                                                                                            |
-| keep.weekly        | no       |         | Number of weekly backups to keep.                                                                                           |
-| keep.monthly       | no       |         | Number of monthly backups to keep.                                                                                          |
-| keep.yearly        | no       |         | Number of yearly backups to keep.                                                                                           |
+| Key                | Required | Default | Description                                                                                                                                                                                 |
+|--------------------|----------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| encryption_key     | no       |         | Use this passphrase for encryption.                                                                                                                                                         |
+| authentication_key | no       |         | Use this passphrase for authentication. Not used if encryption_key is set.                                                                                                                  |
+| blake2             | no       | false   | Use BLAKE2b for hashing / encryption instead of SHA256. See borg documentation for details. Speed depends on the processor.                                                                 |
+| quota              | no       |         | Set the storage quota when initializing the borg repo.                                                                                                                                      |
+| no_init            | no       | false   | Do not initialize the borg repo. Make sure the repo is initialized and the metadata is present.                                                                                             |
+| append_only        | no       | false   | Initialize repo in append-only mode.                                                                                                                                                        |
+| exclude            | no       | []      | Exclude these patterns from the backup. See the borg documentation for details.                                                                                                             | 
+| additional_options | no       | []      | Pass additional options to the borg create command.                                                                                                                                         | 
+| disable_prune      | no       | false   | Do not prune the repo after creating a backup.                                                                                                                                              |
+| prefix             | no       |         | Specify a prefix for the backup, appended after `vbackup_`. Note that the prefix will also be used for pruning, meaning that in case the prefix is changed, not all backups will be pruned. |
+| keep               | yes      |         | Configure prune behaviour. At least one of these options is required.                                                                                                                       |
+| keep.within        | no       |         | Keep all archives within this time interval. E.g. 10d for ten days.                                                                                                                         |
+| keep.secondly      | no       |         | Number of secondly backups to keep.                                                                                                                                                         |
+| keep.minutely      | no       |         | Number of minutely backups to keep.                                                                                                                                                         |
+| keep.hourly        | no       |         | Number of hourly backups to keep.                                                                                                                                                           |
+| keep.daily         | no       |         | Number of daily backups to keep.                                                                                                                                                            |
+| keep.weekly        | no       |         | Number of weekly backups to keep.                                                                                                                                                           |
+| keep.monthly       | no       |         | Number of monthly backups to keep.                                                                                                                                                          |
+| keep.yearly        | no       |         | Number of yearly backups to keep.                                                                                                                                                           |
 
 ```json
 {
@@ -363,36 +380,41 @@ Send the backup to a remote destination using rsync over ssh.
 
 #### borg (over ssh)
 Create a backup using borg over ssh. The backup repository can be initiated on first run and pruned afterwards.
+Requires borg (borgbackup) to be installed on the remote machine.
+If init fails for some reason remove the `init-marker` file in the module data directory, which can be found be default in 
+`/var/vbackup/.module-data/$name/sync`.
+If you want to reset the repository entirely remove the module data directory and the synced path on the remote machine.
 
-| Key                | Required | Default | Description                                                                                                                 |
-|--------------------|----------|---------|-----------------------------------------------------------------------------------------------------------------------------|
-| directory          | yes      |         | The remote directory containing the borg repository, or the directory that should be used for it.                           |
-| host_reference     | depends  |         | Reference to ssh server information in the shared authentication store.                                                     |
-| host               | depends  |         | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided.                            | 
-| host.hostname      | yes      |         | Hostname of the server.                                                                                                     |
-| host.port          | yes      |         | Port of the server.                                                                                                         |
-| host.user          | yes      |         | Username for login on the server.                                                                                           |
-| host.password      | no       |         | Password for login on the server.                                                                                           |
-| host.ssh_key       | no       |         | Unencrypted private key for login on the server. This will be preferred over the password if both are given.                |
-| host.host_key      | yes      |         | Public key of the host for host authentication.                                                                             |
-| encryption_key     | no       |         | Use this passphrase for encryption.                                                                                         |
-| authentication_key | no       |         | Use this passphrase for authentication. Not used if encryption_key is set.                                                  |
-| blake2             | no       | false   | Use BLAKE2b for hashing / encryption instead of SHA256. See borg documentation for details. Speed depends on the processor. |
-| quota              | no       |         | Set the storage quota when initializing the borg repo.                                                                      |
-| no_init            | no       | false   | Do not initialize the borg repo. Make sure the repo is initialized and the metadata is present.                             |
-| append_only        | no       | false   | Initialize repo in append-only mode.                                                                                        |
-| exclude            | no       | []      | Exclude these patterns from the backup. See the borg documentation for details.                                             | 
-| additional_options | no       | []      | Pass additional options to the borg create command.                                                                         | 
-| disable_prune      | no       | false   | Do not prune the repo after creating a backup.                                                                              |
-| keep               | yes      |         | Configure prune behaviour. At least one of these options is required.                                                       |
-| keep.within        | no       |         | Keep all archives within this time interval. E.g. 10d for ten days.                                                         |
-| keep.secondly      | no       |         | Number of secondly backups to keep.                                                                                         |
-| keep.minutely      | no       |         | Number of minutely backups to keep.                                                                                         |
-| keep.hourly        | no       |         | Number of hourly backups to keep.                                                                                           |
-| keep.daily         | no       |         | Number of daily backups to keep.                                                                                            |
-| keep.weekly        | no       |         | Number of weekly backups to keep.                                                                                           |
-| keep.monthly       | no       |         | Number of monthly backups to keep.                                                                                          |
-| keep.yearly        | no       |         | Number of yearly backups to keep.                                                                                           |
+| Key                | Required | Default | Description                                                                                                                                                                                 |
+|--------------------|----------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| directory          | yes      |         | The remote directory containing the borg repository, or the directory that should be used for it.                                                                                           |
+| host_reference     | depends  |         | Reference to ssh server information in the shared authentication store.                                                                                                                     |
+| host               | depends  |         | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided.                                                                                            | 
+| host.hostname      | yes      |         | Hostname of the server.                                                                                                                                                                     |
+| host.port          | yes      |         | Port of the server.                                                                                                                                                                         |
+| host.user          | yes      |         | Username for login on the server.                                                                                                                                                           |
+| host.password      | no       |         | Password for login on the server.                                                                                                                                                           |
+| host.ssh_key       | no       |         | Unencrypted private key for login on the server. This will be preferred over the password if both are given.                                                                                |
+| host.host_key      | yes      |         | Public key of the host for host authentication.                                                                                                                                             |
+| encryption_key     | no       |         | Use this passphrase for encryption.                                                                                                                                                         |
+| authentication_key | no       |         | Use this passphrase for authentication. Not used if encryption_key is set.                                                                                                                  |
+| blake2             | no       | false   | Use BLAKE2b for hashing / encryption instead of SHA256. See borg documentation for details. Speed depends on the processor.                                                                 |
+| quota              | no       |         | Set the storage quota when initializing the borg repo.                                                                                                                                      |
+| no_init            | no       | false   | Do not initialize the borg repo. Make sure the repo is initialized and the metadata is present.                                                                                             |
+| append_only        | no       | false   | Initialize repo in append-only mode.                                                                                                                                                        |
+| exclude            | no       | []      | Exclude these patterns from the backup. See the borg documentation for details.                                                                                                             | 
+| additional_options | no       | []      | Pass additional options to the borg create command.                                                                                                                                         | 
+| disable_prune      | no       | false   | Do not prune the repo after creating a backup.                                                                                                                                              |
+| prefix             | no       |         | Specify a prefix for the backup, appended after `vbackup_`. Note that the prefix will also be used for pruning, meaning that in case the prefix is changed, not all backups will be pruned. |
+| keep               | yes      |         | Configure prune behaviour. At least one of these options is required.                                                                                                                       |
+| keep.within        | no       |         | Keep all archives within this time interval. E.g. 10d for ten days.                                                                                                                         |
+| keep.secondly      | no       |         | Number of secondly backups to keep.                                                                                                                                                         |
+| keep.minutely      | no       |         | Number of minutely backups to keep.                                                                                                                                                         |
+| keep.hourly        | no       |         | Number of hourly backups to keep.                                                                                                                                                           |
+| keep.daily         | no       |         | Number of daily backups to keep.                                                                                                                                                            |
+| keep.weekly        | no       |         | Number of weekly backups to keep.                                                                                                                                                           |
+| keep.monthly       | no       |         | Number of monthly backups to keep.                                                                                                                                                          |
+| keep.yearly        | no       |         | Number of yearly backups to keep.                                                                                                                                                           |
 
 ```json
 {
@@ -407,6 +429,7 @@ Create a backup using borg over ssh. The backup repository can be initiated on f
     "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...\n",
     "host_key": "[my-ssh-server.local]:2222 ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMjDsazoYSf3uTT5G8YPqGJq3Hgx/YmUdCDdemWOWg+H"
   },
+  "prefix": "borg_backup",
   "quota": "2G",
   "keep": {
     "daily": 7,

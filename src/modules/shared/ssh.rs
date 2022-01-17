@@ -16,12 +16,19 @@ pub struct SshConfig {
 
 impl CommandWrapper {
     pub fn append_ssh_command(&mut self, ssh_config: &SshConfig, module_paths: &ModulePaths, use_docker: bool, has_previous: bool) -> Result<&mut CommandWrapper, String> {
+        let ssh_command = self.build_ssh_command(ssh_config, module_paths, use_docker, has_previous);
+        self.arg_string(ssh_command);
+
+        return Ok(self);
+    }
+
+    pub fn build_ssh_command(&mut self, ssh_config: &SshConfig, module_paths: &ModulePaths, use_docker: bool, has_previous: bool) -> String {
         let ssh_option_end = format!("-oUserKnownHostsFile={} -oCheckHostIp=no -p {}", get_known_hosts_filename(module_paths, use_docker), ssh_config.port);
 
         if ssh_config.ssh_key.is_some() {
 
             // The identity file needs to be created beforehand
-            self.arg_string(format!("ssh -oIdentityFile={} {}", get_identity_filename(module_paths, use_docker), ssh_option_end));
+            format!("ssh -oIdentityFile={} {}", get_identity_filename(module_paths, use_docker), ssh_option_end)
 
         } else if let Some(password) = ssh_config.password.as_ref() {
 
@@ -32,10 +39,10 @@ impl CommandWrapper {
                 self.env("SSHPASS", password);
             }
 
-            self.arg_string(format!("sshpass -e ssh {}", ssh_option_end));
+            format!("sshpass -e ssh {}", ssh_option_end)
+        } else {
+            format!("ssh {}", ssh_option_end)
         }
-
-        return Ok(self);
     }
 }
 

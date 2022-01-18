@@ -7,6 +7,7 @@ use serde_json::Value;
 mod duplicati;
 mod rsync;
 mod ssh_gpg;
+pub mod borg;
 
 pub struct SyncModule {
     module: Box<dyn SyncWrapper>
@@ -15,9 +16,18 @@ pub struct SyncModule {
 impl SyncModule {
     pub fn new(sync_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
         let module: Box<dyn SyncWrapper> = match sync_type.to_lowercase().as_str() {
-            duplicati::Duplicati::MODULE_NAME => duplicati::Duplicati::new(name, config_json, paths, args)?,
-            rsync::Rsync::MODULE_NAME => rsync::Rsync::new(name, config_json, paths, args)?,
-            ssh_gpg::SshGpg::MODULE_NAME => ssh_gpg::SshGpg::new(name, config_json, paths, args)?,
+            duplicati::Duplicati::MODULE_NAME => {
+                duplicati::Duplicati::new(name, config_json, paths, args)?
+            },
+            rsync::Rsync::MODULE_NAME => {
+                rsync::Rsync::new(name, config_json, paths, args)?
+            },
+            ssh_gpg::SshGpg::MODULE_NAME => {
+                ssh_gpg::SshGpg::new(name, config_json, paths, args)?
+            },
+            <borg::Borg as Sync>::MODULE_NAME => {
+                <borg::Borg as Sync>::new(name, config_json, paths, args)?
+            },
             unknown => {
                 let msg = format!("Unknown sync module: '{}'", unknown);
                 error!("{}", msg);

@@ -1,7 +1,7 @@
 use crate::modules::traits::{Controller, Bundleable};
 use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths, ModulePaths};
-use crate::util::objects::shared::mqtt::MqttConfiguration;
+use crate::modules::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
 use crate::{try_result,try_option,bool_result,dry_run};
 

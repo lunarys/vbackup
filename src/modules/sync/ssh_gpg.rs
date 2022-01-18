@@ -3,7 +3,7 @@ use crate::util::objects::paths::{ModulePaths, SourcePath};
 use crate::Arguments;
 use crate::util::docker;
 use crate::util::io::{json, auth_data, file};
-use crate::util::objects::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
+use crate::modules::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
 use crate::util::command::CommandWrapper;
 use crate::{try_option,dry_run};
 

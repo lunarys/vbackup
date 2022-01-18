@@ -3,7 +3,7 @@ use crate::util::command::CommandWrapper;
 use crate::util::io::{file,json,auth_data};
 use crate::util::docker;
 use crate::util::objects::paths::{ModulePaths,SourcePath};
-use crate::util::objects::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
+use crate::modules::shared::ssh::{SshConfig, write_identity_file, write_known_hosts};
 use crate::Arguments;
 
 use serde_json::Value;
@@ -239,7 +239,7 @@ impl Rsync {
         command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?;
 
         // Default sync options
-        command.arg_str("--archive")
+        command.arg_str("-rlptD")// nearly the same as --archive mode, but without -g and -o flag to preserve group and owner
             .arg_str("--delete")
             .arg_str("--partial");
 

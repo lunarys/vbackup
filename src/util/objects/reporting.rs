@@ -1,8 +1,7 @@
 #[derive(Clone)]
 pub enum ReportEvent {
     Operation(OperationStatus),
-    Status(StatusReport),
-    Size(SizeReport)
+    Status(StatusReport)
 }
 
 #[derive(Clone)]
@@ -19,14 +18,6 @@ pub struct StatusReport {
 }
 
 #[derive(Clone)]
-pub struct SizeReport {
-    pub module: Option<String>,
-    pub size: u64,
-    pub run_type: RunType,
-    pub size_type: SizeType
-}
-
-#[derive(Clone)]
 pub enum Status {
     START,
     DONE,
@@ -38,13 +29,6 @@ pub enum Status {
 #[derive(Clone)]
 pub enum RunType {
     RUN,
-    BACKUP,
-    SYNC
-}
-
-#[derive(Clone)]
-pub enum SizeType {
-    ORIGINAL,
     BACKUP,
     SYNC
 }
@@ -67,16 +51,6 @@ impl std::fmt::Display for RunType {
             RunType::RUN => write!(f, "run"),
             RunType::BACKUP => write!(f, "backup"),
             RunType::SYNC => write!(f, "sync")
-        }
-    }
-}
-
-impl std::fmt::Display for SizeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SizeType::ORIGINAL => write!(f, "original files"),
-            SizeType::BACKUP => write!(f, "backup files"),
-            SizeType::SYNC => write!(f, "synced files")
         }
     }
 }

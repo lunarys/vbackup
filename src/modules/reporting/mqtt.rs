@@ -2,7 +2,7 @@ use crate::modules::traits::Reporting;
 use crate::util::objects::reporting::*;
 use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths};
-use crate::util::objects::shared::mqtt::MqttConfiguration;
+use crate::modules::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
 use crate::{try_result};
 
@@ -75,24 +75,6 @@ impl Reporting for Reporter {
                     Status::DISABLED => "disabled"
                 })
             },
-            ReportEvent::Size(report) => {
-                if let Some(name) = report.module {
-                    topic.push('/');
-                    topic.add_assign(name.as_str());
-                }
-
-                topic.push('/');
-                topic.add_assign("size");
-
-                topic.push('/');
-                topic.add_assign(match report.size_type {
-                    SizeType::ORIGINAL => "original",
-                    SizeType::BACKUP => "backup",
-                    SizeType::SYNC => "synced"
-                });
-
-                report.size.to_string()
-            }
             ReportEvent::Operation(operation) => {
                 match operation {
                     OperationStatus::START(op) => op,

@@ -6,6 +6,7 @@ use crate::Arguments;
 use serde_json::Value;
 
 mod tar7zip;
+mod borg;
 
 pub struct BackupModule {
     module: Box<dyn BackupWrapper>
@@ -14,7 +15,12 @@ pub struct BackupModule {
 impl BackupModule {
     pub fn new(backup_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self, String> {
         let module: Box<dyn BackupWrapper> = match backup_type.to_lowercase().as_str() {
-            tar7zip::Tar7Zip::MODULE_NAME => tar7zip::Tar7Zip::new(name, config_json, paths, args)?,
+            tar7zip::Tar7Zip::MODULE_NAME => {
+                tar7zip::Tar7Zip::new(name, config_json, paths, args)?
+            },
+            <borg::Borg as Backup>::MODULE_NAME => {
+                <borg::Borg as Backup>::new(name, config_json, paths, args)?
+            },
             unknown => {
                 let msg = format!("Unknown backup module: '{}'", unknown);
                 error!("{}", msg);

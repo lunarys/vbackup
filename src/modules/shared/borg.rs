@@ -41,7 +41,9 @@ struct BorgConfig {
 
     keep: BorgKeepConfig,
     #[serde(default="default_false")]
-    disable_prune: bool
+    disable_prune: bool,
+    #[serde(default="default_false")]
+    relocate_ok: bool
 }
 
 fn default_false() -> bool { false }
@@ -296,6 +298,10 @@ impl Borg {
                 "--env=BORG_PASSPHRASE",
                 "--env=SSHPASS"
             ];
+
+            if self.config.relocate_ok {
+                options.push("--env=BORG_RELOCATED_REPO_ACCESS_IS_OK=yes");
+            }
 
             let volume_mount_arg;
             if self.sync_config.as_ref().is_none() {

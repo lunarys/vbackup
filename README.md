@@ -345,11 +345,12 @@ Send the backup to a remote destination using rsync over ssh.
 | host_reference     | depends  |              | Reference to ssh server information in the shared authentication store.                                                                                                                                      |
 | host               | depends  |              | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided.                                                                                                             | 
 | host.hostname      | yes      |              | Hostname of the server.                                                                                                                                                                                      |
-| host.port          | yes      |              | Port of the server.                                                                                                                                                                                          |
+| host.port          | no       | 22           | Port of the server.                                                                                                                                                                                          |
 | host.user          | yes      |              | Username for login on the server.                                                                                                                                                                            |
 | host.password      | no       |              | Password for login on the server.                                                                                                                                                                            |
 | host.ssh_key       | no       |              | Unencrypted private key for login on the server. This will be preferred over the password if both are given.                                                                                                 |
 | host.host_key      | yes      |              | Public key of the host for host authentication.                                                                                                                                                              |
+| host.raw_host_key  | no       | false        | Use the provided host key as a raw known_hosts file entry and do not try to prepend the appropriate hostname / port.                                                                                         | 
 
 ```json
 {
@@ -392,11 +393,12 @@ If you want to reset the repository entirely remove the module data directory an
 | host_reference     | depends  |         | Reference to ssh server information in the shared authentication store.                                                                                                                     |
 | host               | depends  |         | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided.                                                                                            | 
 | host.hostname      | yes      |         | Hostname of the server.                                                                                                                                                                     |
-| host.port          | yes      |         | Port of the server.                                                                                                                                                                         |
+| host.port          | no       | 22      | Port of the server.                                                                                                                                                                         |
 | host.user          | yes      |         | Username for login on the server.                                                                                                                                                           |
 | host.password      | no       |         | Password for login on the server.                                                                                                                                                           |
 | host.ssh_key       | no       |         | Unencrypted private key for login on the server. This will be preferred over the password if both are given.                                                                                |
 | host.host_key      | yes      |         | Public key of the host for host authentication.                                                                                                                                             |
+| host.raw_host_key  | no       | false   | Use the provided host key as a raw known_hosts file entry and do not try to prepend the appropriate hostname / port.                                                                        |
 | encryption_key     | no       |         | Use this passphrase for encryption.                                                                                                                                                         |
 | authentication_key | no       |         | Use this passphrase for authentication. Not used if encryption_key is set.                                                                                                                  |
 | blake2             | no       | false   | Use BLAKE2b for hashing / encryption instead of SHA256. See borg documentation for details. Speed depends on the processor.                                                                 |
@@ -425,7 +427,6 @@ If you want to reset the repository entirely remove the module data directory an
   "remote_directory": "~/path/on/remote/server",
   "host": {
     "hostname": "my-ssh-server.local",
-    "port": 22,
     "user": "foo",
     "password": "bar",
     "ssh_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n...\n",
@@ -458,7 +459,7 @@ Only really makes sense without creating a local backup before.
 | auth_reference       | depends  |                    | Reference to authentication information in the shared authentication store.                                                                                                  |
 | auth                 | depends  |                    | Authentication for the MQTT broker. Note: Either this or the `auth_reference` has to be provided.                                                                            | 
 | auth.hostname        | yes      |                    | Hostname of the server.                                                                                                                                                      |
-| auth.port            | yes      |                    | Port of the server.                                                                                                                                                          |
+| auth.port            | no       | 22                 | Port of the server.                                                                                                                                                          |
 | auth.user            | yes      |                    | Username for login on the server.                                                                                                                                            |
 | auth.password        | no       |                    | Password for login on the server.                                                                                                                                            |
 | auth.ssh_key         | no       |                    | Unencrypted RSA private key for login on the server. This will be preferred over the password if both are given. Duplicati does not yet support newer SSH keys like ED25519. |
@@ -500,20 +501,21 @@ This module needs to be used with care:
  - Files in the remote directory are retrieved using `ls` over SSH, so access needs to work.
  - Access permissions (file mode) is only set on transferred files, not parent directories that may be created in the process.
 
-| Key            | Required | Default | Description                                                                                                                            |
-|----------------|----------|---------|----------------------------------------------------------------------------------------------------------------------------------------|
-| encryption_key | yes      |         | The passphrase for gpg to encrypt backed up files.                                                                                     |
-| remote_path    | yes      |         | The remote directory to save backups in.                                                                                               |
-| remote_chmod   | no       |         | The file mode to set on remote files. Anything that `chmod` accepts works.                                                             |
-| local_chmod    | no       |         | The file mode to set on local files. Only used for the currently unavailable `restore` operation. Anything that `chmod` accepts works. |
-| host_reference | depends  |         | Reference to ssh server information in the shared authentication store.                                                                |
-| host           | depends  |         | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided.                                       | 
-| host.hostname  | yes      |         | Hostname of the server.                                                                                                                |
-| host.port      | yes      |         | Port of the server.                                                                                                                    |
-| host.user      | yes      |         | Username for login on the server.                                                                                                      |
-| host.password  | no       |         | Password for login on the server.                                                                                                      |
-| host.ssh_key   | no       |         | Unencrypted private key for login on the server. This will be preferred over the password if both are given.                           |
-| host.host_key  | yes      |         | Public key of the host for host authentication.                                                                                        |
+| Key               | Required | Default | Description                                                                                                                            |
+|-------------------|----------|---------|----------------------------------------------------------------------------------------------------------------------------------------|
+| encryption_key    | yes      |         | The passphrase for gpg to encrypt backed up files.                                                                                     |
+| remote_path       | yes      |         | The remote directory to save backups in.                                                                                               |
+| remote_chmod      | no       |         | The file mode to set on remote files. Anything that `chmod` accepts works.                                                             |
+| local_chmod       | no       |         | The file mode to set on local files. Only used for the currently unavailable `restore` operation. Anything that `chmod` accepts works. |
+| host_reference    | depends  |         | Reference to ssh server information in the shared authentication store.                                                                |
+| host              | depends  |         | Authentication for the ssh server. Note: Either this or the `host_reference` has to be provided.                                       | 
+| host.hostname     | yes      |         | Hostname of the server.                                                                                                                |
+| host.port         | no       | 22      | Port of the server.                                                                                                                    |
+| host.user         | yes      |         | Username for login on the server.                                                                                                      |
+| host.password     | no       |         | Password for login on the server.                                                                                                      |
+| host.ssh_key      | no       |         | Unencrypted private key for login on the server. This will be preferred over the password if both are given.                           |
+| host.host_key     | yes      |         | Public key of the host for host authentication.                                                                                        |
+| host.raw_host_key | no       | false   | Use the provided host key as a raw known_hosts file entry and do not try to prepend the appropriate hostname / port.                   |
 
 ```json
 {

@@ -7,12 +7,16 @@ use std::option::Option::Some;
 #[derive(Deserialize)]
 pub struct SshConfig {
     pub hostname: String,
+    #[serde(default="default_22")]
     pub port: i32,
     pub user: String,
     pub password: Option<String>,
+    pub raw_host_key: Option<bool>,
     pub ssh_key: Option<String>, // SSH private key (unencrypted)
     pub host_key: String // SSH public key of host
 }
+
+fn default_22() -> i32 { 22 }
 
 impl CommandWrapper {
     pub fn append_ssh_command(&mut self, ssh_config: &SshConfig, module_paths: &ModulePaths, use_docker: bool, has_previous: bool) -> Result<&mut CommandWrapper, String> {
@@ -49,10 +53,12 @@ impl CommandWrapper {
 pub fn write_known_hosts(ssh_config: &SshConfig, module_paths: &ModulePaths, dry_run: bool) -> Result<(), String> {
     if !dry_run {
         // backwards compatibility (to some degree): check whether the hostname/ip combo is prepended
-        let to_write = if ssh_config.host_key.starts_with("[") {
+        let to_write = if ssh_config.host_key.starts_with("[") || ssh_config.raw_host_key.unwrap_or(false) {
             ssh_config.host_key.clone()
+        } else if ssh_config.port == 22 {
+            format!("{} {}\n", ssh_config.hostname, ssh_config.host_key)
         } else {
-            format!("[{}]:{} {}", ssh_config.hostname, ssh_config.port, ssh_config.host_key)
+            format!("[{}]:{} {}\n", ssh_config.hostname, ssh_config.port, ssh_config.host_key)
         };
 
         file::write_if_change(get_actual_known_hosts_filename(module_paths).as_str(), Some("600"), to_write.as_str(), true)?;

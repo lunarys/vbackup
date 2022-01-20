@@ -43,10 +43,14 @@ struct BorgConfig {
     #[serde(default="default_false")]
     disable_prune: bool,
     #[serde(default="default_false")]
-    relocate_ok: bool
+    relocate_ok: bool,
+
+    #[serde(default="default_umask")]
+    umask: String
 }
 
 fn default_false() -> bool { false }
+fn default_umask() -> String { String::from("0007") }
 
 pub struct Borg {
     config: BorgConfig,
@@ -334,6 +338,9 @@ impl Borg {
             let ssh_command = command.build_ssh_command(&borg_sync.ssh_config, &self.paths, !self.no_docker, false);
             command.arg_string(format!("--rsh={}", ssh_command));
         }
+
+        // set umask
+        command.arg_string(format!("--umask={}", self.config.umask));
 
         /*if self.verbose {
             command.arg_str("--debug");

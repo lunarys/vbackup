@@ -77,6 +77,9 @@ impl Borg {
 
     pub fn init(&mut self) -> Result<(), String> {
 
+        // create the module data directory if it does not exist
+        file::create_dir_if_missing(self.paths.module_data_dir.as_str(), true)?;
+
         // Create a marker file to determine whether the repo has been initialized
         //  run repo init only in save later, as it possibly involves a ssh connection and file creation
         if !self.config.no_init && !file::exists(format!("{}/init-marker", self.paths.module_data_dir).as_str()) {

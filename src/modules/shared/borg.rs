@@ -90,6 +90,10 @@ impl Borg {
             self.requires_init = true;
         }
 
+        if self.dry_run {
+            return Ok(());
+        }
+
         if !self.no_docker {
             docker::build_image_if_missing(&self.paths.base_paths, "borg.Dockerfile", "vbackup-borg")?;
         }
@@ -210,7 +214,10 @@ impl Borg {
          */
         if self.requires_init {
             self.run_init()?;
-            file::write(format!("{}/init-marker", self.paths.module_data_dir).as_str(), "1", true)?;
+
+            if !self.dry_run {
+                file::write(format!("{}/init-marker", self.paths.module_data_dir).as_str(), "1", true)?;
+            }
         }
 
         /*

@@ -303,7 +303,7 @@ impl Borg {
     fn get_base_cmd(&self, operation: &str) -> Result<CommandWrapper,String> {
         let mut command;
         if self.no_docker {
-            command = CommandWrapper::new("borg");
+            command = CommandWrapper::new_with_args("borg", vec![operation]);
 
             command.env("BORG_BASE_DIR", self.paths.module_data_dir.as_str());
         } else {

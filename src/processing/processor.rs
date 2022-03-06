@@ -62,7 +62,7 @@ fn process_backup(config: &mut BackupUnit,
     reporter.report_status(RunType::BACKUP, Some(config.config.name.clone()), Status::START);
 
     // run before
-    let setup_result = run_before(config.backup_config.setup.as_ref(), args.dry_run);
+    let setup_result = run_before(config.backup_config.setup.as_ref(), args.dry_run, args.debug || args.verbose);
 
     // TODO: Pass paths by reference
     // Run the backup and report the result
@@ -72,7 +72,7 @@ fn process_backup(config: &mut BackupUnit,
     result_reporter(RunType::BACKUP, result, config.config.name.borrow(), reporter);
 
     // run after
-    try_result!(run_after(config.backup_config.setup.as_ref(), args.dry_run), "Script after backup failed");
+    try_result!(run_after(config.backup_config.setup.as_ref(), args.dry_run, args.debug || args.verbose), "Script after backup failed");
 
     return Ok(());
 }
@@ -102,7 +102,7 @@ fn process_sync(config: &mut SyncUnit,
     reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::START);
 
     // run before
-    let setup_result = run_before(config.sync_config.setup.as_ref(), args.dry_run);
+    let setup_result = run_before(config.sync_config.setup.as_ref(), args.dry_run, args.debug || args.verbose);
 
     // Run the sync and report the result (if before script was successful)
     let result = setup_result.and_then(|()| {
@@ -111,7 +111,7 @@ fn process_sync(config: &mut SyncUnit,
     result_reporter(RunType::SYNC, result, config.config.name.borrow(), reporter);
 
     // run after
-    try_result!(run_after(config.sync_config.setup.as_ref(), args.dry_run), "Script after sync failed");
+    try_result!(run_after(config.sync_config.setup.as_ref(), args.dry_run, args.debug || args.verbose), "Script after sync failed");
 
     return Ok(());
 }
@@ -139,12 +139,15 @@ fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBun
 }
 
 // ############################ Helper functions ############################
-fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result<(), String> {
+fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool, print: bool) -> Result<(), String> {
     if let Some(setup) = setup_opt {
+        info!("Running before setup");
+
         if let Some(before) = setup.before.as_ref() {
             debug!("Running custom before scripts");
             for script in before {
-                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration(false, dry_run)?;
+                // the command fails if not printing output...
+                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration_output(true, print, dry_run)?;
             }
         }
 
@@ -156,15 +159,17 @@ fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Resul
             });
 
             debug!("Stopping related containers: {}", containers.join(", "));
-            CommandWrapper::new_with_args("docker", cmd_args).run_configuration(false, dry_run)?;
+            CommandWrapper::new_with_args("docker", cmd_args).run_configuration_output(true, print, dry_run)?;
         }
     }
 
     Ok(())
 }
 
-fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result<(), String> {
+fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool, print: bool) -> Result<(), String> {
     if let Some(setup) = setup_opt {
+        info!("Running after setup");
+
         if let Some(containers) = setup.containers.as_ref() {
             let mut cmd_args = vec!["start"];
 
@@ -173,13 +178,13 @@ fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool) -> Result
             });
 
             debug!("Starting related containers: {}", containers.join(", "));
-            CommandWrapper::new_with_args("docker", cmd_args).run_configuration(false, dry_run)?;
+            CommandWrapper::new_with_args("docker", cmd_args).run_configuration_output(true, print, dry_run)?;
         }
 
         if let Some(after) = setup.after.as_ref() {
             debug!("Running custom after scripts");
             for script in after {
-                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration(false, dry_run)?;
+                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration_output(true, print, dry_run)?;
             }
         }
     }

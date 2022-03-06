@@ -131,7 +131,13 @@ impl CommandWrapper {
     pub fn run(&mut self) -> Result<(), String> {
         let exit_status = self.run_get_status()?;
         if !exit_status.success() {
-            let msg = format!("Exit code indicates failure of command");
+            let msg;
+            if let Some(rc) = exit_status.code() {
+                msg = format!("Exit code {} indicates failure of command: {}", rc, self.to_string());
+            } else {
+                msg = format!("Exit code indicates failure of command: {}", self.to_string());
+            }
+
             error!("{}", msg);
             return Err(msg);
         }
@@ -139,11 +145,17 @@ impl CommandWrapper {
     }
 
     pub fn run_configuration(&mut self, print: bool, dry_run: bool) -> Result<(),String> {
+        return self.run_configuration_output(false, print, dry_run);
+    }
+
+    pub fn run_configuration_output(&mut self, output: bool, print: bool, dry_run: bool) -> Result<(),String> {
         if dry_run {
             dry_run!(self.to_string());
             return Ok(());
         } else if print {
             println!("-> {}", self.to_string());
+            return self.run();
+        } else if output {
             return self.run();
         } else {
             return self.run_without_output();
@@ -153,7 +165,13 @@ impl CommandWrapper {
     pub fn run_without_output(&mut self) -> Result<(), String> {
         let exit_status = self.run_get_status_without_output()?;
         if !exit_status.success() {
-            let msg = format!("Exit code indicates failure of command");
+            let msg;
+            if let Some(rc) = exit_status.code() {
+                msg = format!("Exit code {} indicates failure of command: {}", rc, self.to_string());
+            } else {
+                msg = format!("Exit code indicates failure of command: {}", self.to_string());
+            }
+
             error!("{}", msg);
             return Err(msg);
         }
@@ -208,7 +226,14 @@ impl CommandWrapper {
                     return Ok(String::new());
                 }
             } else {
-                return Err(String::from("Exit code indicates failure of command"));
+                let msg;
+                if let Some(rc) = output.status.code() {
+                    msg = format!("Exit code {} indicates failure of command: {}", rc, self.to_string());
+                } else {
+                    msg = format!("Exit code indicates failure of command: {}", self.to_string());
+                }
+
+                return Err(msg);
             }
         } else {
             return Err(format!("Failed executing command: {}", result.unwrap_err().to_string()))

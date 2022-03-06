@@ -315,6 +315,8 @@ impl Borg {
 
             if self.config.relocate_ok {
                 options.push("--env=BORG_RELOCATED_REPO_ACCESS_IS_OK=yes");
+            } else {
+                options.push("--env=BORG_RELOCATED_REPO_ACCESS_IS_OK=no");
             }
 
             let volume_mount_arg;

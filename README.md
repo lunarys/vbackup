@@ -448,6 +448,8 @@ If you want to reset the repository entirely remove the module data directory an
 Send a backup to a remote destination using [duplicati](https://www.duplicati.com/) over sftp.
 Only really makes sense without creating a local backup before.
 
+**Note**: Borg is recommended over duplicati!
+
 | Key                  | Required | Default            | Description                                                                                                                                                                  |
 |----------------------|----------|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | directory_prefix     | no       |                    | Prefix for the remote path. Treated as a path relative to the home directory unless there is a '/' as the first character.                                                   |

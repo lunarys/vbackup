@@ -25,7 +25,7 @@ struct BorgKeepConfig {
 struct BorgConfig {
     encryption_key: Option<String>,
     authentication_key: Option<String>,
-    #[serde(default="default_false")]
+    #[serde(default="default_true")]
     blake2: bool,
     quota: Option<String>,
 
@@ -49,6 +49,7 @@ struct BorgConfig {
     umask: String
 }
 
+fn default_true() -> bool { true }
 fn default_false() -> bool { false }
 fn default_umask() -> String { String::from("0007") }
 

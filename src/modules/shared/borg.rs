@@ -306,6 +306,7 @@ impl Borg {
             command = CommandWrapper::new_with_args("borg", vec![operation]);
 
             command.env("BORG_BASE_DIR", self.paths.module_data_dir.as_str());
+            command.env("BORG_RELOCATED_REPO_ACCESS_IS_OK", if self.config.relocate_ok {"yes"} else {"no"})
         } else {
             let mut options = vec![
                 "--env=BORG_BASE_DIR",

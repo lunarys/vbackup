@@ -4,18 +4,20 @@ use crate::util::command::CommandWrapper;
 use crate::util::objects::time::{ExecutionTiming};
 use crate::util::objects::paths::{ModulePaths,SourcePath};
 use crate::util::io::json;
+use crate::util::docker;
 use crate::Arguments;
 
 use serde_json::Value;
 use serde::{Deserialize};
-use crate::util::docker;
+use std::cmp::max;
 
 pub struct FileAge {
     paths: ModulePaths,
     no_docker: bool,
     dry_run: bool,
     config: Configuration,
-    cached_result: Option<i64>
+    cached_result: Option<i64>,
+    had_error: bool
 }
 
 #[derive(Deserialize)]
@@ -34,7 +36,8 @@ impl Check for FileAge {
             no_docker: args.no_docker,
             dry_run: args.dry_run,
             config,
-            cached_result: None
+            cached_result: None,
+            had_error: false
         }))
     }
 
@@ -52,6 +55,8 @@ impl Check for FileAge {
             // If there is no last run, just run it
             debug!("Check is not necessary as there was no run before");
             return Ok(true);
+        } else if self.had_error {
+            return Err(String::from("There was an error in a previous file-age check, not trying again..."));
         } else {
             trace!("Checking the age of files before doing anything");
             frame.last_run.as_ref().unwrap()
@@ -60,30 +65,17 @@ impl Check for FileAge {
         if self.cached_result.is_none() {
             let check_path = &self.paths.source;
 
-            let mut command_base = if self.no_docker {
-                let mut command = CommandWrapper::new("bash");
-                command.arg_str("-c");
-                command
-            } else {
-                let mut command = CommandWrapper::new("docker");
-                command.arg_str("run")
-                    .arg_str("--rm")
-                    .arg_str("--name=vbackup-check-fileage-tmp")
-                    .add_docker_volume_mapping(check_path, "volume")
-                    .arg_str("vbackup-file-age")
-                    .arg_str("sh")
-                    .arg_str("-c");
-                command
-            };
-
-            let search_path = if self.no_docker {
-                if let SourcePath::Single(path) = check_path {
-                    path.as_str()
-                } else {
-                    return Err(String::from("Multiple source paths are not supported in file age check module without docker"));
+            let search_paths = if self.no_docker {
+                match check_path {
+                    SourcePath::Single(path) => {
+                        vec![path.as_str()]
+                    }
+                    SourcePath::Multiple(paths) => {
+                        paths.iter().map(|mapping| {mapping.path.as_str()}).collect()
+                    }
                 }
             } else {
-                "/volume"
+                vec!["/volume"]
             };
 
             // a string of exclude options for grep to filter modified files
@@ -94,42 +86,83 @@ impl Check for FileAge {
                     .join(" ")
             });
 
-            // generate the command to execute from its individual parts
-            let precondition_check = format!("[[ -d '{s}' ]] && [[ ! -z \"$(ls -A '{s}')\" ]]", s = search_path);
-            let generate_list = format!("find {s} -type f -printf '%T@;./%P\\n'", s = search_path);
-            let filter_list = format!("grep -v -F -e .savedata.json {e}", e = exclude_string.as_deref().unwrap_or(""));
-            let sort_list = "sort -nr";
-            let get_result = "head -n 1";
-            let command_actual = format!("{} && {} | {} | {} | {}",
-                                         precondition_check,
-                                         generate_list,
-                                         filter_list,
-                                         sort_list,
-                                         get_result
-            );
-            command_base.arg_string(command_actual);
+            let timestamp_result: Result<i64,String> = search_paths.iter().fold(Ok(0), |previous_result, search_path| {
+                if previous_result.is_err() {
+                    // just pass on the error if there was some...
+                    return previous_result;
+                }
 
-            if self.dry_run {
-                dry_run!(command_base.to_string());
-            }
+                let mut command_base = if self.no_docker {
+                    let mut command = CommandWrapper::new("bash");
+                    command.arg_str("-c");
+                    command
+                } else {
+                    let mut command = CommandWrapper::new("docker");
+                    command.arg_str("run")
+                        .arg_str("--rm")
+                        .arg_str("--name=vbackup-check-fileage-tmp")
+                        .add_docker_volume_mapping(check_path, "volume")
+                        .arg_str("vbackup-file-age")
+                        .arg_str("sh")
+                        .arg_str("-c");
+                    command
+                };
 
-            let output = command_base.run_get_output()?;
-            let split_pos: usize = try_option!(output.find(";"), "Expected semicolon for split of check output");
-            let (timestamp_str_fraction,filename) = output.split_at(split_pos);
+                // generate the command to execute from its individual parts
+                let precondition_check = format!("[ -e '{s}' ]", s = search_path);
+                let generate_list = format!("find {s} -type f -printf '%T@;./%P\\n'", s = search_path);
+                let filter_list = format!("grep -v -F -e .savedata.json {e}", e = exclude_string.as_deref().unwrap_or(""));
+                let sort_list = "sort -nr";
+                let get_result = "head -n 1";
+                let command_actual = format!("{} && {} | {} | {} | {}",
+                                             precondition_check,
+                                             generate_list,
+                                             filter_list,
+                                             sort_list,
+                                             get_result
+                );
+                command_base.arg_string(command_actual);
 
-            // timestamp contains a fraction (after a dot)
-            let fraction_split_pos = timestamp_str_fraction.find('.');
-            let timestamp_str = if let Some(pos) = fraction_split_pos {
-                timestamp_str_fraction.split_at(pos).0
-            } else {
-                // there is no dot, assume there is no fraction
-                timestamp_str_fraction
+                if self.dry_run {
+                    dry_run!(command_base.to_string());
+                }
+
+                let output = command_base.run_get_output()?;
+                let split_pos: usize;
+                if output == "" {
+                    debug!("There appears to be no file in the check path '{}'", search_path);
+                    return previous_result;
+                } else {
+                    split_pos = try_option!(output.find(";"), "Expected semicolon for split of check output");
+                }
+                let (timestamp_str_fraction,filename) = output.split_at(split_pos);
+
+                // timestamp contains a fraction (after a dot)
+                let fraction_split_pos = timestamp_str_fraction.find('.');
+                let timestamp_str = if let Some(pos) = fraction_split_pos {
+                    timestamp_str_fraction.split_at(pos).0
+                } else {
+                    // there is no dot, assume there is no fraction
+                    timestamp_str_fraction
+                };
+
+                trace!("Newest file in '{}' is '{}' and was changed at '{}'", search_path, filename, timestamp_str);
+                let current_timestamp: i64 = try_result!(timestamp_str.parse(), "Could not parse timestamp from string");
+
+                previous_result.map(|previous_timestamp| {max(current_timestamp, previous_timestamp)})
+            });
+
+            match timestamp_result {
+                Ok(timestamp) => {
+                    trace!("Newest file in the given paths was changed at '{}'", timestamp);
+                    self.cached_result = Some(timestamp);
+                }
+                Err(error) => {
+                    error!("{}", error);
+                    self.had_error = true;
+                    return Err(String::from("Could not get the timestamp of the latest file editing"));
+                }
             };
-
-            trace!("Newest file is '{}' and was changed at '{}'", filename, timestamp_str);
-            let timestamp: i64 = try_result!(timestamp_str.parse(), "Could not parse timestamp from string");
-
-            self.cached_result = Some(timestamp);
         } else {
             trace!("Using cached value from previous timeframe for file-age check");
         }

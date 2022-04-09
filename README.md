@@ -22,6 +22,24 @@ to a remote destination. If both are defined, a local backup is created and then
 transferred to the remote device instead of directly syncing the source,
 but only if a backup that has not been synced before exists.  
 
+## Modules
+- backup
+  - [tar7zip](#tar7zip)
+  - [borg](#borg)
+- sync
+  - [rsync-ssh](#rsync-ssh)
+  - [borg](#borg-over-ssh)
+  - [duplicati](#duplicati-over-sftp)
+  - [ssh-gpg](#ssh-gpg)
+- conditions
+  - [file-age](#file-age)
+  - [usetime](#usetime)
+- controller
+  - [mqtt](#mqtt-controller)
+  - [ping](#ping)
+- reporting
+  - [mqtt](#mqtt-reporter)
+
 ## Related projects
 - [Backup trigger](https://github.com/lunarys/mqtt-vbackup-trigger): Remotely start the backup over MQTT
 - [Device controller](https://github.com/lunarys/mqtt-device-controller): Remotely start and stop devices for the backup over MQTT  
@@ -583,7 +601,7 @@ updated by an external program, like a server plugin.
 ### Controller
 Controller for starting remote devices for syncs and stopping them afterwards.
 
-#### mqtt
+#### mqtt controller
 Use the [MQTT device controller](https://github.com/lunarys/mqtt-device-controller) to start and stop devices for the sync.
 This controller can be bundled for different configurations: 
 If the configuration matches for some configurations, they are executed right after another, so that the controller only sends the start command once to the server.
@@ -630,7 +648,7 @@ Ping the specified host before attempting to sync in order to determine whether 
 ### Reporting
 Send information about backup and sync runs to additional destinations.
 
-#### mqtt
+#### mqtt reporter
 | Key            | Required | Default           | Description                                                                                                                                                        |
 |----------------|----------|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | base_topic     | yes      | device/%u/vbackup | Topic that is used as a base for all messages, the specific report submodule is appended. Note: %u = MQTT user (assuming the device logs in as a designated user). |

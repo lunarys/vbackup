@@ -14,12 +14,12 @@ pub enum Reference {
 }
 
 pub struct CheckModule {
-    module: Box<dyn CheckRelay>
+    module: Box<dyn CheckWrapper>
 }
 
 impl CheckModule {
     pub fn new(check_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
-        let module: Box<dyn CheckRelay> = match check_type.to_lowercase().as_str() {
+        let module: Box<dyn CheckWrapper> = match check_type.to_lowercase().as_str() {
             file_age::FileAge::MODULE_NAME => file_age::FileAge::new(name, config_json, paths, args)?,
             usetime::Usetime::MODULE_NAME => usetime::Usetime::new(name, config_json, paths, args)?,
             unknown => {
@@ -33,12 +33,12 @@ impl CheckModule {
     }
 }
 
-impl CheckRelay for CheckModule {
+impl CheckWrapper for CheckModule {
     fn init(&mut self) -> Result<(), String> {
         self.module.init()
     }
 
-    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
+    fn check(&mut self, timing: &ExecutionTiming) -> Result<bool, String> {
         self.module.check(timing)
     }
 
@@ -55,20 +55,20 @@ impl CheckRelay for CheckModule {
     }
 }
 
-pub trait CheckRelay {
+pub trait CheckWrapper {
     fn init(&mut self) -> Result<(), String>;
-    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String>;
+    fn check(&mut self, timing: &ExecutionTiming) -> Result<bool, String>;
     fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
     fn get_module_name(&self) -> &str;
 }
 
-impl<T: Check> CheckRelay for T {
+impl<T: Check> CheckWrapper for T {
     fn init(&mut self) -> Result<(), String> {
         Check::init(self)
     }
 
-    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
+    fn check(&mut self, timing: &ExecutionTiming) -> Result<bool, String> {
         Check::check(self, timing)
     }
 

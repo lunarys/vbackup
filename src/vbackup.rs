@@ -1,5 +1,5 @@
 use crate::util::io::{file,json};
-use crate::modules::reporting::{ReportingModule, ReportingRelay};
+use crate::modules::reporting::{ReportingModule, ReportingWrapper};
 use crate::util::objects::time::{TimeFrameReference};
 use crate::util::objects::paths::{Paths,PathBase,ModulePaths,SourcePath};
 use crate::util::objects::configuration::Configuration;

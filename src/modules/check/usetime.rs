@@ -1,33 +1,43 @@
 use crate::modules::traits::Check;
-use crate::util::command::CommandWrapper;
 use crate::util::io::{json,file};
 use crate::{try_result,dry_run};
 
-use serde_json::Value;
-use serde::{Deserialize};
 use crate::util::objects::time::{ExecutionTiming};
-use crate::util::objects::paths::{ModulePaths,SourcePath};
+use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
+
+use std::path::Path;
+use serde_json::{Value,json as create_json};
+use serde::{Deserialize};
+
+const USETIME_PROPERTY: &str = "usetime";
 
 pub struct Usetime {
     config: Configuration,
-    paths: ModulePaths,
-    dry_run: bool,
-    no_docker: bool
+    dry_run: bool
 }
 
 struct BackupInfo {
     usetime: i64,
-    file_content: String
+    file_content: Option<FileContent>
+}
+
+enum FileContent {
+    Json(Value),
+    Plain(String)
 }
 
 #[derive(Deserialize)]
 struct Configuration {
+    #[serde(default="default_format_json")]
+    json: bool,
+
     #[serde(default="relative_backup_info")]
-    backup_info: String,
+    file: String,
     targeted_usetime: i64
 }
 
+fn default_format_json() -> bool { true }
 fn relative_backup_info() -> String {
     return String::from("backupinfo/props.info");
 }
@@ -35,14 +45,12 @@ fn relative_backup_info() -> String {
 impl Check for Usetime {
     const MODULE_NAME: &'static str = "usetime";
 
-    fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(_name: &str, config_json: &Value, _paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
 
         return Ok(Box::new(Self {
             config,
-            paths,
-            dry_run: args.dry_run,
-            no_docker: args.no_docker
+            dry_run: args.dry_run
         }));
     }
 
@@ -50,7 +58,7 @@ impl Check for Usetime {
         return Ok(());
     }
 
-    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String> {
+    fn check(&mut self, timing: &ExecutionTiming) -> Result<bool, String> {
         if timing.last_run.is_some() {
             let backup_info = self.read_backupinfo()?;
             let test_result = self.config.targeted_usetime < backup_info.usetime;
@@ -69,15 +77,15 @@ impl Check for Usetime {
     }
 
     fn update(&mut self, _timing: &ExecutionTiming) -> Result<(), String> {
-        let backup_info = self.read_backupinfo()?;
+        let mut backup_info = self.read_backupinfo()?;
 
         debug!("Resetting usetime for server to zero");
 
         if self.dry_run {
-            dry_run!(format!("Writing usetime=0 to file '{}'", self.backupinfo_path()?));
+            dry_run!(format!("Writing usetime=0 to file '{}'", self.config.file));
             return Ok(());
         } else {
-            return self.reset_backupinfo(&backup_info);
+            return self.reset_backupinfo(&mut backup_info);
         }
     }
 
@@ -87,87 +95,93 @@ impl Check for Usetime {
 }
 
 impl Usetime {
-    fn backupinfo_path(&self) -> Result<String,String> {
-        if let SourcePath::Single(path) = &self.paths.source {
-            return Ok(format!("{}/{}", path, self.config.backup_info));
-        } else {
-            return Err(String::from("Multiple source paths are not supported in usetime check"));
-        }
-    }
-
     fn read_backupinfo(&self) -> Result<BackupInfo, String> {
-        let file = self.backupinfo_path()?;
+        let file = self.config.file.as_str();
 
-        // TODO: Currently does not handle missing backupinfo file properly (exit with error)
-        let content = if self.no_docker {
-            file::read(file.as_str())?
-        } else {
-            let mut cmd = CommandWrapper::new("docker");
-            cmd.arg_str("run")
-                .arg_str("--rm")
-                .arg_string(format!("--volume={}:/file", file))
-                .arg_str("--name=vbackup-tmp")
-                .arg_str("alpine")
-                .arg_str("sh")
-                .arg_str("-c");
-            cmd.arg_str("cat /file");
+        let mut content_opt: Option<FileContent> = None;
+        let mut usetime_opt: Option<i64> = None;
 
-            if self.dry_run {
-                dry_run!(cmd.to_string());
-            }
+        if file::exists(file) {
+            if self.config.json {
+                let raw_content = json::from_file::<Value>(Path::new(file))?;
 
-            cmd.run_get_output()?
-        };
-
-        let mut usetime: Option<i64> = None;
-        for line in content.split("\n") {
-            let separator_option = line.find("=");
-            if separator_option.is_none() {
-                continue;
-            } else {
-                let (key, value_tmp): (&str, &str) = line.split_at(separator_option.unwrap());
-                let value = if value_tmp.starts_with("=") {
-                    let (_, tmp) = value_tmp.split_at(1);
-                    tmp
+                if let Some(usetime_value) = raw_content.get(USETIME_PROPERTY) {
+                    usetime_opt = usetime_value.as_i64();
                 } else {
-                    value_tmp
-                };
-                match key.to_lowercase().as_str() {
-                    "usetime" => {
-                        debug!("Value for usetime: {}", value);
-                        usetime = Some(try_result!(value.parse(), "Could not parse usetime for minecraft server"))
-                    }
-                    _ => ()
+                    warn!("usetime property is not included in json");
                 }
+
+                content_opt = Some(FileContent::Json(raw_content));
+            } else {
+                let raw_content = file::read(file)?;
+
+                for line in raw_content.split("\n") {
+                    let separator_option = line.find("=");
+                    if separator_option.is_none() {
+                        continue;
+                    } else {
+                        let (key, value_tmp): (&str, &str) = line.split_at(separator_option.unwrap());
+                        let value = if value_tmp.starts_with("=") {
+                            let (_, tmp) = value_tmp.split_at(1);
+                            tmp
+                        } else {
+                            value_tmp
+                        };
+
+                        if key.to_lowercase().as_str() == USETIME_PROPERTY {
+                            usetime_opt = Some(try_result!(value.parse(), "Could not parse usetime for minecraft server"))
+                        } else {
+                            ()
+                        }
+                    }
+                }
+
+                content_opt = Some(FileContent::Plain(raw_content));
             }
+        }
+
+        if let Some(usetime) = usetime_opt {
+            debug!("Read usetime: {}", usetime);
+        } else {
+            debug!("Usetime did not exist, assuming zero");
         }
 
         let result = BackupInfo {
-            usetime: usetime.unwrap_or(0),
-            file_content: content
+            usetime: usetime_opt.unwrap_or(0),
+            file_content: content_opt
         };
 
         return Ok(result);
     }
 
-    fn reset_backupinfo(&self, info: &BackupInfo) -> Result<(), String> {
-        if self.no_docker {
-            // Use the original value to reset the usetime
-            let file = self.backupinfo_path()?;
-            let to_replace = format!("usetime={}", info.usetime);
-            let content = info.file_content.replace(to_replace.as_str(), "usetime=0");
-            return file::write(file.as_str(), content.as_str(), true);
+    fn reset_backupinfo(&self, info: &mut BackupInfo) -> Result<(), String> {
+        if let Some(file_content) = info.file_content.as_mut() {
+            let file = self.config.file.as_str();
+
+            return match file_content {
+                FileContent::Json(content) => {
+                    if let Some(json_object) = content.as_object_mut() {
+                        json_object.insert(String::from(USETIME_PROPERTY), create_json!(0));
+                        json::to_file::<Value>(Path::new(file), content)
+                    } else {
+                        // usetime is not an object...
+                        warn!("Usetime file did not contain an object, not updating");
+                        Ok(())
+                    }
+                }
+                FileContent::Plain(content) => {
+                    // Use the original value to reset the usetime
+                    let to_replace = format!("{}={}", USETIME_PROPERTY, info.usetime);
+                    let replace_with = format!("{}=0", USETIME_PROPERTY);
+                    let content = content.replace(to_replace.as_str(), replace_with.as_str());
+
+                    file::write(file, content.as_str(), true)
+                }
+            }
         } else {
-            let mut cmd = CommandWrapper::new("docker");
-            cmd.arg_str("run")
-                .arg_str("--rm")
-                .add_docker_volume_mapping(&self.paths.source, "volume") // at this point source path is only single, as backupinfo is loaded before and fails otherwise
-                .arg_str("--name=vbackup-tmp")
-                .arg_str("alpine")
-                .arg_str("sh")
-                .arg_str("-c");
-            cmd.arg_string(format!("sed -i 's/usetime=.*/usetime=0/g' /volume/{}", self.config.backup_info));
-            return cmd.run();
+            trace!("Usetime file was empty, not updating");
         }
+
+        Ok(())
     }
 }

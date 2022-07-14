@@ -1,19 +1,19 @@
 use crate::Arguments;
 use crate::modules::reporting::ReportingModule;
-use crate::util::io::file;
 use crate::util::objects::savedata::{SaveDataCollection};
-use crate::util::objects::reporting::{SizeType,RunType,Status};
-use crate::util::objects::paths::SourcePath;
+use crate::util::objects::reporting::{RunType,Status};
 use crate::processing::backup::backup;
 use crate::processing::sync::sync;
 use crate::processing::preprocessor::{ConfigurationUnit, SyncControllerBundle, SyncUnit, BackupUnit};
 use crate::processing::timeframe_check;
 use crate::modules::controller::ControllerModule;
 
-use crate::{log_error};
+use crate::{log_error,try_result};
 
 use core::borrow::{BorrowMut, Borrow};
 use chrono::{DateTime, Local};
+use crate::util::objects::configuration::StrategyConfiguration;
+use crate::util::command::CommandWrapper;
 
 pub fn process_configurations(args: &Arguments,
                               reporter: &mut ReportingModule,
@@ -54,10 +54,6 @@ fn process_backup(config: &mut BackupUnit,
                   savedata_collection: &mut SaveDataCollection,
                   args: &Arguments,
                   reporter: &mut ReportingModule) -> Result<(), String> {
-    // Save those paths for later, as the ModulePaths will be moved
-    let original_path = config.module_paths.source.clone();
-    let store_path = config.module_paths.destination.clone();
-
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
@@ -65,16 +61,18 @@ fn process_backup(config: &mut BackupUnit,
     // Announce that this backup is starting
     reporter.report_status(RunType::BACKUP, Some(config.config.name.clone()), Status::START);
 
+    // run before
+    let setup_result = run_before(config.backup_config.setup.as_ref(), args.dry_run, args.debug || args.verbose);
+
     // TODO: Pass paths by reference
     // Run the backup and report the result
-    let result = backup(args, config, savedata);
+    let result = setup_result.and_then(|()| {
+        backup(args, config, savedata)
+    });
     result_reporter(RunType::BACKUP, result, config.config.name.borrow(), reporter);
 
-    // Calculate and report the size of the original files
-    size_reporter(RunType::BACKUP, SizeType::ORIGINAL, original_path.borrow(), config.config.name.borrow(), reporter, args);
-
-    // Calculate and report the size of the backup files
-    size_reporter(RunType::BACKUP, SizeType::BACKUP, &SourcePath::Single(store_path.clone()), config.config.name.borrow(), reporter, args);
+    // run after
+    try_result!(run_after(config.backup_config.setup.as_ref(), args.dry_run, args.debug || args.verbose), "Script after backup failed");
 
     return Ok(());
 }
@@ -84,9 +82,6 @@ fn process_sync(config: &mut SyncUnit,
                 args: &Arguments,
                 reporter: &mut ReportingModule,
                 controller_override: Option<&mut ControllerModule>) -> Result<(), String> {
-    // Save owned objects of configuration and path
-    let store_path = config.module_paths.source.clone();
-
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
@@ -106,13 +101,17 @@ fn process_sync(config: &mut SyncUnit,
     // Announce that this sync is starting
     reporter.report_status(RunType::SYNC, Some(config.config.name.clone()), Status::START);
 
-    // Run the sync and report the result
-    let result = sync(args, config, savedata, controller_override);
+    // run before
+    let setup_result = run_before(config.sync_config.setup.as_ref(), args.dry_run, args.debug || args.verbose);
+
+    // Run the sync and report the result (if before script was successful)
+    let result = setup_result.and_then(|()| {
+        sync(args, config, savedata, controller_override)
+    });
     result_reporter(RunType::SYNC, result, config.config.name.borrow(), reporter);
 
-    // Calculate and report size of the synced files
-    // TODO: Current implementation just takes the size of the local files...
-    size_reporter(RunType::SYNC, SizeType::SYNC, store_path.borrow(), config.config.name.borrow(), reporter, args);
+    // run after
+    try_result!(run_after(config.sync_config.setup.as_ref(), args.dry_run, args.debug || args.verbose), "Script after sync failed");
 
     return Ok(());
 }
@@ -140,6 +139,59 @@ fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBun
 }
 
 // ############################ Helper functions ############################
+fn run_before(setup_opt: Option<&StrategyConfiguration>, dry_run: bool, print: bool) -> Result<(), String> {
+    if let Some(setup) = setup_opt {
+        info!("Running before setup");
+
+        if let Some(before) = setup.before.as_ref() {
+            debug!("Running custom before scripts");
+            for script in before {
+                // the command fails if not printing output...
+                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration_output(true, print, dry_run)?;
+            }
+        }
+
+        if let Some(containers) = setup.containers.as_ref() {
+            let mut cmd_args = vec!["stop"];
+
+            containers.iter().for_each(|container| {
+                cmd_args.push(container);
+            });
+
+            debug!("Stopping related containers: {}", containers.join(", "));
+            CommandWrapper::new_with_args("docker", cmd_args).run_configuration_output(true, print, dry_run)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool, print: bool) -> Result<(), String> {
+    if let Some(setup) = setup_opt {
+        info!("Running after setup");
+
+        if let Some(containers) = setup.containers.as_ref() {
+            let mut cmd_args = vec!["start"];
+
+            containers.iter().rev().for_each(|container| {
+                cmd_args.push(container)
+            });
+
+            debug!("Starting related containers: {}", containers.join(", "));
+            CommandWrapper::new_with_args("docker", cmd_args).run_configuration_output(true, print, dry_run)?;
+        }
+
+        if let Some(after) = setup.after.as_ref() {
+            debug!("Running custom after scripts");
+            for script in after {
+                CommandWrapper::new_with_args("sh", vec!["-c", script]).run_configuration_output(true, print, dry_run)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn result_reporter(run_type: RunType,
                    result: Result<bool,String>,
                    config_name: &String,
@@ -156,22 +208,6 @@ fn result_reporter(run_type: RunType,
         Err(err) => {
             error!("{} for '{}' failed: {}", run_type, config_name, err);
             reporter.report_status(run_type, Some(config_name.clone()), Status::ERROR);
-        }
-    }
-}
-
-fn size_reporter(run_type: RunType,
-                 directory_type: SizeType,
-                 path: &SourcePath,
-                 config_name: &String,
-                 reporter: &mut ReportingModule,
-                 args: &Arguments) {
-    match file::size(path, args.no_docker) {
-        Ok(curr_size) => {
-            reporter.report_size(run_type, directory_type, Some(config_name.clone()), curr_size);
-        },
-        Err(err) => {
-            error!("Could not read size of the {} files: {}", directory_type, if args.dry_run { "This is likely due to this being a dry-run" } else { err.as_str() });
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::util::objects::paths::SourcePath;
+use crate::util::objects::paths::{SourcePath, ModulePaths};
 use crate::{change_error, try_result, dry_run};
 
 use std::process::{Command, Child, ExitStatus};
@@ -7,7 +7,8 @@ pub struct CommandWrapper {
     command: Command,
     base: String,
     args: Vec<String>,
-    envs: Vec<String>
+    envs: Vec<String>,
+    wrapped: Option<Vec<String>>
 }
 
 impl CommandWrapper {
@@ -16,8 +17,75 @@ impl CommandWrapper {
             command: Command::new(cmd),
             base: cmd.to_string(),
             args: vec![],
-            envs: vec![]
+            envs: vec![],
+            wrapped: None
         }
+    }
+
+    pub fn new_with_args(cmd: &str, args: Vec<&str>) -> CommandWrapper {
+        let mut result = Self::new(cmd);
+
+        for arg in args {
+            result.arg_str(arg);
+        }
+
+        return result;
+    }
+
+    pub fn new_docker(
+        container_name: &str,
+        image_name: &str,
+        command: Option<&str>,
+        args: Option<Vec<&str>>,
+        module_paths: &ModulePaths,
+        volume_mapping: (&SourcePath, &str),
+        options: Option<Vec<&str>>
+    ) -> CommandWrapper {
+        let executable = "docker";
+        let mut cmd = CommandWrapper {
+            command: Command::new(executable),
+            base: String::from(executable),
+            args: vec![],
+            envs: vec![],
+            wrapped: None
+        };
+
+        cmd.arg_str("run");
+        cmd.arg_str("--rm");
+        cmd.arg_string(format!("--name={}", container_name));
+        cmd.arg_string(format!("--volume={}:{}", module_paths.module_data_dir, "/module"));
+
+        cmd.add_docker_volume_mapping(volume_mapping.0, volume_mapping.1);
+
+        if let Some(options) = options {
+            for option in options {
+                cmd.arg_str(option);
+            }
+        }
+
+        cmd.arg_str(image_name);
+
+        if let Some(command) = command {
+            cmd.arg_str(command);
+        }
+
+        if let Some(args) = args {
+            for arg in args {
+                cmd.arg_str(arg);
+            }
+        }
+
+        return cmd;
+    }
+
+    pub fn wrap(&mut self) -> &mut CommandWrapper {
+        if let Some(wrapped) = self.wrapped.take() {
+            self.arg_string(wrapped.join(" "));
+        } else {
+            self.wrapped = Some(vec![])
+        }
+
+        return self;
     }
 
     pub fn arg_str(&mut self, arg: &str) -> &mut CommandWrapper {
@@ -25,16 +93,20 @@ impl CommandWrapper {
     }
 
     pub fn arg_string(&mut self, option: String) -> &mut CommandWrapper {
-        let this = option;
-        self.command.arg(&this);
-        self.args.push(this);
-        self
+        if let Some(wrapped) = self.wrapped.as_mut() {
+            wrapped.push(option);
+        } else {
+            self.command.arg(&option);
+            self.args.push(option);
+        }
+
+        return self;
     }
 
     pub fn add_docker_volume_mapping(&mut self, source_path: &SourcePath, name: &str) -> &mut CommandWrapper {
         match source_path {
             SourcePath::Single(path) => {
-                self.arg_string(format!("--volume={}:/{}", path, name));
+                self.arg_string(format!("--volume={}:{}{}", path, if name.starts_with('/') { "" } else { "/" }, name));
             },
             SourcePath::Multiple(paths) => {
                 for path in paths {
@@ -59,7 +131,13 @@ impl CommandWrapper {
     pub fn run(&mut self) -> Result<(), String> {
         let exit_status = self.run_get_status()?;
         if !exit_status.success() {
-            let msg = format!("Exit code indicates failure of command");
+            let msg;
+            if let Some(rc) = exit_status.code() {
+                msg = format!("Exit code {} indicates failure of command: {}", rc, self.to_string());
+            } else {
+                msg = format!("Exit code indicates failure of command: {}", self.to_string());
+            }
+
             error!("{}", msg);
             return Err(msg);
         }
@@ -67,11 +145,17 @@ impl CommandWrapper {
     }
 
     pub fn run_configuration(&mut self, print: bool, dry_run: bool) -> Result<(),String> {
+        return self.run_configuration_output(false, print, dry_run);
+    }
+
+    pub fn run_configuration_output(&mut self, output: bool, print: bool, dry_run: bool) -> Result<(),String> {
         if dry_run {
             dry_run!(self.to_string());
             return Ok(());
         } else if print {
             println!("-> {}", self.to_string());
+            return self.run();
+        } else if output {
             return self.run();
         } else {
             return self.run_without_output();
@@ -81,7 +165,13 @@ impl CommandWrapper {
     pub fn run_without_output(&mut self) -> Result<(), String> {
         let exit_status = self.run_get_status_without_output()?;
         if !exit_status.success() {
-            let msg = format!("Exit code indicates failure of command");
+            let msg;
+            if let Some(rc) = exit_status.code() {
+                msg = format!("Exit code {} indicates failure of command: {}", rc, self.to_string());
+            } else {
+                msg = format!("Exit code indicates failure of command: {}", self.to_string());
+            }
+
             error!("{}", msg);
             return Err(msg);
         }
@@ -136,7 +226,14 @@ impl CommandWrapper {
                     return Ok(String::new());
                 }
             } else {
-                return Err(String::from("Exit code indicates failure of command"));
+                let msg;
+                if let Some(rc) = output.status.code() {
+                    msg = format!("Exit code {} indicates failure of command: {}", rc, self.to_string());
+                } else {
+                    msg = format!("Exit code indicates failure of command: {}", self.to_string());
+                }
+
+                return Err(msg);
             }
         } else {
             return Err(format!("Failed executing command: {}", result.unwrap_err().to_string()))
@@ -154,7 +251,9 @@ impl ToString for CommandWrapper {
         result.push_str(self.base.as_str());
         result.push_str(" ");
         for arg in self.args.iter() {
+            result.push('"');
             result.push_str(arg.as_str());
+            result.push('"');
             result.push_str(" ");
         }
         return result;

@@ -23,7 +23,7 @@ pub trait Check {
 
     fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String>;
     fn init(&mut self) -> Result<(), String>;
-    fn check(&self, timing: &ExecutionTiming) -> Result<bool, String>;
+    fn check(&mut self, timing: &ExecutionTiming) -> Result<bool, String>;
     fn update(&mut self, timing: &ExecutionTiming) -> Result<(), String>;
     fn clear(&mut self) -> Result<(), String>;
 }

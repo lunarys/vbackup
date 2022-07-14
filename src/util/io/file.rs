@@ -172,7 +172,7 @@ pub fn list_in_dir(dir_name: &str) -> Result<Vec<PathBuf>, String> {
     return Ok(files);
 }
 
-pub fn size(path: &SourcePath, no_docker: bool) -> Result<u64,String> {
+pub fn _size(path: &SourcePath, no_docker: bool) -> Result<u64,String> {
     // TODO: Not ideal as it relies on other tools
     let mut cmd = if no_docker {
         let mut tmp = CommandWrapper::new("sh");

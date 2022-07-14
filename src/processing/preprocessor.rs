@@ -13,6 +13,7 @@ use crate::processing::{timeframe_check,controller_bundler};
 
 use std::rc::Rc;
 use core::borrow::Borrow;
+use std::borrow::BorrowMut;
 
 pub enum ConfigurationUnit {
     Backup(BackupUnit),
@@ -91,7 +92,8 @@ pub fn preprocess(configurations: Vec<Configuration>,
     }
 
     let without_disabled = filter_disabled(configurations, reporter, args);
-    let with_module_paths = load_module_paths(without_disabled, paths);
+    let with_setup = load_default_setup_strategy(without_disabled);
+    let with_module_paths = load_module_paths(with_setup, paths);
     let savedata = load_savedata(&with_module_paths, reporter);
     let split = flatten_processing_list(with_module_paths, do_backup, do_sync);
     let with_time_constraints = filter_time_constraints(split, args, paths, &savedata, reporter)?;
@@ -157,6 +159,29 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut Report
         })
         .filter(|config| {
             config.backup_config.is_some() || config.sync_config.is_some()
+        })
+        .collect();
+}
+
+fn load_default_setup_strategy(mut configurations: Vec<ConfigurationSplit>) -> Vec<ConfigurationSplit> {
+    // step 1.5
+    //  if the configuration has a default setup copy it to the respective backup or sync part
+    //  if a backup configuration exists use the backup there, otherwise use it for sync
+    return configurations.drain(..)
+        .map(|mut config| {
+            if let Some(setup_config) = config.config.setup.as_ref() {
+                if let Some(backup_config) = config.backup_config.as_mut() {
+                    if backup_config.setup.is_none() {
+                        backup_config.setup.replace(setup_config.clone());
+                    }
+                } else if let Some(sync_config) = config.sync_config.as_mut() {
+                    if sync_config.setup.is_none() {
+                        sync_config.setup.replace(setup_config.clone());
+                    }
+                }
+            }
+
+            return config;
         })
         .collect();
 }
@@ -364,7 +389,7 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     return configurations
         .drain(..)
         .filter_map(|configuration| {
-            fn filter_timeframes(run_type: RunType, name: &String, check: &Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &mut ReportingModule) -> Option<Vec<ExecutionTiming>> {
+            fn filter_timeframes(run_type: RunType, name: &String, check: &mut Option<CheckModule>, timeframes: Option<Vec<ExecutionTiming>>, reporter: &mut ReportingModule) -> Option<Vec<ExecutionTiming>> {
                 if check.is_none() {
                     debug!("There is no additional check for '{}' {}, only using the interval checks", name, run_type);
                     return timeframes;
@@ -407,7 +432,13 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
 
             match configuration {
                 ConfigurationUnitBuilder::Backup(mut backup) => {
-                    backup.timeframes = filter_timeframes(RunType::BACKUP, backup.config.name.borrow(), &backup.check, backup.timeframes, reporter);
+                    backup.timeframes = filter_timeframes(
+                        RunType::BACKUP,
+                        backup.config.name.borrow(),
+                        backup.check.borrow_mut(),
+                        backup.timeframes,
+                        reporter
+                    );
 
                     if backup.timeframes.is_none() {
                         return None;
@@ -416,7 +447,13 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
                     }
                 },
                 ConfigurationUnitBuilder::Sync(mut sync) => {
-                    sync.timeframes = filter_timeframes(RunType::SYNC, sync.config.name.borrow(), &sync.check, sync.timeframes, reporter);
+                    sync.timeframes = filter_timeframes(
+                        RunType::SYNC,
+                        sync.config.name.borrow(),
+                        sync.check.borrow_mut(),
+                        sync.timeframes,
+                        reporter
+                    );
 
                     if sync.timeframes.is_none() {
                         return None;

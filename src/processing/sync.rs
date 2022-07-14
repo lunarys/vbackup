@@ -1,5 +1,5 @@
-use crate::modules::sync::{SyncModule,SyncRelay};
-use crate::modules::controller::{ControllerModule, BundleableRelay};
+use crate::modules::sync::{SyncModule, SyncWrapper};
+use crate::modules::controller::{ControllerModule, BundleableWrapper};
 use crate::util::helper::{controller as controller_helper,check as check_helper};
 use crate::util::io::savefile::{time_format};
 use crate::util::objects::time::TimeEntry;

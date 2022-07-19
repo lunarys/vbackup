@@ -44,7 +44,7 @@ impl Reporting for Reporter {
         let base_topic = get_base_topic(&self.config, &self.mqtt_config);
         trace!("Base topic is '{}'", base_topic);
 
-        let (client,_) = try_result!(get_client(&self.mqtt_config, base_topic.as_str(), "cancelled"), "Could not create mqtt client and receiver");
+        let (client,_) = try_result!(get_client(&self.mqtt_config, base_topic.as_str(), "cancelled", None), "Could not create mqtt client and receiver");
         self.client = Some(client);
 
         return Ok(());

@@ -3,7 +3,7 @@ use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::modules::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
-use crate::{try_result,try_option,bool_result,dry_run};
+use crate::{try_result,try_option,bool_result,dry_run,log_error};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use std::rc::Rc;
 use std::cmp::max;
 use std::thread;
-use crossbeam_channel::{unbounded,Receiver};
+use crossbeam_channel::{unbounded, Receiver, bounded};
 use rand;
 
 pub struct MqttController {
@@ -54,9 +54,7 @@ impl Controller for MqttController {
 
         let qos = qos_from_u8(self.mqtt_config.qos)?;
 
-        let (mut client,receiver) =
-            try_result!(get_client(&self.mqtt_config, topic_pub.as_str(), "ABORT"), "Could not create mqtt client and receiver");
-        try_result!(client.subscribe(&topic_sub, qos), "Could not subscribe to mqtt topic");
+        let (mut client,receiver) = try_result!(get_client(&self.mqtt_config, topic_pub.as_str(), "ABORT", Some(vec![topic_sub.clone()])), "Could not create mqtt client and receiver");
 
         let controller_topic = get_controller_state_topic(&self.config);
         let is_controller_online = get_controller_state(&mut client, &receiver, controller_topic, qos)?;
@@ -256,7 +254,7 @@ fn end(client: &mut Client, topic: String, qos: u8) -> Result<bool, String> {
     return bool_result!(result.is_ok(), true, "Could not send end message");
 }
 
-pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str) -> Result<(Client,Receiver<Publish>), String> {
+pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str, auto_subscibe: Option<Vec<String>>) -> Result<(Client,Receiver<Publish>), String> {
     trace!("Trying to connect to mqtt broker with address '{}:{}'", mqtt_config.host.as_str(), mqtt_config.port);
 
     let random_id: i32 = rand::random();
@@ -281,11 +279,16 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
 
     // TODO: cap=10 ?? (taken from crate examples)
     let (client,mut connection) = Client::new(options, 10);
+    let mut client_clone = client.clone(); // move this to the mqtt event loop in order to (re)subscribe
+    let qos = qos_from_u8(mqtt_config.qos)?;
 
     // create a channel that received messages are sent into, such that they can be received by the main thread
     let (sender, receiver) = unbounded();
+    let (thread_sender, thread_receiver) = bounded(1);
 
     thread::spawn(move || {
+        let mut did_connect = false;
+
         for (_i, notification) in connection.iter().enumerate() {
             match notification {
                 Ok(event) => {
@@ -293,12 +296,29 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
                         Event::Incoming(packet) => {
                             match packet {
                                 Packet::Publish(publish) => {
-                                    // TODO: unwrap will kill the process on error, is there a way to gracefully handle this?
-                                    sender.send(publish).unwrap();
+                                    // TODO: if there is an error act accordingly?
+                                    log_error!(sender.send(publish));
                                 },
                                 Packet::Disconnect => {
                                   // if not terminated from outgoing disconnect, terminate now
                                     break;
+                                },
+                                Packet::ConnAck(conn_ack) => {
+                                    if let Some(subscribe) = auto_subscibe.as_ref() {
+                                        subscribe.iter().for_each(|topic| {
+                                            let result = client_clone.subscribe(topic, qos);
+                                            if result.is_err() {
+                                                error!("Could not automatically subscribe to mqtt topic '{}' after connect", topic);
+                                            }
+                                        });
+                                    }
+
+                                    // only notify the parent thread about the connection once at the beginning
+                                    if !did_connect {
+                                        did_connect = true;
+                                        // TODO: if there is an error act accordingly?
+                                        log_error!(thread_sender.send(conn_ack));
+                                    }
                                 },
                                 _ => {}
                             }
@@ -324,7 +344,12 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
         }
     });
 
-    // TODO: await connect? how?
+    // TODO: make configurable?
+    let timeout_secs = 15;
+
+    // await connect?
+    try_result!(thread_receiver.recv_timeout(Duration::from_secs(timeout_secs)), format!("Could not connect to the mqtt broker within {} seconds", timeout_secs));
+
     return Ok((client, receiver));
 }
 

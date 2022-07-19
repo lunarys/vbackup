@@ -82,7 +82,7 @@ impl ReportingModule {
         log_error!(result);
     }
 
-    pub fn report_operation(&self, operation: OperationStatus) {
+    pub fn report_operation(&mut self, operation: OperationStatus) {
         let result = self.report(ReportEvent::Operation(operation));
         log_error!(result);
     }

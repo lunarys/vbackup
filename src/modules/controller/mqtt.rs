@@ -107,35 +107,41 @@ impl Controller for MqttController {
     }
 
     fn end(&mut self) -> Result<bool, String> {
-        let connection = try_option!(self.connected.as_mut(), "MQTT controller could not end, as it is not connected... was the init step skipped?");
+        if let Some(connection) = self.connected.as_mut() {
+            info!("MQTT controller end run for device '{}'", self.config.device);
 
-        info!("MQTT controller end run for device '{}'", self.config.device);
+            if !connection.is_controller_online {
+                return Ok(false);
+            }
 
-        if !connection.is_controller_online {
-            return Ok(false);
-        }
+            let qos = self.mqtt_config.qos;
+            let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
-        let qos = self.mqtt_config.qos;
-        let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
+            let result = if !self.dry_run {
+                end(&mut connection.client, topic_pub, qos)?
+            } else {
+                dry_run!(format!("Sending end command on MQTT topic '{}'", &topic_pub));
+                true
+            };
 
-        let result = if !self.dry_run {
-            end(&mut connection.client, topic_pub, qos)?
+            trace!("MQTT controller end run is done");
+            Ok(result)
         } else {
-            dry_run!(format!("Sending end command on MQTT topic '{}'", &topic_pub));
-            true
-        };
-
-        trace!("MQTT controller end run is done");
-        return Ok(result);
+            debug!("MQTT controller was not connected, skipping end procedure");
+            Ok(false)
+        }
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        let connection = try_option!(self.connected.as_mut(), "MQTT controller could not terminate, as it is not connected... was the init step skipped?");
+        if let Some(connection) = self.connected.as_mut() {
+            try_result!(connection.client.disconnect(), "Disconnect from broker failed");
 
-        try_result!(connection.client.disconnect(), "Disconnect from broker failed");
-
-        self.connected = None;
-        return Ok(());
+            self.connected = None;
+            Ok(())
+        } else {
+            trace!("MQTT controller was not connected, skipping disconnect");
+            Ok(())
+        }
     }
 }
 

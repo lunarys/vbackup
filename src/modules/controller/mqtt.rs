@@ -37,8 +37,18 @@ struct Configuration {
     auth_reference: Option<String>,
     topic_sub: Option<String>,
     topic_pub: Option<String>,
-    auth: Option<Value>
+    auth: Option<Value>,
+
+    #[serde(default="default_timeout_start")]
+    start_timeout_sec: u64,
+
+    #[serde(default="default_timeout_controller")]
+    controller_timeout_sec: u64
 }
+
+fn default_timeout_start() -> u64 { 600 }
+fn default_timeout_controller() -> u64 { 10 }
+
 impl Controller for MqttController {
     const MODULE_NAME: &'static str = "mqtt";
 
@@ -57,7 +67,7 @@ impl Controller for MqttController {
         let (mut client,receiver) = try_result!(get_client(&self.mqtt_config, topic_pub.as_str(), "ABORT", Some(vec![topic_sub.clone()])), "Could not create mqtt client and receiver");
 
         let controller_topic = get_controller_state_topic(&self.config);
-        let is_controller_online = get_controller_state(&mut client, &receiver, controller_topic, qos)?;
+        let is_controller_online = get_controller_state(&mut client, &receiver, controller_topic, qos, self.config.controller_timeout_sec)?;
         if is_controller_online {
             debug!("MQTT controller for '{}' is available", self.config.device);
         } else {
@@ -86,7 +96,7 @@ impl Controller for MqttController {
         let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
         let result = if !self.dry_run {
-            start(&mut connection.client, &connection.receiver, self.config.start, topic_pub, qos)?
+            start(&mut connection.client, &connection.receiver, self.config.start, topic_pub, qos, self.config.start_timeout_sec)?
         } else {
             dry_run!(format!("Sending start command on MQTT topic '{}'", &topic_pub));
             true
@@ -176,7 +186,7 @@ impl Bundleable for MqttController {
     }
 }
 
-fn get_controller_state(client: &mut Client, receiver: &Receiver<Publish>, topic: String, qos: QoS) -> Result<bool, String> {
+fn get_controller_state(client: &mut Client, receiver: &Receiver<Publish>, topic: String, qos: QoS, timeout_sec: u64) -> Result<bool, String> {
     debug!("Checking the mqtt controller state for availability of the remote device");
 
     // Subscribe to state topic
@@ -184,9 +194,9 @@ fn get_controller_state(client: &mut Client, receiver: &Receiver<Publish>, topic
     try_result!(client.subscribe(topic.as_str(), qos), "Could not subscribe to controller state topic");
 
     // 10 seconds should be more than enough, as the state is retained
-    let wait_time = Duration::new(10,0);
+    let wait_time = Duration::from_secs(timeout_sec);
     // Wait for a result
-    let result_string = wait_for_message(receiver, Some(topic.as_str()), wait_time, None)?;
+    let result_string = try_result!(wait_for_message(receiver, Some(topic.as_str()), wait_time, None), "Mqtt controller state check did not respond");
     let result = result_string.to_uppercase() == "ENABLED";
 
     // Unsubscribe from state topic
@@ -196,15 +206,14 @@ fn get_controller_state(client: &mut Client, receiver: &Receiver<Publish>, topic
     return Ok(result);
 }
 
-fn start(client: &mut Client, receiver: &Receiver<Publish>, boot: bool, topic: String, qos: QoS) -> Result<bool, String> {
+fn start(client: &mut Client, receiver: &Receiver<Publish>, boot: bool, topic: String, qos: QoS, timeout_sec: u64) -> Result<bool, String> {
     let payload = if boot { "START_BOOT" } else { "START_RUN" };
 
     if let Err(err) = client.publish(topic.as_str(), qos, false, payload) {
         return Err(format!("Could not send start message: {}", err));
     }
 
-    // TODO: Timeout as option?
-    let timeout = Duration::new(600, 0);
+    let timeout = Duration::from_secs(timeout_sec);
     let received: String = wait_for_message(receiver, None, timeout, None)?;
 
     if received.to_lowercase().eq("disabled") {
@@ -228,7 +237,7 @@ fn start(client: &mut Client, receiver: &Receiver<Publish>, boot: bool, topic: S
     }
 
     // Second message should be CHECK
-    let timeout2 = Duration::new(600, 0);
+    let timeout2 = Duration::from_secs(timeout_sec);
     let received2 = wait_for_message(receiver, None, timeout2, None)?;
 
     // Wait for check from controller to confirm still waiting
@@ -288,6 +297,7 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
 
     thread::spawn(move || {
         let mut did_connect = false;
+        let mut error_count = 0;
 
         for (_i, notification) in connection.iter().enumerate() {
             match notification {
@@ -304,6 +314,12 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
                                     break;
                                 },
                                 Packet::ConnAck(conn_ack) => {
+                                    if did_connect {
+                                        info!("Reconnected to mqtt broker");
+                                    } else {
+                                        debug!("Connected to mqtt broker");
+                                    }
+
                                     if let Some(subscribe) = auto_subscibe.as_ref() {
                                         subscribe.iter().for_each(|topic| {
                                             let result = client_clone.subscribe(topic, qos);
@@ -335,7 +351,7 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
                     }
                 },
                 Err(error) => {
-                    error!("Connection error in mqtt receiver: {}", error);
+                    error!("Connection error ({}) in mqtt receiver: {}", { error_count += 1; error_count }, error);
 
                     // sleep after an error before triggering a reconnect through the event loop
                     thread::sleep(Duration::from_secs(5))
@@ -344,8 +360,7 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
         }
     });
 
-    // TODO: make configurable?
-    let timeout_secs = 15;
+    let timeout_secs = mqtt_config.connect_timeout_sec;
 
     // await connect?
     try_result!(thread_receiver.recv_timeout(Duration::from_secs(timeout_secs)), format!("Could not connect to the mqtt broker within {} seconds", timeout_secs));

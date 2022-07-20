@@ -61,6 +61,6 @@ pub trait Reporting {
 
     fn new(config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<Box<Self>, String>;
     fn init(&mut self) -> Result<(),String>;
-    fn report(&self, event: ReportEvent) -> Result<(),String>;
+    fn report(&mut self, event: ReportEvent) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }

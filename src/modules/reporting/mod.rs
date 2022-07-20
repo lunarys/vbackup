@@ -72,7 +72,7 @@ impl ReportingModule {
         return ReportingModule { modules: vec![] };
     }
 
-    pub fn report_status(&self, run_type: RunType, name: Option<String>, status: Status) {
+    pub fn report_status(&mut self, run_type: RunType, name: Option<String>, status: Status) {
         let result = self.report(ReportEvent::Status(StatusReport {
             module: name.map(|input| String::from(input)),
             status,
@@ -82,7 +82,7 @@ impl ReportingModule {
         log_error!(result);
     }
 
-    pub fn report_operation(&self, operation: OperationStatus) {
+    pub fn report_operation(&mut self, operation: OperationStatus) {
         let result = self.report(ReportEvent::Operation(operation));
         log_error!(result);
     }
@@ -97,8 +97,8 @@ impl ReportingWrapper for ReportingModule {
         return accumulate(result).map(|_| ());
     }
 
-    fn report(&self, event: ReportEvent) -> Result<(), String> {
-        let result = self.modules.iter().map(|module| {
+    fn report(&mut self, event: ReportEvent) -> Result<(), String> {
+        let result = self.modules.iter_mut().map(|module| {
             module.report(event.clone())
         }).collect();
 
@@ -141,7 +141,7 @@ fn accumulate<T>(input: Vec<Result<T,String>>) -> Result<Vec<T>,String> {
 
 pub trait ReportingWrapper {
     fn init(&mut self) -> Result<(),String>;
-    fn report(&self, event: ReportEvent) -> Result<(),String>;
+    fn report(&mut self, event: ReportEvent) -> Result<(),String>;
     fn clear(&mut self) -> Result<(), String>;
 }
 
@@ -150,7 +150,7 @@ impl<T: Reporting> ReportingWrapper for T {
         Reporting::init(self)
     }
 
-    fn report(&self, event: ReportEvent) -> Result<(), String> {
+    fn report(&mut self, event: ReportEvent) -> Result<(), String> {
         Reporting::report(self, event)
     }
 

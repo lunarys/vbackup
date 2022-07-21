@@ -17,7 +17,7 @@ struct SyncControllerBundleBuilder {
     controller: ControllerBundle
 }
 
-pub fn load_controllers(mut configurations: Vec<ConfigurationUnit>, args: &Arguments, paths: &Rc<Paths>, reporter: &ReportingModule) -> Vec<ConfigurationUnit> {
+pub fn load_controllers(mut configurations: Vec<ConfigurationUnit>, args: &Arguments, paths: &Rc<Paths>, reporter: &mut ReportingModule) -> Vec<ConfigurationUnit> {
     let mut done = vec![];
     let mut bundle_types: HashMap<String,Vec<SyncControllerBundleBuilder>> = HashMap::new();
 
@@ -124,6 +124,6 @@ fn handle_controller_bundle(mut sync: SyncUnit, done: &mut Vec<ConfigurationUnit
     return Ok(());
 }
 
-fn report_error(reporter: &ReportingModule, run_type: RunType, name: &String) {
+fn report_error(reporter: &mut ReportingModule, run_type: RunType, name: &String) {
     reporter.report_status(run_type, Some(name.clone()), Status::ERROR);
 }

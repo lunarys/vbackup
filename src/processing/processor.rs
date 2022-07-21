@@ -16,7 +16,7 @@ use crate::util::objects::configuration::StrategyConfiguration;
 use crate::util::command::CommandWrapper;
 
 pub fn process_configurations(args: &Arguments,
-                              reporter: &ReportingModule,
+                              reporter: &mut ReportingModule,
                               configurations: Vec<ConfigurationUnit>,
                               mut savedata_collection: SaveDataCollection) -> Result<(),String> {
     for configuration in configurations {
@@ -53,7 +53,7 @@ pub fn process_configurations(args: &Arguments,
 fn process_backup(config: &mut BackupUnit,
                   savedata_collection: &mut SaveDataCollection,
                   args: &Arguments,
-                  reporter: &ReportingModule) -> Result<(), String> {
+                  reporter: &mut ReportingModule) -> Result<(), String> {
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
         .ok_or(format!("No savedata is present for '{}' backup", config.config.name.as_str()))?;
@@ -80,7 +80,7 @@ fn process_backup(config: &mut BackupUnit,
 fn process_sync(config: &mut SyncUnit,
                 savedata_collection: &mut SaveDataCollection,
                 args: &Arguments,
-                reporter: &ReportingModule,
+                reporter: &mut ReportingModule,
                 controller_override: Option<&mut ControllerModule>) -> Result<(), String> {
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
@@ -119,7 +119,7 @@ fn process_sync(config: &mut SyncUnit,
 fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBundle,
                                   savedata: &mut SaveDataCollection,
                                   args: &Arguments,
-                                  reporter: &ReportingModule) -> Result<(), String> {
+                                  reporter: &mut ReportingModule) -> Result<(), String> {
 
     for configuration in &mut sync_controller_bundle.units {
         let result = process_sync(configuration, savedata, args, reporter, Some(sync_controller_bundle.controller.borrow_mut()));
@@ -195,7 +195,7 @@ fn run_after(setup_opt: Option<&StrategyConfiguration>, dry_run: bool, print: bo
 fn result_reporter(run_type: RunType,
                    result: Result<bool,String>,
                    config_name: &String,
-                   reporter: &ReportingModule) {
+                   reporter: &mut ReportingModule) {
     match result {
         Ok(true) => {
             info!("{} for '{}' was successfully executed", run_type, config_name);

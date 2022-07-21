@@ -7,7 +7,6 @@ extern crate serde_derive;
 extern crate chrono;
 extern crate glob;
 extern crate fs2;
-extern crate ping;
 
 mod processing;
 mod vbackup;
@@ -95,8 +94,8 @@ fn main() {
 
     // TODO: Always prints timestamps in UTC
     Builder::new()
-        .filter_level(log_level)
-        .filter_module("paho_mqtt", LevelFilter::Warn)
+        .filter_level(LevelFilter::Warn)
+        .filter_module("vbackup", log_level)
         .init();
 
     run(args);

@@ -25,7 +25,7 @@ struct BorgKeepConfig {
 struct BorgConfig {
     encryption_key: Option<String>,
     authentication_key: Option<String>,
-    #[serde(default="default_false")]
+    #[serde(default="default_true")]
     blake2: bool,
     quota: Option<String>,
 
@@ -49,6 +49,7 @@ struct BorgConfig {
     umask: String
 }
 
+fn default_true() -> bool { true }
 fn default_false() -> bool { false }
 fn default_umask() -> String { String::from("0007") }
 
@@ -306,6 +307,7 @@ impl Borg {
             command = CommandWrapper::new_with_args("borg", vec![operation]);
 
             command.env("BORG_BASE_DIR", self.paths.module_data_dir.as_str());
+            command.env("BORG_RELOCATED_REPO_ACCESS_IS_OK", if self.config.relocate_ok {"yes"} else {"no"})
         } else {
             let mut options = vec![
                 "--env=BORG_BASE_DIR",

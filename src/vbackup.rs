@@ -5,7 +5,7 @@ use crate::util::objects::paths::{Paths,PathBase,ModulePaths,SourcePath};
 use crate::util::objects::configuration::Configuration;
 use crate::util::objects::reporting::{OperationStatus};
 use crate::processing::{preprocessor,scheduler,processor};
-use crate::Arguments;
+use crate::{Arguments, restore};
 
 use crate::{log_error};
 
@@ -56,19 +56,24 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
     // TODO: Might solve this via RunType also
     reporter.report_operation(OperationStatus::START(args.operation.clone()));
 
-    let (do_backup, do_sync) = match args.operation.as_str() {
-        "run" => Ok((true, true)),
-        "backup" | "save" => Ok((true, false)),
-        "sync" => Ok((false, true)),
-        unknown => {
-            Err(format!("Unknown operation: '{}'", unknown))
-        }
-    }?;
+    let result = if args.operation == "restore" {
+        restore::main(args, paths)
+    } else {
+        let (do_backup, do_sync) = match args.operation.as_str() {
+            "run" => Ok((true, true)),
+            "backup" | "save" => Ok((true, false)),
+            "sync" => Ok((false, true)),
+            unknown => {
+                Err(format!("Unknown operation: '{}'", unknown))
+            }
+        }?;
 
-    let config_list = get_config_list(&args, paths.as_ref())?;
-    let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &mut reporter, do_backup, do_sync)?;
-    let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
-    let result = processor::process_configurations(&args, &mut reporter, scheduled, preprocessed.savedata);
+        let config_list = get_config_list(&args, paths.as_ref())?;
+        let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &mut reporter, do_backup, do_sync)?;
+        let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
+        let result = processor::process_configurations(&args, &mut reporter, scheduled, preprocessed.savedata);
+        return result;
+    };
 
     reporter.report_operation(OperationStatus::DONE);
     log_error!(reporter.clear());

@@ -10,6 +10,7 @@ extern crate fs2;
 
 mod processing;
 mod vbackup;
+mod restore;
 mod modules;
 mod util;
 

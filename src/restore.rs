@@ -1,7 +1,9 @@
 use std::path::Path;
 use std::rc::Rc;
-use crate::{Arguments, try_result};
+use crate::{Arguments, log_error, try_option, try_result};
 use crate::modules::backup::{BackupModule, BackupWrapper};
+use crate::modules::controller::bundle::BundleableControllerWrapper;
+use crate::modules::controller::ControllerModule;
 use crate::modules::sync::{SyncModule, SyncWrapper};
 use crate::util::io::json;
 use crate::util::io::user::ask_user_boolean;
@@ -39,14 +41,72 @@ pub fn main(args: Arguments, paths: Rc<Paths>) -> Result<(),String> {
         if !confirmation {
             info!("Not running sync restore.");
         } else {
+            debug!("Setting up sync module...");
+
             let module_paths = ModulePaths::for_sync_module(&paths, "sync", &config);
             let module = SyncModule::new(sync_config.sync_type.as_str(), name, &sync_config.config, module_paths, &args)?;
+
+            debug!("Setting up controller...");
+
+            // check for controller
+            let controller = if let Some(controller_config) = sync_config.controller.as_ref() {
+                let controller_type_opt = try_option!(controller_config.get("type"), "Controller config contains no field 'type'");
+                let controller_type = try_option!(controller_type_opt.as_str(), "Could not get controller type as string");
+                let module_paths = ModulePaths::for_sync_module(&paths, "controller", &config);
+
+                let mut controller = ControllerModule::new(controller_type, config.name.as_str(), &controller_config, module_paths, &args)?;
+
+                debug!("Starting controller init...");
+                controller.as_mut_controller().init()?;
+                info!("Starting controller...");
+                let started = controller.as_mut_controller().begin()?;
+
+                if started {
+                    info!("Remote device is online.")
+                } else {
+                    let err = "Remote device is not online and/or can not be started.";
+                    error!("{}", err);
+                    return Err(String::from(err));
+                }
+
+                Some(controller)
+            } else {
+                debug!("No controller found.... Skipping.");
+                None
+            };
 
             info!("Starting sync restore...");
 
             let restore_result = module.restore();
 
-            try_result!(restore_result, "Sync restore failed...");
+            log_error!(&restore_result);
+
+            // controller should be terminated regardless of sync restore result
+            let result = if let Some(mut controller) = controller {
+                debug!("Running controller end procedure...");
+                let end_result = controller.as_mut_controller().end();
+                log_error!(&end_result);
+
+                if let Ok(ended) = end_result.as_ref() {
+                    if !ended {
+                        // anything we can do here?
+                        warn!("Controller did not end properly...");
+                    }
+                }
+
+                debug!("Running controller clear procedure...");
+                let clear_result = controller.as_mut_controller().clear();
+                log_error!(&clear_result);
+
+                restore_result.and(end_result).and(clear_result)
+            } else {
+                restore_result
+            };
+
+            if result.is_err() {
+                return result;
+            }
+
             info!("Sync restore successful.")
         }
     } else {

@@ -5,9 +5,11 @@ use crate::util::objects::paths::{ModulePaths, SourcePath};
 use crate::Arguments;
 use crate::util::command::CommandWrapper;
 use std::borrow::Borrow;
+use std::ops::Sub;
 use crate::modules::sync::borg::BorgSyncConfig;
 use crate::util::docker;
 use crate::modules::shared::ssh::{write_known_hosts, write_identity_file};
+use crate::util::io::user::{ask_user_option_list_index};
 
 #[derive(Deserialize)]
 struct BorgKeepConfig {
@@ -298,7 +300,76 @@ impl Borg {
     }
 
     pub fn run_restore(&self) -> Result<(), String> {
-        todo!()
+        // if the repo is not initialized during a restore operation assume it was recovered from some other location and does not need to be initialized
+        if self.requires_init && !self.dry_run {
+            file::write(format!("{}/init-marker", self.paths.module_data_dir).as_str(), "1", true)?;
+        }
+
+        // TODO: borg writes into the current directory ("."), so better make sure to use "cd /"
+
+        let selected_archive = self.user_select_archive()?;
+        let mut command = self.get_base_cmd("extract")?;
+
+        if self.dry_run {
+            command.arg_str("--dry-run");
+        }
+
+        // TODO: does this make sense?
+        //command.arg_str("--numeric-ids");
+
+        if self.verbose {
+            command.arg_str("--list");
+        }
+
+        // archive path is constructed from repo and archive
+        command.arg_string(format!("{}::{}", self.get_repo_path(), selected_archive));
+
+        info!("Starting restore of '{}'...", selected_archive);
+        command.run_configuration(self.print_command, self.dry_run)?;
+        info!("Restore done.");
+
+        Ok(())
+    }
+
+    fn user_select_archive(&self) -> Result<String, String> {
+        let mut archive_list = self.get_list_of_archives(Some("{archive}{NEWLINE}"))?; // would also work with '--short' option
+
+        // the list is sorted by timestamp (borg default) so suggest the last entry
+        let selected_index = ask_user_option_list_index(
+            Some("Found multiple backup archives in the borg repository:"),
+            Some("Which archive should be restored?"),
+            archive_list.as_ref(),
+            &|archive| {archive.as_str()},
+            archive_list.len().sub(1)
+        )?;
+
+        return if selected_index < archive_list.len() {
+            Ok(archive_list.swap_remove(selected_index))
+        } else {
+            Err(String::from("Selected index is out of bounds"))
+        }
+    }
+
+    /*
+     * format according to borg list's --format option
+     * entries should be newline-separated if passing a custom format
+     */
+    fn get_list_of_archives(&self, format: Option<&str>) -> Result<Vec<String>, String> {
+        let mut command = self.get_base_cmd("list")?;
+
+        if let Some(format) = format {
+            command.arg_string(format!("--format={}", format));
+        }
+
+        command.arg_string(self.get_repo_path());
+
+        return command.run_get_output().map(|result| {
+            result.split("\n").map(String::from).collect()
+        });
+    }
+
+    fn _run_check_backup(&self) -> Result<(), String> {
+        todo!("check the consistency of the backup?")
     }
 
     fn get_base_cmd(&self, operation: &str) -> Result<CommandWrapper,String> {

@@ -4,7 +4,7 @@ use crate::util::command::CommandWrapper;
 use crate::util::docker;
 use crate::util::objects::time::{ExecutionTiming};
 use crate::util::objects::paths::{ModulePaths,SourcePath};
-use crate::{Arguments, try_option, try_result};
+use crate::{Arguments, try_option};
 
 use crate::{dry_run};
 
@@ -13,8 +13,9 @@ use serde::{Deserialize};
 use std::fs::{copy, remove_file};
 use core::borrow::{Borrow};
 use std::borrow::BorrowMut;
-use std::str::FromStr;
-use crate::util::io::user::{ask_user_default};
+use std::ops::Sub;
+use std::path::PathBuf;
+use crate::util::io::user::{ask_user_option_list};
 
 pub struct Tar7Zip {
     name: String,
@@ -169,30 +170,15 @@ impl Backup for Tar7Zip {
         // file names start with an ISO date and thus can be sorted by name
         paths.sort();
 
-        println!("Found multiple backup files:");
-        paths.iter().enumerate().for_each(|(index,path)| {
-            println!("[{}] {}", index, path.to_str().unwrap_or("<can't parse path>"));
-        });
+        let selected_path = ask_user_option_list(
+            Some("Found multiple backup files:"),
+            Some("Which backup file should be restored?"),
+            paths.as_ref(),
+            &|path: &PathBuf| {path.to_str().unwrap_or("<can't parse path>")},
+            paths.len().sub(1)
+        )?;
 
-        // ask the user which file to restore
-        let user_input_result = ask_user_default("Which backup file should be restored?", paths.len().to_string().as_str());
-        let user_input = try_result!(user_input_result, "Could not get user input");
-
-        let index = if let Ok(index) = usize::from_str(user_input.as_str()) {
-            index
-        } else {
-            let err = "Could not parse user input, expected a number";
-            error!("{}", err);
-            return Err(String::from(err));
-        };
-
-        let chosen_file: &str = if let Some(path) = paths.get(index) {
-            try_option!(path.file_name().map(|name| name.to_str()).flatten(), "Could not read filename for latest file")
-        } else {
-            let err = "Chosen file does not exist";
-            error!("{}", err);
-            return Err(String::from(err));
-        };
+        let chosen_file = try_option!(selected_path.file_name().map(|name| name.to_str()).flatten(), "Could not read filename for latest file");
 
         // Relative path to restore (if docker is used)
         let contextual_restore_path = self.get_save_path()?;

@@ -462,7 +462,7 @@ If you want to reset the repository entirely remove the module data directory an
 }
 ```
 
-#### duplicati (over sftp)
+#### duplicati (over sftp) [DEPRECATED]
 Send a backup to a remote destination using [duplicati](https://www.duplicati.com/) over sftp.
 Only really makes sense without creating a local backup before.
 

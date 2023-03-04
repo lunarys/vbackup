@@ -6,6 +6,10 @@ fn get_user_input_line() -> Result<String,String> {
     let mut input = String::new();
     let result = io::stdin().read_line(&mut input);
 
+    // input is confirmed with enter and that is appended to the input string... remove it
+    let len_without_newline = input.trim_end().len();
+    input.truncate(len_without_newline);
+
     return if let Err(err) = result {
         Err(format!("Could not read user input: {}", err))
     } else {

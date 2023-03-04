@@ -44,7 +44,8 @@ pub fn main(args: Arguments, paths: Rc<Paths>) -> Result<(),String> {
             debug!("Setting up sync module...");
 
             let module_paths = ModulePaths::for_sync_module(&paths, "sync", &config);
-            let module = SyncModule::new(sync_config.sync_type.as_str(), name, &sync_config.config, module_paths, &args)?;
+            let mut module = SyncModule::new(sync_config.sync_type.as_str(), name, &sync_config.config, module_paths, &args)?;
+            module.init()?;
 
             debug!("Setting up controller...");
 
@@ -78,8 +79,10 @@ pub fn main(args: Arguments, paths: Rc<Paths>) -> Result<(),String> {
             info!("Starting sync restore...");
 
             let restore_result = module.restore();
-
             log_error!(&restore_result);
+
+            let clear_result = module.clear();
+            log_error!(&clear_result);
 
             // controller should be terminated regardless of sync restore result
             let result = if let Some(mut controller) = controller {
@@ -130,13 +133,17 @@ pub fn main(args: Arguments, paths: Rc<Paths>) -> Result<(),String> {
             info!("Not running backup restore.");
         } else {
             let module_paths = ModulePaths::for_backup_module(&paths, "backup", &config);
-            let module = BackupModule::new(backup_config.backup_type.as_str(), name, &backup_config.config, module_paths, &args)?;
+            let mut module = BackupModule::new(backup_config.backup_type.as_str(), name, &backup_config.config, module_paths, &args)?;
+            module.init()?;
 
             info!("Starting backup restore...");
 
             let restore_result = module.restore();
+            let clear_result = module.clear();
 
+            log_error!(clear_result);
             try_result!(restore_result, "Backup restore failed...");
+
             info!("Backup restore successful");
         }
     } else {

@@ -57,6 +57,7 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
     reporter.report_operation(OperationStatus::START(args.operation.clone()));
 
     let result = if args.operation == "restore" {
+        args.is_restore = true;
         restore::main(args, paths)
     } else {
         let (do_backup, do_sync) = match args.operation.as_str() {

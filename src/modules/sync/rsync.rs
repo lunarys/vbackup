@@ -16,7 +16,6 @@ pub struct Rsync {
     ssh_config: SshConfig,
     module_paths: ModulePaths,
     sync_paths: DockerPaths,
-    restore_paths: DockerPaths,
     dry_run: bool,
     no_docker: bool,
     verbose: bool,
@@ -80,7 +79,7 @@ impl Sync for Rsync {
     const MODULE_NAME: &'static str = "rsync-ssh";
 
     fn new(name: &str, config_json: &Value, module_paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
-        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
+        let mut config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
 
         let remote_path = format!("{}@{}:{}",
@@ -99,45 +98,40 @@ impl Sync for Rsync {
             ""
         };
 
-        let (sync_paths, restore_paths) = if args.no_docker {
+        // reverse the direction in case of a restore
+        config.to_remote ^= args.is_restore; // exclusive or assignment
+
+        let sync_paths= if args.no_docker {
             if let SourcePath::Single(source_path) = module_paths.source.clone() {
-                let to_remote = DockerPaths {
-                    volume: None,
-                    from: source_path.clone(),
-                    to: remote_path.clone(),
-                };
-
-                let from_remote = DockerPaths {
-                    volume: None,
-                    from: format!("{}{}{}", remote_path, separator, config.dirname),
-                    to: source_path,
-                };
-
                 if config.to_remote {
-                    (to_remote, from_remote)
+                    DockerPaths {
+                        volume: None,
+                        from: source_path,
+                        to: remote_path,
+                    }
                 } else {
-                    (from_remote, to_remote)
+                    DockerPaths {
+                        volume: None,
+                        from: format!("{}{}{}", remote_path, separator, config.dirname),
+                        to: source_path,
+                    }
                 }
             } else {
                 return Err(String::from("Multiple source paths are not supported in rsync module without docker"));
             }
         } else {
-            let to_remote = DockerPaths {
-                volume: Some(module_paths.source.clone()),
-                from: format!("/{}", config.dirname),
-                to: remote_path.clone()
-            };
-
-            let from_remote = DockerPaths {
-                volume: Some(module_paths.source.clone()),
-                from: format!("{}{}{}", remote_path, separator, config.dirname),
-                to: String::from("/")
-            };
-
             if config.to_remote {
-                (to_remote, from_remote)
+                DockerPaths {
+                    volume: Some(module_paths.source.clone()),
+                    from: format!("/{}", config.dirname),
+                    to: remote_path
+                }
             } else {
-                (from_remote, to_remote)
+                DockerPaths {
+                    volume: Some(module_paths.source.clone()),
+                    from: format!("{}{}{}", remote_path, separator, config.dirname),
+                    to: String::from("/")
+                }
             }
         };
 
@@ -147,7 +141,6 @@ impl Sync for Rsync {
             ssh_config,
             module_paths,
             sync_paths,
-            restore_paths,
             dry_run: args.dry_run,
             no_docker: args.no_docker,
             verbose: args.verbose,
@@ -199,8 +192,8 @@ impl Sync for Rsync {
     fn restore(&self) -> Result<(), String> {
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("{}", &self.restore_paths.from))
-            .arg_string(format!("{}", &self.restore_paths.to));
+        command.arg_string(format!("{}", &self.sync_paths.from))
+            .arg_string(format!("{}", &self.sync_paths.to));
 
         command.run_configuration(self.print_command, self.dry_run)?;
 

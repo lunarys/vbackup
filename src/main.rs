@@ -36,7 +36,8 @@ pub struct Arguments {
     pub base_config: String,
     pub no_docker: bool,
     pub no_reporting: bool,
-    pub override_disabled: bool
+    pub override_disabled: bool,
+    pub is_restore: bool
 }
 
 fn main() {
@@ -51,7 +52,8 @@ fn main() {
         base_config: String::from("/etc/vbackup/config.json"),
         no_docker: false,
         no_reporting: false,
-        override_disabled: false
+        override_disabled: false,
+        is_restore: false
     };
 
     {

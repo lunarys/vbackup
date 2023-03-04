@@ -63,12 +63,18 @@ pub struct Borg {
     no_docker: bool,
     print_command: bool,
     requires_init: bool,
-    verbose: bool
+    verbose: bool,
+    restore_to: Option<String>,
+    is_restore: bool
 }
 
 impl Borg {
     pub fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments, sync_config: Option<BorgSyncConfig>) -> Result<Box<Self>, String> {
         let config = json::from_value::<BorgConfig>(config_json.clone())?; // TODO: - clone
+
+        if args.no_docker && args.is_restore && args.restore_to.is_some() {
+            return Err(String::from("The restore-to option is not supported for borg without docker"));
+        }
 
         return Ok(Box::new(Self {
             config,
@@ -78,6 +84,8 @@ impl Borg {
             verbose: args.verbose,
             no_docker: args.no_docker,
             print_command: args.verbose || args.debug,
+            restore_to: args.restore_to.clone(),
+            is_restore: args.is_restore,
             requires_init: false // initial value overwritten in init step
         }));
     }
@@ -398,13 +406,22 @@ impl Borg {
                 options.push(volume_mount_arg.as_str());
             }
 
+            let mut source_overwrite = None;
+            if self.is_restore {
+                if let Some(restore_to) = self.restore_to.as_ref() {
+                    source_overwrite.replace(SourcePath::Single(restore_to.clone()));
+                }
+            }
+
+            let source_mount =  source_overwrite.as_ref().unwrap_or(self.paths.source.borrow());
+
             command = CommandWrapper::new_docker(
                 "borg-vbackup-tmp",
                 "vbackup-borg",
                 Some("borg"),
                 Some(vec![operation]),
                 &self.paths,
-                (self.paths.source.borrow(), "/volume"),
+                (source_mount, "/volume"),
                 Some(options)
             );
 

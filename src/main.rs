@@ -37,7 +37,8 @@ pub struct Arguments {
     pub no_docker: bool,
     pub no_reporting: bool,
     pub override_disabled: bool,
-    pub is_restore: bool
+    pub is_restore: bool,
+    pub restore_to: Option<String>
 }
 
 fn main() {
@@ -53,7 +54,8 @@ fn main() {
         no_docker: false,
         no_reporting: false,
         override_disabled: false,
-        is_restore: false
+        is_restore: false,
+        restore_to: None
     };
 
     {
@@ -82,6 +84,8 @@ fn main() {
             .add_option(&["--no-reporting"], StoreTrue, "Disable reporting for this run");
         parser.refer(&mut args.override_disabled)
             .add_option(&["--override-disabled", "--run-disabled"], StoreTrue, "Ignore the disabled status on configurations");
+        parser.refer(&mut args.restore_to)
+            .add_option(&["--restore-to"], StoreOption, "Restore only: Restore to the given directory");
         parser.parse_args_or_exit();
     }
 

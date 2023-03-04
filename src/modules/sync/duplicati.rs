@@ -61,6 +61,12 @@ impl Sync for Duplicati {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: Remove clone
         let auth = auth_data::resolve::<Authentication>(&config.auth_reference, &config.auth, paths.base_paths.as_ref())?;
 
+        warn!("Duplicati sync is deprecated! Better use borg.");
+
+        if args.is_restore && args.restore_to.is_some() {
+            return Err(String::from("The restore-to option is not supported for duplicati"));
+        }
+
         return Ok(Box::new(Self {
             name: String::from(name),
             config,

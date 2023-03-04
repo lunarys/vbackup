@@ -23,7 +23,9 @@ pub struct Tar7Zip {
     paths: ModulePaths,
     dry_run: bool,
     no_docker: bool,
-    print_command: bool
+    print_command: bool,
+    is_restore: bool,
+    restore_to: Option<String>
 }
 
 #[derive(Deserialize)]
@@ -47,7 +49,9 @@ impl Backup for Tar7Zip {
             paths,
             dry_run: args.dry_run,
             no_docker: args.no_docker,
-            print_command: args.debug || args.verbose
+            print_command: args.debug || args.verbose,
+            is_restore: args.is_restore,
+            restore_to: args.restore_to.clone()
         };
 
         return Ok(Box::new(module));
@@ -220,9 +224,19 @@ impl Tar7Zip {
             cmd
         } else {
             let mut cmd = CommandWrapper::new("docker");
+
+            let mut source_overwrite = None;
+            if self.is_restore {
+                if let Some(restore_to) = self.restore_to.as_ref() {
+                    source_overwrite.replace(SourcePath::Single(restore_to.clone()));
+                }
+            }
+
+            let source_mount = source_overwrite.as_ref().unwrap_or(self.paths.source.borrow());
+
             cmd.arg_str("run")
                 .arg_str("--rm")
-                .add_docker_volume_mapping(self.paths.source.borrow(), "volume")
+                .add_docker_volume_mapping(source_mount, "volume")
                 .arg_string(format!("--volume={}:/savedir", mount_path))
                 .arg_str("--env=ENCRYPTION_KEY")
                 .arg_str("--name=vbackup-tmp")
@@ -235,7 +249,9 @@ impl Tar7Zip {
 
     fn get_save_path(&self) -> Result<&str, String> {
         return if self.no_docker {
-            if let SourcePath::Single(path) = &self.paths.source {
+            if self.is_restore && self.restore_to.is_some() {
+                Ok(self.restore_to.as_ref().unwrap())
+            } else if let SourcePath::Single(path) = &self.paths.source {
                 Ok(path.as_str())
             } else {
                 Err(String::from("Multiple source paths are not supported in tar7zip module without docker"))

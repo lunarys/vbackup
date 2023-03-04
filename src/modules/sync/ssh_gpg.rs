@@ -46,6 +46,10 @@ impl Sync for SshGpg {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths.as_ref())?;
 
+        if args.is_restore && args.restore_to.is_some() {
+            return Err(format!("The restore-to option is currently not supported for {}", SshGpg::MODULE_NAME));
+        }
+
         let local_path = if let SourcePath::Single(path) = paths.source.borrow() {
             path.clone()
         } else {

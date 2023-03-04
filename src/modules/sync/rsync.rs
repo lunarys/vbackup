@@ -19,6 +19,7 @@ pub struct Rsync {
     dry_run: bool,
     no_docker: bool,
     verbose: bool,
+    args: Arguments,
     print_command: bool
 }
 
@@ -82,6 +83,10 @@ impl Sync for Rsync {
         let mut config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
 
+        if args.no_docker && args.is_restore && args.restore_to.is_some() {
+            return Err(format!("The restore-to option is not supported for {} without docker", Rsync::MODULE_NAME));
+        }
+
         let remote_path = format!("{}@{}:{}",
                                   ssh_config.user,
                                   ssh_config.hostname,
@@ -144,6 +149,7 @@ impl Sync for Rsync {
             dry_run: args.dry_run,
             no_docker: args.no_docker,
             verbose: args.verbose,
+            args: args.clone(),
             print_command: args.debug || args.verbose
         }));
     }
@@ -220,13 +226,22 @@ impl Rsync {
                 "vbackup-rsync"
             };
 
+            let mut source_overwrite = None;
+            if self.args.is_restore {
+                if let Some(restore_to) = self.args.restore_to.as_ref() {
+                    source_overwrite.replace(SourcePath::Single(restore_to.clone()));
+                }
+            }
+
+            let source_mount = source_overwrite.as_ref().unwrap_or(docker_paths);
+
             CommandWrapper::new_docker(
                 "rsync-vbackup-tmp",
                 image_name,
                 Some(self.config.local_rsync.as_str()),
                 None,
                 &self.module_paths,
-                (docker_paths, &self.config.dirname),
+                (source_mount, &self.config.dirname),
                 Some(vec![
                     "--env=SSHPASS"
                 ])

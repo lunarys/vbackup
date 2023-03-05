@@ -22,8 +22,7 @@ pub struct Tar7Zip {
     name: String,
     config: Configuration,
     paths: ModulePaths,
-    args: Rc<Arguments>,
-    print_command: bool,
+    args: Rc<Arguments>
 }
 
 #[derive(Deserialize)]
@@ -45,8 +44,7 @@ impl Backup for Tar7Zip {
             name: String::from(name),
             config,
             paths,
-            args: args.clone(),
-            print_command: args.debug || args.verbose
+            args: args.clone()
         };
 
         return Ok(Box::new(module));
@@ -106,7 +104,7 @@ impl Backup for Tar7Zip {
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file
-        cmd.run_configuration(self.print_command, self.args.dry_run)?;
+        cmd.run_with_args(self.args.as_ref())?;
 
         // Create directory for backups
         file::create_dir_if_missing(self.paths.destination.as_str(), true)?;
@@ -202,7 +200,7 @@ impl Backup for Tar7Zip {
         cmd.arg_string(command_actual);
 
         info!("Starting restore of '{}'...", chosen_file);
-        cmd.run_configuration(self.print_command, self.args.dry_run)?;
+        cmd.run_with_args(self.args.as_ref())?;
         info!("Restore done.");
 
         Ok(())

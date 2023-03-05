@@ -38,7 +38,10 @@ pub struct Arguments {
     pub no_reporting: bool,
     pub override_disabled: bool,
     pub is_restore: bool,
-    pub restore_to: Option<String>
+    pub restore_to: Option<String>,
+    pub show_command: bool,
+    pub show_command_output: bool,
+    pub hide_command: bool
 }
 
 fn main() {
@@ -55,7 +58,10 @@ fn main() {
         no_reporting: false,
         override_disabled: false,
         is_restore: false,
-        restore_to: None
+        restore_to: None,
+        show_command: false,
+        show_command_output: false,
+        hide_command: false
     };
 
     {
@@ -86,6 +92,12 @@ fn main() {
             .add_option(&["--override-disabled", "--run-disabled"], StoreTrue, "Ignore the disabled status on configurations");
         parser.refer(&mut args.restore_to)
             .add_option(&["--restore-to"], StoreOption, "Restore only: Restore to the given directory");
+        parser.refer(&mut args.show_command)
+            .add_option(&["--show-command", "--print-command"], StoreTrue, "Print the commands that are executed. Default for debug and verbose log level");
+        parser.refer(&mut args.show_command_output)
+            .add_option(&["-o", "--show-command-output"], StoreTrue, "Do not print command output when printing executed commands");
+        parser.refer(&mut args.hide_command)
+            .add_option(&["--hide-command"], StoreTrue, "Disable default command output for verbose or debug logging");
         parser.parse_args_or_exit();
     }
 
@@ -98,6 +110,12 @@ fn main() {
     } else {
         LevelFilter::Info
     };
+
+    // set defaults for command printing
+    if !args.hide_command {
+        args.show_command_output |= args.verbose | args.debug;
+    }
+    args.show_command |= args.show_command_output;
 
     // TODO: Always prints timestamps in UTC
     Builder::new()

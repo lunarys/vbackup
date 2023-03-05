@@ -17,8 +17,7 @@ pub struct Rsync {
     ssh_config: SshConfig,
     module_paths: ModulePaths,
     sync_paths: DockerPaths,
-    args: Rc<Arguments>,
-    print_command: bool
+    args: Rc<Arguments>
 }
 
 struct DockerPaths {
@@ -144,8 +143,7 @@ impl Sync for Rsync {
             ssh_config,
             module_paths,
             sync_paths,
-            args: args.clone(),
-            print_command: args.debug || args.verbose
+            args: args.clone()
         }));
     }
 
@@ -185,9 +183,7 @@ impl Sync for Rsync {
         command.arg_string(format!("{}", &self.sync_paths.from))
             .arg_string(format!("{}", &self.sync_paths.to));
 
-        command.run_configuration(self.print_command, self.args.dry_run)?;
-
-        return Ok(());
+        return command.run_with_args(self.args.as_ref());
     }
 
     fn restore(&self) -> Result<(), String> {
@@ -196,9 +192,7 @@ impl Sync for Rsync {
         command.arg_string(format!("{}", &self.sync_paths.from))
             .arg_string(format!("{}", &self.sync_paths.to));
 
-        command.run_configuration(self.print_command, self.args.dry_run)?;
-
-        return Ok(());
+        return command.run_with_args(self.args.as_ref());
     }
 
     fn clear(&mut self) -> Result<(), String> {

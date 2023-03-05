@@ -36,7 +36,6 @@ pub struct SshGpg {
     file_extension: String,
     passphrase_file: String,
     args: Rc<Arguments>,
-    print_command: bool,
     tmp_file: String
 }
 
@@ -69,8 +68,7 @@ impl Sync for SshGpg {
             file_extension: String::from(".gpg"),
             passphrase_file: format!("{}/passphrase.txt", paths.module_data_dir),
             module_paths: paths,
-            args: args.clone(),
-            print_command: args.debug || args.verbose
+            args: args.clone()
         }));
     }
 
@@ -183,7 +181,7 @@ impl Sync for SshGpg {
             }
         }
 
-        return cmd.wrap().run_configuration(self.print_command, self.args.dry_run);
+        return cmd.wrap().run_with_args(self.args.as_ref());
     }
 
     fn restore(&self) -> Result<(), String> {
@@ -249,7 +247,7 @@ impl Sync for SshGpg {
             trace!("Successfully set access permissions");
         }
 
-        return cmd.wrap().run_configuration(self.print_command, self.args.dry_run);
+        return cmd.wrap().run_with_args(self.args.as_ref());
     }
 
     fn clear(&mut self) -> Result<(), String> {

@@ -5,8 +5,6 @@ use crate::util::io::{file,json,auth_data};
 use crate::util::objects::paths::{ModulePaths,SourcePath};
 use crate::Arguments;
 
-use crate::{dry_run};
-
 use serde_json::Value;
 use serde::{Deserialize};
 
@@ -15,9 +13,7 @@ pub struct Duplicati {
     config: Configuration,
     auth: Authentication,
     paths: ModulePaths,
-    dry_run: bool,
-    no_docker: bool,
-    print_command: bool
+    args: Rc<Arguments>
 }
 
 #[derive(Deserialize)]
@@ -73,9 +69,7 @@ impl Sync for Duplicati {
             config,
             auth,
             paths,
-            dry_run: args.dry_run,
-            no_docker: args.no_docker,
-            print_command: args.debug || args.verbose
+            args: args.clone()
         }));
     }
 
@@ -87,12 +81,12 @@ impl Sync for Duplicati {
         debug!("Starting duplicati sync for {}", self.name);
 
         // Base command
-        let mut command = get_base_cmd(self.no_docker, &self.paths);
+        let mut command = get_base_cmd(self.args.no_docker, &self.paths);
 
         // Add source and destination
         command.arg_str("backup");
         command.arg_string(format!("{}", get_connection_uri(&self.config, &self.auth)));
-        if self.no_docker {
+        if self.args.no_docker {
             if let SourcePath::Single(path) = &self.paths.source {
                 command.arg_string(path.clone());
             } else {
@@ -103,7 +97,7 @@ impl Sync for Duplicati {
         }
 
         // Add options that are always required
-        add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.no_docker)?;
+        add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.args.no_docker)?;
 
         // Add retention options
         if self.config.smart_retention {
@@ -116,29 +110,19 @@ impl Sync for Duplicati {
         command.arg_str("--compression-module=zip");
         command.arg_str("--encryption-module=aes");
 
-        if self.dry_run {
-            dry_run!(command.to_string());
-        } else {
-            let status = if self.print_command {
-                println!("-> {}", command.to_string());
-                command.run_get_status()?
-            } else {
-                command.run_get_status_without_output()?
-            };
-
-            if let Some(code) = status.code() {
-                trace!("Exit code is '{}'", code);
-                if code == 50 {
-                    let msg = format!("Backup uploaded some files, but did not finish");
-                    error!("{}", msg);
-                    return Err(msg);
-                } else if code == 2 {
-                    warn!("Duplicati exited with warnings");
-                } else if code != 0 && code != 1 {
-                    let msg = format!("Exit code indicates failure of duplicati backup");
-                    error!("{}", msg);
-                    return Err(msg);
-                }
+        let status = command.run_get_status_with_args(self.args.as_ref())?;
+        if let Some(code) = status.code() {
+            trace!("Exit code is '{}'", code);
+            if code == 50 {
+                let msg = format!("Backup uploaded some files, but did not finish");
+                error!("{}", msg);
+                return Err(msg);
+            } else if code == 2 {
+                warn!("Duplicati exited with warnings");
+            } else if code != 0 && code != 1 {
+                let msg = format!("Exit code indicates failure of duplicati backup");
+                error!("{}", msg);
+                return Err(msg);
             }
         }
 
@@ -151,28 +135,28 @@ impl Sync for Duplicati {
 
         // Restore / repair the local database
         {
-            let mut command = get_base_cmd(self.no_docker, &self.paths);
+            let mut command = get_base_cmd(self.args.no_docker, &self.paths);
 
             command.arg_str("repair");
             command.arg_string(format!("{}", get_connection_uri(&self.config, &self.auth)));
 
-            add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.no_docker)?;
+            add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.args.no_docker)?;
 
-            command.run_configuration(self.print_command, self.dry_run)?;
+            command.run_with_args(self.args.as_ref())?;
         }
 
         // Restore the data
         {
-            let mut command = get_base_cmd(self.no_docker, &self.paths);
+            let mut command = get_base_cmd(self.args.no_docker, &self.paths);
 
             command.arg_str("restore");
             command.arg_string(format!("{}", get_connection_uri(&self.config, &self.auth)));
             command.arg_str("*");
 
-            add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.no_docker)?;
+            add_default_options(&mut command, &self.name, &self.config, &self.auth, &self.paths, self.args.no_docker)?;
 
             command.arg_str("--restore-permission=true");
-            if self.no_docker {
+            if self.args.no_docker {
                 if let SourcePath::Single(path) = &self.paths.source {
                     command.arg_string(format!("--restore-path={}", path));
                 } else {
@@ -182,7 +166,7 @@ impl Sync for Duplicati {
                 command.arg_str("--restore-path=/volume");
             }
 
-            command.run_configuration(self.print_command, self.dry_run)?;
+            command.run_with_args(self.args.as_ref())?;
         }
 
         debug!("Duplicati restore for {} is done", self.name);

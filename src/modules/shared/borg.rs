@@ -61,8 +61,7 @@ pub struct Borg {
     sync_config: Option<BorgSyncConfig>,
     paths: ModulePaths,
     args: Rc<Arguments>,
-    requires_init: bool,
-    print_command: bool
+    requires_init: bool
 }
 
 impl Borg {
@@ -78,7 +77,6 @@ impl Borg {
             sync_config,
             paths,
             args: args.clone(),
-            print_command: args.verbose || args.debug,
             requires_init: false // initial value overwritten in init step
         }));
     }
@@ -148,7 +146,7 @@ impl Borg {
         command.arg_str("--make-parent-dirs");
         command.arg_string(self.get_repo_path());
 
-        command.run_configuration(self.print_command, self.args.dry_run)
+        return command.run_with_args(self.args.as_ref());
     }
 
     fn run_prune(&self) -> Result<(), String> {
@@ -209,7 +207,7 @@ impl Borg {
 
         command.arg_string(self.get_repo_path());
 
-        command.run_configuration(self.print_command, self.args.dry_run)
+        return command.run_with_args(self.args.as_ref());
     }
 
     pub fn run_save(&self) -> Result<(), String> {
@@ -289,7 +287,7 @@ impl Borg {
             }
         }
 
-        command.run_configuration(self.print_command, self.args.dry_run)?;
+        command.run_with_args(self.args.as_ref())?;
 
         if !self.config.disable_prune {
             self.run_prune()?;
@@ -329,7 +327,7 @@ impl Borg {
         command.arg_string(format!("{}::{}", self.get_repo_path(), selected_archive));
 
         info!("Starting restore of '{}'...", selected_archive);
-        command.run_configuration(self.print_command, self.args.dry_run)?;
+        command.run_with_args(self.args.as_ref())?;
         info!("Restore done.");
 
         Ok(())

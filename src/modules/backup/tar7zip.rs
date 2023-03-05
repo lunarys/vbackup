@@ -16,7 +16,7 @@ use std::borrow::BorrowMut;
 use std::ops::Sub;
 use std::path::PathBuf;
 use std::rc::Rc;
-use crate::util::io::user::{ask_user_option_list};
+use crate::util::io::user::{ask_user_abort, ask_user_option_list};
 
 pub struct Tar7Zip {
     name: String,
@@ -178,6 +178,8 @@ impl Backup for Tar7Zip {
         )?;
 
         let chosen_file = try_option!(selected_path.file_name().map(|name| name.to_str()).flatten(), "Could not read filename for latest file");
+
+        ask_user_abort(Some(&format!("Continue to restore '{}'?", chosen_file)))?;
 
         // Relative path to restore (if docker is used)
         let contextual_restore_path = self.get_save_path()?;

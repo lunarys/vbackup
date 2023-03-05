@@ -12,6 +12,7 @@ use serde::{Deserialize};
 use std::borrow::Borrow;
 use std::path::Path;
 use std::rc::Rc;
+use crate::util::io::user::ask_user_abort;
 
 #[derive(Deserialize)]
 struct Configuration {
@@ -188,6 +189,8 @@ impl Sync for SshGpg {
     fn restore(&self) -> Result<(), String> {
 
         // TODO: untested
+        warn!("ssh-gpg restore is untested!");
+        ask_user_abort(None)?;
 
         // copy missing local from remote and keep everything else for now
         //  ssh user@server "cat test.txt.gpg" | gpg -d --passphrase-file /tmp/password.txt --batch --output file.txt

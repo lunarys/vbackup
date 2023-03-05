@@ -109,3 +109,12 @@ pub fn ask_user_option_list<'a,T>(
 fn apply_mapper<'a,T>(fun: &'a dyn Fn(&T) -> &str, input: &'a T) -> &'a str {
     fun(input)
 }
+
+pub fn ask_user_abort(text: Option<&str>) -> Result<(),String> {
+    let confirm = ask_user_boolean(text.unwrap_or("Continue?"), true)?;
+    return if !confirm {
+        Err(String::from("Aborted by user"))
+    } else {
+        Ok(())
+    }
+}

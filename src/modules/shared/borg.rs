@@ -10,7 +10,7 @@ use std::rc::Rc;
 use crate::modules::sync::borg::BorgSyncConfig;
 use crate::util::docker;
 use crate::modules::shared::ssh::{write_known_hosts, write_identity_file};
-use crate::util::io::user::{ask_user_option_list_index};
+use crate::util::io::user::{ask_user_abort, ask_user_option_list_index};
 
 #[derive(Deserialize)]
 struct BorgKeepConfig {
@@ -309,6 +309,9 @@ impl Borg {
         // TODO: borg writes into the current directory ("."), so better make sure to use "cd /"
 
         let selected_archive = self.user_select_archive()?;
+
+        ask_user_abort(Some(&format!("Continue to restore '{}'?", selected_archive)))?;
+
         let mut command = self.get_base_cmd("extract")?;
 
         if self.args.dry_run {

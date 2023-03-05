@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::modules::traits::{Controller, Bundleable};
 use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
@@ -15,7 +16,7 @@ pub enum ControllerModule {
 }
 
 impl ControllerModule {
-    pub fn new(controller_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
+    pub fn new(controller_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Self,String> {
         let module: Box<dyn ControllerWrapper> = match controller_type.to_lowercase().as_str() {
             mqtt::MqttController::MODULE_NAME => mqtt::MqttController::new(name, config_json, paths, args)?,
             ping::Ping::MODULE_NAME => ping::Ping::new(name, config_json, paths, args)?,

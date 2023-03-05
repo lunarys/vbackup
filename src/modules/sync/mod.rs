@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::modules::traits::Sync;
 use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
@@ -14,7 +15,7 @@ pub struct SyncModule {
 }
 
 impl SyncModule {
-    pub fn new(sync_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
+    pub fn new(sync_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Self,String> {
         let module: Box<dyn SyncWrapper> = match sync_type.to_lowercase().as_str() {
             duplicati::Duplicati::MODULE_NAME => {
                 duplicati::Duplicati::new(name, config_json, paths, args)?

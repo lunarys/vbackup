@@ -35,7 +35,7 @@ pub fn check_sync_after_backup(timing: &ExecutionTiming, savedata: &SaveData, ha
 }
 
 impl TimeframeChecker {
-    pub fn new(paths: &Paths, args: &Arguments) -> Result<Self, String> {
+    pub fn new(paths: &Paths, args: &Rc<Arguments>) -> Result<Self, String> {
         let mut timeframes = json::from_file::<TimeFrames>(Path::new(&paths.timeframes_file))?;
         let timeframes_rc = timeframes
             .drain()

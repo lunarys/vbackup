@@ -10,7 +10,7 @@ use crate::util::io::user::ask_user_boolean;
 use crate::util::objects::configuration::Configuration;
 use crate::util::objects::paths::{ModulePaths, Paths};
 
-pub fn main(args: Arguments, paths: Rc<Paths>) -> Result<(),String> {
+pub fn main(args: Rc<Arguments>, paths: Rc<Paths>) -> Result<(),String> {
     let (name, file_path) = if let Some(name) = args.name.as_ref() {
         (name, format!("{}/volumes/{}.json", &paths.config_dir, args.name.as_ref().unwrap()))
     } else {

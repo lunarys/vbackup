@@ -6,6 +6,7 @@ use crate::Arguments;
 use crate::util::command::CommandWrapper;
 use std::borrow::Borrow;
 use std::ops::Sub;
+use std::rc::Rc;
 use crate::modules::sync::borg::BorgSyncConfig;
 use crate::util::docker;
 use crate::modules::shared::ssh::{write_known_hosts, write_identity_file};
@@ -69,7 +70,7 @@ pub struct Borg {
 }
 
 impl Borg {
-    pub fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments, sync_config: Option<BorgSyncConfig>) -> Result<Box<Self>, String> {
+    pub fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>, sync_config: Option<BorgSyncConfig>) -> Result<Box<Self>, String> {
         let config = json::from_value::<BorgConfig>(config_json.clone())?; // TODO: - clone
 
         if args.no_docker && args.is_restore && args.restore_to.is_some() {

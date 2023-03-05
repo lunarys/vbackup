@@ -52,7 +52,7 @@ fn default_timeout_controller() -> u64 { 10 }
 impl Controller for MqttController {
     const MODULE_NAME: &'static str = "mqtt";
 
-    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         return Bundleable::new_bundle(name, config_json, &paths.base_paths, args);
     }
 
@@ -146,7 +146,7 @@ impl Controller for MqttController {
 }
 
 impl Bundleable for MqttController {
-    fn new_bundle(name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new_bundle(name: &str, config_json: &Value, paths: &Rc<Paths>, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let mqtt_config = auth_data::resolve::<MqttConfiguration>(&config.auth_reference, &config.auth, paths)?;
 

@@ -27,7 +27,7 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
 
     // List does not need anything else
     if args.operation == "list" {
-        return list(&args, &paths);
+        return list(&Rc::new(args), &paths);
     }
 
     // Set up reporter (if existing)
@@ -58,7 +58,7 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
 
     let result = if args.operation == "restore" {
         args.is_restore = true;
-        restore::main(args, paths)
+        restore::main(Rc::new(args), paths)
     } else {
         let (do_backup, do_sync) = match args.operation.as_str() {
             "run" => Ok((true, true)),
@@ -68,6 +68,8 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
                 Err(format!("Unknown operation: '{}'", unknown))
             }
         }?;
+
+        let args = Rc::new(args);
 
         let config_list = get_config_list(&args, paths.as_ref())?;
         let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &mut reporter, do_backup, do_sync)?;
@@ -81,7 +83,7 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
     return result;
 }
 
-pub fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
+pub fn get_config_list(args: &Rc<Arguments>, paths: &Paths) -> Result<Vec<Configuration>, String> {
     // Get directory containing configurations
     let volume_config_path = format!("{}/volumes", &paths.config_dir);
 
@@ -112,7 +114,7 @@ pub fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configurat
     return Ok(configs);
 }
 
-pub fn list(args: &Arguments, paths: &Rc<Paths>) -> Result<(), String> {
+pub fn list(args: &Rc<Arguments>, paths: &Rc<Paths>) -> Result<(), String> {
 
     // Helper to output an additional check nicely formatted
     fn print_check(config: &Option<Value>) {

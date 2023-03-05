@@ -9,6 +9,7 @@ use crate::Arguments;
 use serde_json::Value;
 use serde::{Deserialize};
 use std::path::Path;
+use std::rc::Rc;
 
 pub struct Rsync {
     _name: String,
@@ -19,7 +20,7 @@ pub struct Rsync {
     dry_run: bool,
     no_docker: bool,
     verbose: bool,
-    args: Arguments,
+    args: Rc<Arguments>,
     print_command: bool
 }
 
@@ -79,7 +80,7 @@ fn default_rsync() -> String { String::from("rsync") }
 impl Sync for Rsync {
     const MODULE_NAME: &'static str = "rsync-ssh";
 
-    fn new(name: &str, config_json: &Value, module_paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(name: &str, config_json: &Value, module_paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let mut config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
 

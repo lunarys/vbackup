@@ -10,6 +10,7 @@ use crate::Arguments;
 use serde_json::Value;
 use serde::{Deserialize};
 use std::cmp::max;
+use std::rc::Rc;
 
 pub struct FileAge {
     paths: ModulePaths,
@@ -28,7 +29,7 @@ struct Configuration {
 impl Check for FileAge {
     const MODULE_NAME: &'static str = "file-age";
 
-    fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let config = json::from_value(config_json.clone())?; // TODO: - clone
 
         return Ok(Box::new(Self {

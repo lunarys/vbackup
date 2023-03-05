@@ -17,7 +17,7 @@ struct SyncControllerBundleBuilder {
     controller: ControllerBundle
 }
 
-pub fn load_controllers(mut configurations: Vec<ConfigurationUnit>, args: &Arguments, paths: &Rc<Paths>, reporter: &mut ReportingModule) -> Vec<ConfigurationUnit> {
+pub fn load_controllers(mut configurations: Vec<ConfigurationUnit>, args: &Rc<Arguments>, paths: &Rc<Paths>, reporter: &mut ReportingModule) -> Vec<ConfigurationUnit> {
     let mut done = vec![];
     let mut bundle_types: HashMap<String,Vec<SyncControllerBundleBuilder>> = HashMap::new();
 
@@ -74,7 +74,7 @@ pub fn load_controllers(mut configurations: Vec<ConfigurationUnit>, args: &Argum
     return done;
 }
 
-fn handle_controller_bundle(mut sync: SyncUnit, done: &mut Vec<ConfigurationUnit>, bundles: &mut HashMap<String,Vec<SyncControllerBundleBuilder>>, paths: &Rc<Paths>, args: &Arguments) -> Result<(),String> {
+fn handle_controller_bundle(mut sync: SyncUnit, done: &mut Vec<ConfigurationUnit>, bundles: &mut HashMap<String,Vec<SyncControllerBundleBuilder>>, paths: &Rc<Paths>, args: &Rc<Arguments>) -> Result<(),String> {
     if let Some(controller_config) = sync.sync_config.controller.clone() { // TODO: clone ?
         let controller_type_opt = try_option!(controller_config.get("type"), "Controller config contains no field 'type'");
         let controller_type = try_option!(controller_type_opt.as_str(), "Could not get controller type as string");

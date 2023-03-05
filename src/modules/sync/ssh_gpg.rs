@@ -11,6 +11,7 @@ use serde_json::Value;
 use serde::{Deserialize};
 use std::borrow::Borrow;
 use std::path::Path;
+use std::rc::Rc;
 
 #[derive(Deserialize)]
 struct Configuration {
@@ -42,7 +43,7 @@ pub struct SshGpg {
 impl Sync for SshGpg {
     const MODULE_NAME: &'static str = "ssh-gpg";
 
-    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths.as_ref())?;
 

@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::modules::traits::Check;
 use crate::util::objects::time::{ExecutionTiming};
 use crate::util::objects::paths::{ModulePaths};
@@ -18,7 +19,7 @@ pub struct CheckModule {
 }
 
 impl CheckModule {
-    pub fn new(check_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self,String> {
+    pub fn new(check_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Self,String> {
         let module: Box<dyn CheckWrapper> = match check_type.to_lowercase().as_str() {
             file_age::FileAge::MODULE_NAME => file_age::FileAge::new(name, config_json, paths, args)?,
             usetime::Usetime::MODULE_NAME => usetime::Usetime::new(name, config_json, paths, args)?,

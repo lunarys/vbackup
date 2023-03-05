@@ -15,7 +15,7 @@ pub struct ControllerBundle {
 }
 
 impl ControllerBundle {
-    pub fn new(controller_type: &str, name: &str, config: &Value, paths: &Rc<Paths>, args: &Arguments) -> Result<ControllerBundle,String> {
+    pub fn new(controller_type: &str, name: &str, config: &Value, paths: &Rc<Paths>, args: &Rc<Arguments>) -> Result<ControllerBundle,String> {
         let module: Box<dyn BundleableControllerWrapper> = match controller_type.to_lowercase().as_str() {
             MqttController::MODULE_NAME => {
                 MqttController::new_bundle(name, config, paths, args)?

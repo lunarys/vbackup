@@ -5,6 +5,7 @@ use crate::Arguments;
 use crate::try_result;
 
 use std::net::IpAddr;
+use std::rc::Rc;
 use serde_json::Value;
 use serde::Deserialize;
 use std::time::Duration;
@@ -30,7 +31,7 @@ fn default_timeout() -> u64 { 10 }
 impl Controller for Ping {
     const MODULE_NAME: &'static str = "ping";
 
-    fn new(_name: &str, config_json: &Value, _paths: ModulePaths, _args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(_name: &str, config_json: &Value, _paths: ModulePaths, _args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let config = json::from_value::<DeserializedConfig>(config_json.clone())?; // TODO: - clone
         let ips: Vec<std::net::IpAddr> = try_result!(lookup_host(config.address.as_str()), format!("DNS lookup for '{}' failed", config.address));
         if ips.is_empty() {

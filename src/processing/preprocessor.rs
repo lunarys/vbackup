@@ -82,7 +82,7 @@ pub struct PreprocessorResult {
 }
 
 pub fn preprocess(configurations: Vec<Configuration>,
-                  args: &Arguments,
+                  args: &Rc<Arguments>,
                   paths: &Rc<Paths>,
                   reporter: &mut ReportingModule,
                   do_backup: bool,
@@ -109,7 +109,7 @@ pub fn preprocess(configurations: Vec<Configuration>,
     });
 }
 
-fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut ReportingModule, args: &Arguments) -> Vec<ConfigurationSplit> {
+fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut ReportingModule, args: &Rc<Arguments>) -> Vec<ConfigurationSplit> {
     // step 1
     //  filter disabled
     //  move to split
@@ -267,7 +267,7 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
 }
 
 fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
-                           args: &Arguments,
+                           args: &Rc<Arguments>,
                            paths: &Rc<Paths>,
                            savedata_collection: &SaveDataCollection,
                            reporter: &mut ReportingModule) -> Result<Vec<ConfigurationUnitBuilder>,String> {
@@ -330,7 +330,7 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
 }
 
 fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
-               args: &Arguments,
+               args: &Rc<Arguments>,
                paths: &Rc<Paths>,
                reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 6
@@ -379,7 +379,7 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
         .collect();
 }
 
-fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
+fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Rc<Arguments>, reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 7
     if args.force {
         debug!("Skipping additional checks due to forced run");

@@ -11,11 +11,12 @@ use crate::modules::controller::ControllerModule;
 use crate::{log_error,try_result};
 
 use core::borrow::{BorrowMut, Borrow};
+use std::rc::Rc;
 use chrono::{DateTime, Local};
 use crate::util::objects::configuration::StrategyConfiguration;
 use crate::util::command::CommandWrapper;
 
-pub fn process_configurations(args: &Arguments,
+pub fn process_configurations(args: &Rc<Arguments>,
                               reporter: &mut ReportingModule,
                               configurations: Vec<ConfigurationUnit>,
                               mut savedata_collection: SaveDataCollection) -> Result<(),String> {
@@ -52,7 +53,7 @@ pub fn process_configurations(args: &Arguments,
 
 fn process_backup(config: &mut BackupUnit,
                   savedata_collection: &mut SaveDataCollection,
-                  args: &Arguments,
+                  args: &Rc<Arguments>,
                   reporter: &mut ReportingModule) -> Result<(), String> {
     let savedata = savedata_collection
         .get_mut(config.config.name.as_str())
@@ -79,7 +80,7 @@ fn process_backup(config: &mut BackupUnit,
 
 fn process_sync(config: &mut SyncUnit,
                 savedata_collection: &mut SaveDataCollection,
-                args: &Arguments,
+                args: &Rc<Arguments>,
                 reporter: &mut ReportingModule,
                 controller_override: Option<&mut ControllerModule>) -> Result<(), String> {
     let savedata = savedata_collection
@@ -118,7 +119,7 @@ fn process_sync(config: &mut SyncUnit,
 
 fn process_sync_controller_bundle(sync_controller_bundle: &mut SyncControllerBundle,
                                   savedata: &mut SaveDataCollection,
-                                  args: &Arguments,
+                                  args: &Rc<Arguments>,
                                   reporter: &mut ReportingModule) -> Result<(), String> {
 
     for configuration in &mut sync_controller_bundle.units {

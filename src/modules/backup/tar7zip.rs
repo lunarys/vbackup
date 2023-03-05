@@ -15,6 +15,7 @@ use core::borrow::{Borrow};
 use std::borrow::BorrowMut;
 use std::ops::Sub;
 use std::path::PathBuf;
+use std::rc::Rc;
 use crate::util::io::user::{ask_user_option_list};
 
 pub struct Tar7Zip {
@@ -41,7 +42,7 @@ fn default_7z_executable() -> String { String::from("/usr/lib/p7zip/7z") }
 impl Backup for Tar7Zip {
     const MODULE_NAME: &'static str = "tar7zip";
 
-    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let config = json::from_value(config_json.clone())?; // TODO: - clone
         let module = Self {
             name: String::from(name),

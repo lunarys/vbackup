@@ -10,8 +10,9 @@ use crate::{dry_run};
 
 use chrono::{Duration};
 use std::ops::Add;
+use std::rc::Rc;
 
-pub fn backup(args: &Arguments, unit: &mut BackupUnit, savedata: &mut SaveData) -> Result<bool,String> {
+pub fn backup(args: &Rc<Arguments>, unit: &mut BackupUnit, savedata: &mut SaveData) -> Result<bool,String> {
     // Get the backup module that should be used
     // TODO: clone
     let mut module = BackupModule::new(unit.backup_config.backup_type.as_str(), &unit.config.name, &unit.backup_config.config, unit.module_paths.clone(), args)?;

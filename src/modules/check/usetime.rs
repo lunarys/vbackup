@@ -15,7 +15,7 @@ const USETIME_PROPERTY: &str = "usetime";
 
 pub struct Usetime {
     config: Configuration,
-    dry_run: bool
+    args: Rc<Arguments>
 }
 
 struct BackupInfo {
@@ -51,7 +51,7 @@ impl Check for Usetime {
 
         return Ok(Box::new(Self {
             config,
-            dry_run: args.dry_run
+            args: args.clone()
         }));
     }
 
@@ -82,7 +82,7 @@ impl Check for Usetime {
 
         debug!("Resetting usetime for server to zero");
 
-        if self.dry_run {
+        if self.args.dry_run {
             dry_run!(format!("Writing usetime=0 to file '{}'", self.config.file));
             return Ok(());
         } else {

@@ -22,11 +22,8 @@ pub struct Tar7Zip {
     name: String,
     config: Configuration,
     paths: ModulePaths,
-    dry_run: bool,
-    no_docker: bool,
+    args: Rc<Arguments>,
     print_command: bool,
-    is_restore: bool,
-    restore_to: Option<String>
 }
 
 #[derive(Deserialize)]
@@ -48,11 +45,8 @@ impl Backup for Tar7Zip {
             name: String::from(name),
             config,
             paths,
-            dry_run: args.dry_run,
-            no_docker: args.no_docker,
-            print_command: args.debug || args.verbose,
-            is_restore: args.is_restore,
-            restore_to: args.restore_to.clone()
+            args: args.clone(),
+            print_command: args.debug || args.verbose
         };
 
         return Ok(Box::new(module));
@@ -60,7 +54,7 @@ impl Backup for Tar7Zip {
 
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image
-        if !self.no_docker {
+        if !self.args.no_docker {
             docker::build_image_if_missing(&self.paths.base_paths, "p7zip.Dockerfile", "vbackup-p7zip")?;
         }
 
@@ -78,7 +72,7 @@ impl Backup for Tar7Zip {
         // Path to the temporary backup file on the disk
         let tmp_backup_file_actual = format!("{}/{}", self.paths.module_data_dir, tmp_file_name);
         // Relative path to the temporary backup file (if docker is used)
-        let tmp_backup_file = if self.no_docker {
+        let tmp_backup_file = if self.args.no_docker {
             tmp_backup_file_actual.clone()
         } else {
             format!("/savedir/{}", tmp_file_name)
@@ -112,7 +106,7 @@ impl Backup for Tar7Zip {
         cmd.arg_string(command_actual);
 
         // Create a backup as temporary file
-        cmd.run_configuration(self.print_command, self.dry_run)?;
+        cmd.run_configuration(self.print_command, self.args.dry_run)?;
 
         // Create directory for backups
         file::create_dir_if_missing(self.paths.destination.as_str(), true)?;
@@ -125,14 +119,14 @@ impl Backup for Tar7Zip {
 
                 // TODO: (?) Change permission on persisted files (currently readable by group and other due to default)?
                 if from.is_none() {
-                    if !self.dry_run {
+                    if !self.args.dry_run {
                         file::move_file(tmp_backup_file_actual.as_str(), backup_file.as_str())?;
                     } else {
                         dry_run!(format!("Moving file '{}' to '{}'", &tmp_backup_file_actual, &backup_file));
                     }
                     from = Some(backup_file);
                 } else {
-                    if !self.dry_run {
+                    if !self.args.dry_run {
                         if copy(from.as_ref().unwrap(), backup_file).is_err() {
                             error!("Could not copy temporary backup to persistent file");
                             continue;
@@ -142,7 +136,7 @@ impl Backup for Tar7Zip {
                     }
                 }
 
-                if !self.dry_run {
+                if !self.args.dry_run {
                     if !savefile::prune(self.paths.destination.as_str(), &timing.time_frame_reference.frame, &timing.time_frame_reference.amount)? {
                         trace!("Amount of backups is below threshold, not removing anything");
                     }
@@ -187,7 +181,7 @@ impl Backup for Tar7Zip {
 
         // Relative path to restore (if docker is used)
         let contextual_restore_path = self.get_save_path()?;
-        let contextual_backup_path = if self.no_docker {
+        let contextual_backup_path = if self.args.no_docker {
             format!("{}/{}", self.paths.destination.as_str(), chosen_file)
         } else {
             format!("/savedir/{}", chosen_file)
@@ -206,7 +200,7 @@ impl Backup for Tar7Zip {
         cmd.arg_string(command_actual);
 
         info!("Starting restore of '{}'...", chosen_file);
-        cmd.run_configuration(self.print_command, self.dry_run)?;
+        cmd.run_configuration(self.print_command, self.args.dry_run)?;
         info!("Restore done.");
 
         Ok(())
@@ -219,7 +213,7 @@ impl Backup for Tar7Zip {
 
 impl Tar7Zip {
     fn get_base_cmd(&self, mount_path: &str) -> CommandWrapper {
-        return if self.no_docker {
+        return if self.args.no_docker {
             let mut cmd = CommandWrapper::new("sh");
             cmd.arg_str("-c");
             cmd
@@ -227,8 +221,8 @@ impl Tar7Zip {
             let mut cmd = CommandWrapper::new("docker");
 
             let mut source_overwrite = None;
-            if self.is_restore {
-                if let Some(restore_to) = self.restore_to.as_ref() {
+            if self.args.is_restore {
+                if let Some(restore_to) = self.args.restore_to.as_ref() {
                     source_overwrite.replace(SourcePath::Single(restore_to.clone()));
                 }
             }
@@ -249,9 +243,9 @@ impl Tar7Zip {
     }
 
     fn get_save_path(&self) -> Result<&str, String> {
-        return if self.no_docker {
-            if self.is_restore && self.restore_to.is_some() {
-                Ok(self.restore_to.as_ref().unwrap())
+        return if self.args.no_docker {
+            if self.args.is_restore && self.args.restore_to.is_some() {
+                Ok(self.args.restore_to.as_ref().unwrap())
             } else if let SourcePath::Single(path) = &self.paths.source {
                 Ok(path.as_str())
             } else {

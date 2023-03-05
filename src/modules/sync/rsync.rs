@@ -17,9 +17,6 @@ pub struct Rsync {
     ssh_config: SshConfig,
     module_paths: ModulePaths,
     sync_paths: DockerPaths,
-    dry_run: bool,
-    no_docker: bool,
-    verbose: bool,
     args: Rc<Arguments>,
     print_command: bool
 }
@@ -147,9 +144,6 @@ impl Sync for Rsync {
             ssh_config,
             module_paths,
             sync_paths,
-            dry_run: args.dry_run,
-            no_docker: args.no_docker,
-            verbose: args.verbose,
             args: args.clone(),
             print_command: args.debug || args.verbose
         }));
@@ -157,7 +151,7 @@ impl Sync for Rsync {
 
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image if missing
-        if !self.no_docker {
+        if !self.args.no_docker {
             if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
                 docker::build_image_if_missing(&self.module_paths.base_paths, "rsync-patched.Dockerfile", "vbackup-rsync-patched")?;
             } else {
@@ -167,8 +161,8 @@ impl Sync for Rsync {
 
         file::create_path_dir_if_missing(Path::new(&self.module_paths.module_data_dir), true)?;
 
-        write_known_hosts(&self.ssh_config, &self.module_paths, self.dry_run)?;
-        write_identity_file(&self.ssh_config, &self.module_paths, self.dry_run)?;
+        write_known_hosts(&self.ssh_config, &self.module_paths, self.args.dry_run)?;
+        write_identity_file(&self.ssh_config, &self.module_paths, self.args.dry_run)?;
 
         return Ok(());
     }
@@ -191,7 +185,7 @@ impl Sync for Rsync {
         command.arg_string(format!("{}", &self.sync_paths.from))
             .arg_string(format!("{}", &self.sync_paths.to));
 
-        command.run_configuration(self.print_command, self.dry_run)?;
+        command.run_configuration(self.print_command, self.args.dry_run)?;
 
         return Ok(());
     }
@@ -202,7 +196,7 @@ impl Sync for Rsync {
         command.arg_string(format!("{}", &self.sync_paths.from))
             .arg_string(format!("{}", &self.sync_paths.to));
 
-        command.run_configuration(self.print_command, self.dry_run)?;
+        command.run_configuration(self.print_command, self.args.dry_run)?;
 
         return Ok(());
     }
@@ -214,7 +208,7 @@ impl Sync for Rsync {
 
 impl Rsync {
     fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
-        if !self.dry_run {
+        if !self.args.dry_run {
             file::create_dir_if_missing(self.module_paths.module_data_dir.as_str(), true)?;
         }
 
@@ -255,7 +249,7 @@ impl Rsync {
         command.arg_str("-e");
 
         // set up the ssh command
-        command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?;
+        command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.args.no_docker, false)?;
 
         // Default sync options
         command.arg_str("-rlptD")// nearly the same as --archive mode, but without -g and -o flag to preserve group and owner
@@ -321,11 +315,11 @@ impl Rsync {
             command.arg_str("--compress");
         }
 
-        if self.dry_run {
+        if self.args.dry_run {
             command.arg_str("--dry-run");
         }
 
-        if self.verbose {
+        if self.args.verbose {
             command.arg_str("--verbose");
         }
 

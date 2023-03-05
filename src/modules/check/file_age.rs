@@ -14,8 +14,7 @@ use std::rc::Rc;
 
 pub struct FileAge {
     paths: ModulePaths,
-    no_docker: bool,
-    dry_run: bool,
+    args: Rc<Arguments>,
     config: Configuration,
     cached_result: Option<i64>,
     had_error: bool
@@ -34,8 +33,7 @@ impl Check for FileAge {
 
         return Ok(Box::new(Self {
             paths,
-            no_docker: args.no_docker,
-            dry_run: args.dry_run,
+            args: args.clone(),
             config,
             cached_result: None,
             had_error: false
@@ -44,7 +42,7 @@ impl Check for FileAge {
 
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image
-        if !self.no_docker {
+        if !self.args.no_docker {
             docker::build_image_if_missing(&self.paths.base_paths, "file-age.Dockerfile", "vbackup-file-age")?;
         }
 
@@ -66,7 +64,7 @@ impl Check for FileAge {
         if self.cached_result.is_none() {
             let check_path = &self.paths.source;
 
-            let search_paths = if self.no_docker {
+            let search_paths = if self.args.no_docker {
                 match check_path {
                     SourcePath::Single(path) => {
                         vec![path.as_str()]
@@ -93,7 +91,7 @@ impl Check for FileAge {
                     return previous_result;
                 }
 
-                let mut command_base = if self.no_docker {
+                let mut command_base = if self.args.no_docker {
                     let mut command = CommandWrapper::new("bash");
                     command.arg_str("-c");
                     command
@@ -124,7 +122,7 @@ impl Check for FileAge {
                 );
                 command_base.arg_string(command_actual);
 
-                if self.dry_run {
+                if self.args.dry_run {
                     dry_run!(command_base.to_string());
                 }
 

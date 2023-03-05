@@ -60,13 +60,9 @@ pub struct Borg {
     config: BorgConfig,
     sync_config: Option<BorgSyncConfig>,
     paths: ModulePaths,
-    dry_run: bool,
-    no_docker: bool,
-    print_command: bool,
+    args: Rc<Arguments>,
     requires_init: bool,
-    verbose: bool,
-    restore_to: Option<String>,
-    is_restore: bool
+    print_command: bool
 }
 
 impl Borg {
@@ -81,12 +77,8 @@ impl Borg {
             config,
             sync_config,
             paths,
-            dry_run: args.dry_run,
-            verbose: args.verbose,
-            no_docker: args.no_docker,
+            args: args.clone(),
             print_command: args.verbose || args.debug,
-            restore_to: args.restore_to.clone(),
-            is_restore: args.is_restore,
             requires_init: false // initial value overwritten in init step
         }));
     }
@@ -102,17 +94,17 @@ impl Borg {
             self.requires_init = true;
         }
 
-        if !self.no_docker {
+        if !self.args.no_docker {
             docker::build_image_if_missing(&self.paths.base_paths, "borg.Dockerfile", "vbackup-borg")?;
         }
 
-        if self.dry_run {
+        if self.args.dry_run {
             return Ok(());
         }
 
         if let Some(sync_config) = self.sync_config.as_ref() {
-            write_known_hosts(sync_config.ssh_config.borrow(), &self.paths, self.dry_run)?;
-            write_identity_file(sync_config.ssh_config.borrow(), &self.paths, self.dry_run)?;
+            write_known_hosts(sync_config.ssh_config.borrow(), &self.paths, self.args.dry_run)?;
+            write_identity_file(sync_config.ssh_config.borrow(), &self.paths, self.args.dry_run)?;
         }
 
         Ok(())
@@ -156,7 +148,7 @@ impl Borg {
         command.arg_str("--make-parent-dirs");
         command.arg_string(self.get_repo_path());
 
-        command.run_configuration(self.print_command, self.dry_run)
+        command.run_configuration(self.print_command, self.args.dry_run)
     }
 
     fn run_prune(&self) -> Result<(), String> {
@@ -174,11 +166,11 @@ impl Borg {
         /*
          * add options
          */
-        if self.dry_run {
+        if self.args.dry_run {
             command.arg_str("--dry-run");
         }
 
-        if self.verbose {
+        if self.args.verbose {
             command.arg_str("--stats");
             command.arg_str("--list");
         }
@@ -217,7 +209,7 @@ impl Borg {
 
         command.arg_string(self.get_repo_path());
 
-        command.run_configuration(self.print_command, self.dry_run)
+        command.run_configuration(self.print_command, self.args.dry_run)
     }
 
     pub fn run_save(&self) -> Result<(), String> {
@@ -227,7 +219,7 @@ impl Borg {
         if self.requires_init {
             self.run_init()?;
 
-            if !self.dry_run {
+            if !self.args.dry_run {
                 file::write(format!("{}/init-marker", self.paths.module_data_dir).as_str(), "1", true)?;
             }
         }
@@ -240,11 +232,11 @@ impl Borg {
         /*
          * add options
          */
-        if self.dry_run {
+        if self.args.dry_run {
             command.arg_str("--dry-run");
         }
 
-        if self.verbose {
+        if self.args.verbose {
             command.arg_str("--stats");
             command.arg_str("--list");
         }
@@ -280,7 +272,7 @@ impl Borg {
          */
         match self.paths.source.borrow() {
             SourcePath::Single(path) => {
-                if self.no_docker {
+                if self.args.no_docker {
                     command.arg_str(path);
                 } else {
                     command.arg_str("/volume");
@@ -288,7 +280,7 @@ impl Borg {
             }
             SourcePath::Multiple(paths) => {
                 for path in paths {
-                    if self.no_docker {
+                    if self.args.no_docker {
                         command.arg_str(path.path.as_str());
                     } else {
                         command.arg_string(format!("/volume/{}", path.name));
@@ -297,7 +289,7 @@ impl Borg {
             }
         }
 
-        command.run_configuration(self.print_command, self.dry_run)?;
+        command.run_configuration(self.print_command, self.args.dry_run)?;
 
         if !self.config.disable_prune {
             self.run_prune()?;
@@ -310,7 +302,7 @@ impl Borg {
 
     pub fn run_restore(&self) -> Result<(), String> {
         // if the repo is not initialized during a restore operation assume it was recovered from some other location and does not need to be initialized
-        if self.requires_init && !self.dry_run {
+        if self.requires_init && !self.args.dry_run {
             file::write(format!("{}/init-marker", self.paths.module_data_dir).as_str(), "1", true)?;
         }
 
@@ -319,14 +311,14 @@ impl Borg {
         let selected_archive = self.user_select_archive()?;
         let mut command = self.get_base_cmd("extract")?;
 
-        if self.dry_run {
+        if self.args.dry_run {
             command.arg_str("--dry-run");
         }
 
         // TODO: does this make sense?
         //command.arg_str("--numeric-ids");
 
-        if self.verbose {
+        if self.args.verbose {
             command.arg_str("--list");
         }
 
@@ -334,7 +326,7 @@ impl Borg {
         command.arg_string(format!("{}::{}", self.get_repo_path(), selected_archive));
 
         info!("Starting restore of '{}'...", selected_archive);
-        command.run_configuration(self.print_command, self.dry_run)?;
+        command.run_configuration(self.print_command, self.args.dry_run)?;
         info!("Restore done.");
 
         Ok(())
@@ -383,7 +375,7 @@ impl Borg {
 
     fn get_base_cmd(&self, operation: &str) -> Result<CommandWrapper,String> {
         let mut command;
-        if self.no_docker {
+        if self.args.no_docker {
             command = CommandWrapper::new_with_args("borg", vec![operation]);
 
             command.env("BORG_BASE_DIR", self.paths.module_data_dir.as_str());
@@ -408,8 +400,8 @@ impl Borg {
             }
 
             let mut source_overwrite = None;
-            if self.is_restore {
-                if let Some(restore_to) = self.restore_to.as_ref() {
+            if self.args.is_restore {
+                if let Some(restore_to) = self.args.restore_to.as_ref() {
                     source_overwrite.replace(SourcePath::Single(restore_to.clone()));
                 }
             }
@@ -435,14 +427,14 @@ impl Borg {
 
         // configure ssh connection
         if let Some(borg_sync) = self.sync_config.as_ref() {
-            let ssh_command = command.build_ssh_command(&borg_sync.ssh_config, &self.paths, !self.no_docker, false);
+            let ssh_command = command.build_ssh_command(&borg_sync.ssh_config, &self.paths, !self.args.no_docker, false);
             command.arg_string(format!("--rsh={}", ssh_command));
         }
 
         // set umask
         command.arg_string(format!("--umask={}", self.config.umask));
 
-        /*if self.verbose {
+        /*if self.args.verbose {
             command.arg_str("--debug");
         }*/
 
@@ -461,7 +453,7 @@ impl Borg {
 
             format!("ssh://{}@{}:{}{}", borg_sync.ssh_config.user, borg_sync.ssh_config.hostname, borg_sync.ssh_config.port, path)
         } else {
-            if self.no_docker {
+            if self.args.no_docker {
                 self.paths.destination.clone()
             } else {
                 String::from("/destination")

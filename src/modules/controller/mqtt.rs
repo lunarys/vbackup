@@ -18,7 +18,7 @@ use rand;
 pub struct MqttController {
     config: Configuration,
     mqtt_config: MqttConfiguration,
-    dry_run: bool,
+    args: Rc<Arguments>,
     name: String,
     paths: Rc<Paths>,
     connected: Option<MqttConnection>
@@ -95,7 +95,7 @@ impl Controller for MqttController {
         let qos = qos_from_u8(self.mqtt_config.qos)?;
         let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
-        let result = if !self.dry_run {
+        let result = if !self.args.dry_run {
             start(&mut connection.client, &connection.receiver, self.config.start, topic_pub, qos, self.config.start_timeout_sec)?
         } else {
             dry_run!(format!("Sending start command on MQTT topic '{}'", &topic_pub));
@@ -117,7 +117,7 @@ impl Controller for MqttController {
             let qos = self.mqtt_config.qos;
             let topic_pub = get_topic_pub(&self.config, &self.mqtt_config);
 
-            let result = if !self.dry_run {
+            let result = if !self.args.dry_run {
                 end(&mut connection.client, topic_pub, qos)?
             } else {
                 dry_run!(format!("Sending end command on MQTT topic '{}'", &topic_pub));
@@ -153,7 +153,7 @@ impl Bundleable for MqttController {
         return Ok(Box::new(Self {
             config,
             mqtt_config,
-            dry_run: args.dry_run,
+            args: args.clone(),
             name: String::from(name),
             paths: paths.clone(),
             connected: None

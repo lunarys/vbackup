@@ -571,7 +571,7 @@ checksum = "15c61ba63f9235225a22310255a29b806b907c9b8c964bcbd0a2c70f3f2deea7"
 
 [[package]]
 name = "vbackup"
-version = "2.7.0"
+version = "2.8.0"
 dependencies = [
  "argparse",
  "chrono",

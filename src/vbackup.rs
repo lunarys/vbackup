@@ -3,7 +3,7 @@ use crate::modules::reporting::{ReportingModule, ReportingWrapper};
 use crate::util::objects::time::{TimeFrameReference};
 use crate::util::objects::paths::{Paths,PathBase,ModulePaths,SourcePath};
 use crate::util::objects::configuration::Configuration;
-use crate::util::objects::reporting::{OperationStatus};
+use crate::util::objects::reporting::{OperationStatus, ReportEvent};
 use crate::processing::{preprocessor,scheduler,processor};
 use crate::{Arguments, restore};
 
@@ -55,6 +55,7 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
     // Only actually does something if run, backup or sync
     // TODO: Might solve this via RunType also
     reporter.report_operation(OperationStatus::START(args.operation.clone()));
+    reporter.report_raw(ReportEvent::Version(String::from(env!("CARGO_PKG_VERSION"))));
 
     let result = if args.operation == "restore" {
         args.is_restore = true;

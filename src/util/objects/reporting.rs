@@ -1,7 +1,8 @@
 #[derive(Clone)]
 pub enum ReportEvent {
     Operation(OperationStatus),
-    Status(StatusReport)
+    Status(StatusReport),
+    Version(String)
 }
 
 #[derive(Clone)]

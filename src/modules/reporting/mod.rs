@@ -86,6 +86,11 @@ impl ReportingModule {
         let result = self.report(ReportEvent::Operation(operation));
         log_error!(result);
     }
+
+    pub fn report_raw(&mut self, event: ReportEvent) {
+        let result = self.report(event);
+        log_error!(result);
+    }
 }
 
 impl ReportingWrapper for ReportingModule {

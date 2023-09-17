@@ -63,6 +63,10 @@ impl Reporting for Reporter {
         let mut topic = get_base_topic(&self.config, &self.mqtt_config);
 
         let message = match event {
+            ReportEvent::Version(version) => {
+                topic.push_str("/version");
+                version
+            },
             ReportEvent::Status(report) => {
                 if let Some(name) = report.module {
                     topic.push('/');

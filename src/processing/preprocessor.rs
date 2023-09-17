@@ -189,7 +189,7 @@ fn load_default_setup_strategy(mut configurations: Vec<ConfigurationSplit>) -> V
 fn load_module_paths(mut configurations: Vec<ConfigurationSplit>, paths: &Rc<Paths>) -> Vec<ConfigurationSplit> {
     // step 2
     //  load module paths
-    for mut configuration in &mut configurations {
+    for configuration in &mut configurations {
         configuration.backup_paths = Some(ModulePaths::for_backup_module(paths, "backup", &configuration.config));
         configuration.sync_paths = Some(ModulePaths::for_sync_module(paths, "sync", &configuration.config));
     }

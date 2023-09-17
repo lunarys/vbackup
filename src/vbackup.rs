@@ -75,7 +75,7 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
         let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &mut reporter, do_backup, do_sync)?;
         let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
         let result = processor::process_configurations(&args, &mut reporter, scheduled, preprocessed.savedata);
-        return result;
+        result
     };
 
     reporter.report_operation(OperationStatus::DONE);

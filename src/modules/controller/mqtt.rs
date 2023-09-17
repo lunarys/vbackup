@@ -3,7 +3,7 @@ use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths, ModulePaths};
 use crate::modules::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
-use crate::{try_result,try_option,bool_result,dry_run,log_error};
+use crate::{try_result,try_option,bool_result,dry_run,log_error,try_result_debug};
 
 use serde_json::Value;
 use serde::{Deserialize};
@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use std::rc::Rc;
 use std::cmp::max;
 use std::thread;
+use std::thread::JoinHandle;
 use crossbeam_channel::{unbounded, Receiver, bounded};
 use rand;
 
@@ -27,7 +28,8 @@ pub struct MqttController {
 struct MqttConnection {
     client: Client,
     receiver: Receiver<Publish>,
-    is_controller_online: bool
+    is_controller_online: bool,
+    join_handle: JoinHandle<()>
 }
 
 #[derive(Deserialize)]
@@ -64,7 +66,7 @@ impl Controller for MqttController {
 
         let qos = qos_from_u8(self.mqtt_config.qos)?;
 
-        let (mut client,receiver) = try_result!(get_client(&self.mqtt_config, topic_pub.as_str(), "ABORT", Some(vec![topic_sub.clone()])), "Could not create mqtt client and receiver");
+        let (mut client,receiver, join_handle) = try_result!(get_client(&self.mqtt_config, topic_pub.as_str(), "ABORT", Some(vec![topic_sub.clone()])), "Could not create mqtt client and receiver");
 
         let controller_topic = get_controller_state_topic(&self.config);
         let is_controller_online = get_controller_state(&mut client, &receiver, controller_topic, qos, self.config.controller_timeout_sec)?;
@@ -77,7 +79,8 @@ impl Controller for MqttController {
         self.connected = Some(MqttConnection {
             client,
             receiver,
-            is_controller_online
+            is_controller_online,
+            join_handle
         });
 
         return Ok(());
@@ -133,10 +136,9 @@ impl Controller for MqttController {
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        if let Some(connection) = self.connected.as_mut() {
+        if let Some(mut connection) = self.connected.take() {
             try_result!(connection.client.disconnect(), "Disconnect from broker failed");
-
-            self.connected = None;
+            try_result_debug!(connection.join_handle.join(), "Error when trying to wait for the MQTT thread");
             Ok(())
         } else {
             trace!("MQTT controller was not connected, skipping disconnect");
@@ -269,7 +271,7 @@ fn end(client: &mut Client, topic: String, qos: u8) -> Result<bool, String> {
     return bool_result!(result.is_ok(), true, "Could not send end message");
 }
 
-pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str, auto_subscibe: Option<Vec<String>>) -> Result<(Client,Receiver<Publish>), String> {
+pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testament_payload: &str, auto_subscibe: Option<Vec<String>>) -> Result<(Client,Receiver<Publish>,JoinHandle<()>), String> {
     trace!("Trying to connect to mqtt broker with address '{}:{}'", mqtt_config.host.as_str(), mqtt_config.port);
 
     let random_id: i32 = rand::random();
@@ -301,7 +303,7 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
     let (sender, receiver) = unbounded();
     let (thread_sender, thread_receiver) = bounded(1);
 
-    thread::spawn(move || {
+    let handle = thread::spawn(move || {
         let mut did_connect = false;
         let mut error_count = 0;
 
@@ -371,7 +373,7 @@ pub fn get_client(mqtt_config: &MqttConfiguration, testament_topic: &str, testam
     // await connect?
     try_result!(thread_receiver.recv_timeout(Duration::from_secs(timeout_secs)), format!("Could not connect to the mqtt broker within {} seconds", timeout_secs));
 
-    return Ok((client, receiver));
+    return Ok((client, receiver, handle));
 }
 
 fn wait_for_message(receiver: &Receiver<Publish>, on_topic: Option<&str>, timeout: Duration, expected: Option<String>) -> Result<String, String> {

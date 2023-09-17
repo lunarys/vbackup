@@ -4,19 +4,21 @@ use crate::util::io::{auth_data,json};
 use crate::util::objects::paths::{Paths};
 use crate::modules::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
-use crate::{try_result};
+use crate::{try_result, try_result_debug};
 use crate::modules::controller::mqtt::{get_client,qos_from_u8};
 
 use serde_json::Value;
 use serde::{Deserialize};
 use std::ops::AddAssign;
 use std::rc::Rc;
+use std::thread::JoinHandle;
 use rumqttc::{Client};
 
 pub struct Reporter {
     config: Configuration,
     mqtt_config: MqttConfiguration,
-    client: Option<Client>
+    client: Option<Client>,
+    join_handle: Option<JoinHandle<()>>
 }
 
 #[derive(Deserialize)]
@@ -36,7 +38,8 @@ impl Reporting for Reporter {
         return Ok(Box::new(Reporter {
             config,
             mqtt_config,
-            client: None
+            client: None,
+            join_handle: None
         }));
     }
 
@@ -44,8 +47,9 @@ impl Reporting for Reporter {
         let base_topic = get_base_topic(&self.config, &self.mqtt_config);
         trace!("Base topic is '{}'", base_topic);
 
-        let (client,_) = try_result!(get_client(&self.mqtt_config, base_topic.as_str(), "cancelled", None), "Could not create mqtt client and receiver");
+        let (client,_,join_handle) = try_result!(get_client(&self.mqtt_config, base_topic.as_str(), "cancelled", None), "Could not create mqtt client and receiver");
         self.client = Some(client);
+        self.join_handle = Some(join_handle);
 
         return Ok(());
     }
@@ -99,8 +103,12 @@ impl Reporting for Reporter {
     }
 
     fn clear(&mut self) -> Result<(), String> {
-        if let Some(client) = self.client.as_mut() {
+        if let Some(mut client) = self.client.take() {
             try_result!(client.disconnect(), "Disconnect from broker failed");
+
+            if let Some(join_handle) = self.join_handle.take() {
+                try_result_debug!(join_handle.join(), "Error when trying to wait for the MQTT thread");
+            }
         }
 
         return Ok(());

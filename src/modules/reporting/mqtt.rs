@@ -5,7 +5,7 @@ use crate::util::objects::paths::{Paths};
 use crate::modules::shared::mqtt::MqttConfiguration;
 use crate::Arguments;
 use crate::{try_result, try_result_debug};
-use crate::modules::controller::mqtt::{get_client,qos_from_u8};
+use crate::modules::shared::mqtt::{get_client,qos_from_u8};
 
 use serde_json::Value;
 use serde::{Deserialize};

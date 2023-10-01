@@ -313,7 +313,7 @@ impl Rsync {
             command.arg_str("--dry-run");
         }
 
-        if self.args.verbose {
+        if self.args.verbose || self.args.show_command_output {
             command.arg_str("--verbose");
         }
 

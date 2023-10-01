@@ -14,6 +14,7 @@ use crate::processing::{timeframe_check,controller_bundler};
 use std::rc::Rc;
 use core::borrow::Borrow;
 use std::borrow::BorrowMut;
+use std::ops::Not;
 
 pub enum ConfigurationUnit {
     Backup(BackupUnit),
@@ -92,7 +93,8 @@ pub fn preprocess(configurations: Vec<Configuration>,
     }
 
     let without_disabled = filter_disabled(configurations, reporter, args);
-    let with_setup = load_default_setup_strategy(without_disabled);
+    let manual_filtered = filter_manual(without_disabled, reporter, args);
+    let with_setup = load_default_setup_strategy(manual_filtered);
     let with_module_paths = load_module_paths(with_setup, paths);
     let savedata = load_savedata(&with_module_paths, reporter);
     let split = flatten_processing_list(with_module_paths, do_backup, do_sync);
@@ -159,6 +161,31 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut Report
         })
         .filter(|config| {
             config.backup_config.is_some() || config.sync_config.is_some()
+        })
+        .collect();
+}
+
+fn filter_manual(mut configurations: Vec<ConfigurationSplit>, reporter: &mut ReportingModule, args: &Rc<Arguments>) -> Vec<ConfigurationSplit> {
+    return configurations.drain(..)
+        .filter(|configuration| {
+            let result = if args.run_manual && args.run_manual_only {
+                // if we run only manual configurations, filter only these
+                configuration.config.manual
+            } else if args.run_manual.not() {
+                // if we do not run manual configurations, filter everything else
+                configuration.config.manual.not()
+            } else {
+                // if we do not run manual configuration only, and also do not exclude manual configuration, run everything
+                true
+            };
+
+            if result && args.run_manual {
+                warn!("Configuration '{}' is marked as manual and will be run", configuration.config.name);
+            } else if !result && configuration.config.manual {
+                reporter.report_status(RunType::RUN, Some(configuration.config.name.clone()), Status::MANUAL);
+            }
+
+            result
         })
         .collect();
 }
@@ -275,6 +302,9 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
     if args.force {
         info!("Skipping time constraints checks due to forced run");
         // still needs to run to load the timeframes
+    } else if args.ignore_time_check {
+        info!("Ignoring time constraints");
+        // still needs to run to load the timeframes
     }
 
     let timeframe_checker = timeframe_check::TimeframeChecker::new(paths, args)?;
@@ -383,6 +413,11 @@ fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, ar
     // step 7
     if args.force {
         debug!("Skipping additional checks due to forced run");
+        return configurations;
+    }
+
+    if args.ignore_additional_check {
+        warn!("Ignoring additional checks");
         return configurations;
     }
 

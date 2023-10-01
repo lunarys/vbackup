@@ -43,7 +43,7 @@ impl TimeframeChecker {
             .collect();
 
         return Ok(Self {
-            force: args.force,
+            force: args.force | args.ignore_time_check,
             timeframes: timeframes_rc
         });
     }

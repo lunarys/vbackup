@@ -41,7 +41,12 @@ pub struct Arguments {
     pub restore_to: Option<String>,
     pub show_command: bool,
     pub show_command_output: bool,
-    pub hide_command: bool
+    pub hide_command: bool,
+    pub run_manual: bool,
+    pub run_all: bool,
+    pub run_manual_only: bool,
+    pub ignore_time_check: bool,
+    pub ignore_additional_check: bool
 }
 
 fn main() {
@@ -61,7 +66,12 @@ fn main() {
         restore_to: None,
         show_command: false,
         show_command_output: false,
-        hide_command: false
+        hide_command: false,
+        run_manual: false,
+        run_all: false,
+        run_manual_only: false,
+        ignore_time_check: false,
+        ignore_additional_check: false
     };
 
     {
@@ -98,7 +108,23 @@ fn main() {
             .add_option(&["-o", "--show-command-output"], StoreTrue, "Do not print command output when printing executed commands");
         parser.refer(&mut args.hide_command)
             .add_option(&["--hide-command"], StoreTrue, "Disable default command output for verbose or debug logging");
+        parser.refer(&mut args.run_manual)
+            .add_option(&["--manual"], StoreTrue, "Run only configurations that are marked as manual");
+        parser.refer(&mut args.run_all)
+            .add_option(&["--all"], StoreTrue, "Run everything except disabled configurations, includes run manual configurations");
+        parser.refer(&mut args.ignore_time_check)
+            .add_option(&["--ignore-time-check", "--ignore-time-checks"], StoreTrue, "Disable all time checks");
+        parser.refer(&mut args.ignore_additional_check)
+            .add_option(&["--ignore-additional-check", "--ignore-additional-checks"],StoreTrue, "Disable all additional checks");
         parser.parse_args_or_exit();
+    }
+
+    // all implies manual, but manual implies not all
+    if args.run_all {
+        args.run_manual = true;
+        args.run_manual_only = false;
+    } else if args.run_manual {
+        args.run_manual_only = true;
     }
 
     let log_level = if args.verbose {

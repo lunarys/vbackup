@@ -17,6 +17,8 @@ pub struct StrategyConfiguration {
 pub struct Configuration {
     #[serde(default="default_bool_false")]
     pub disabled: bool,
+    #[serde(default="default_bool_false")]
+    pub manual: bool,
     pub name: String,
     pub savedata_in_store: Option<bool>,
     pub source_path: SourcePath,

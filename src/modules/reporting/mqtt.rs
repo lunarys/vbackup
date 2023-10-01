@@ -84,7 +84,8 @@ impl Reporting for Reporter {
                     Status::DONE => "done",
                     Status::ERROR => "failed",
                     Status::SKIP => "skipped",
-                    Status::DISABLED => "disabled"
+                    Status::DISABLED => "disabled",
+                    Status::MANUAL => "disabled (manual)"
                 })
             },
             ReportEvent::Operation(operation) => {

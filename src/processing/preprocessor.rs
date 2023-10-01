@@ -182,6 +182,7 @@ fn filter_manual(mut configurations: Vec<ConfigurationSplit>, reporter: &mut Rep
             if result && args.run_manual {
                 warn!("Configuration '{}' is marked as manual and will be run", configuration.config.name);
             } else if !result && configuration.config.manual {
+                info!("Configuration '{}' is marked as manual, skipping run", configuration.config.name);
                 reporter.report_status(RunType::RUN, Some(configuration.config.name.clone()), Status::MANUAL);
             }
 
@@ -303,7 +304,7 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
         info!("Skipping time constraints checks due to forced run");
         // still needs to run to load the timeframes
     } else if args.ignore_time_check {
-        info!("Ignoring time constraints");
+        warn!("Ignoring time constraints");
         // still needs to run to load the timeframes
     }
 

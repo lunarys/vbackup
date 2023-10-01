@@ -45,6 +45,7 @@ pub struct Arguments {
     pub run_manual: bool,
     pub run_all: bool,
     pub run_manual_only: bool,
+    pub ignore_checks: bool,
     pub ignore_time_check: bool,
     pub ignore_additional_check: bool
 }
@@ -70,6 +71,7 @@ fn main() {
         run_manual: false,
         run_all: false,
         run_manual_only: false,
+        ignore_checks: false,
         ignore_time_check: false,
         ignore_additional_check: false
     };
@@ -112,6 +114,8 @@ fn main() {
             .add_option(&["--manual"], StoreTrue, "Run only configurations that are marked as manual");
         parser.refer(&mut args.run_all)
             .add_option(&["--all"], StoreTrue, "Run everything except disabled configurations, includes run manual configurations");
+        parser.refer(&mut args.ignore_checks)
+            .add_option(&["--ignore-checks"], StoreTrue, "Ignore time checks and additional checks");
         parser.refer(&mut args.ignore_time_check)
             .add_option(&["--ignore-time-check", "--ignore-time-checks"], StoreTrue, "Disable all time checks");
         parser.refer(&mut args.ignore_additional_check)
@@ -142,6 +146,12 @@ fn main() {
         args.show_command_output |= args.verbose | args.debug;
     }
     args.show_command |= args.show_command_output;
+
+    // ignore checks implies ignoring both time checks and additional checks
+    if args.ignore_checks {
+        args.ignore_time_check = true;
+        args.ignore_additional_check = true;
+    }
 
     // TODO: Always prints timestamps in UTC
     Builder::new()

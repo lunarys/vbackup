@@ -33,7 +33,7 @@ struct Configuration {
     exclude: Option<Vec<String>>
 }
 
-fn default_7z_executable() -> String { String::from("/usr/lib/p7zip/7z") }
+fn default_7z_executable() -> String { String::from("7z") }
 
 impl Backup for Tar7Zip {
     const MODULE_NAME: &'static str = "tar7zip";

@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::modules::sync::{SyncModule, SyncWrapper};
 use crate::modules::controller::{ControllerModule, BundleableWrapper};
 use crate::util::helper::{controller as controller_helper,check as check_helper};
@@ -9,7 +10,7 @@ use crate::Arguments;
 
 use crate::{dry_run};
 
-pub fn sync(args: &Arguments, unit: &mut SyncUnit, savedata: &mut SaveData, controller_override: Option<&mut ControllerModule>) -> Result<bool,String> {
+pub fn sync(args: &Rc<Arguments>, unit: &mut SyncUnit, savedata: &mut SaveData, controller_override: Option<&mut ControllerModule>) -> Result<bool,String> {
     // Get the sync module that should be used
     let mut controller_module = controller_override.or(unit.controller.as_mut());
     let mut module = SyncModule::new(unit.sync_config.sync_type.as_str(), &unit.config.name, &unit.sync_config.config, unit.module_paths.clone(), args)?;

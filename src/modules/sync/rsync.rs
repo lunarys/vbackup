@@ -9,6 +9,7 @@ use crate::Arguments;
 use serde_json::Value;
 use serde::{Deserialize};
 use std::path::Path;
+use std::rc::Rc;
 
 pub struct Rsync {
     _name: String,
@@ -16,10 +17,7 @@ pub struct Rsync {
     ssh_config: SshConfig,
     module_paths: ModulePaths,
     sync_paths: DockerPaths,
-    dry_run: bool,
-    no_docker: bool,
-    verbose: bool,
-    print_command: bool
+    args: Rc<Arguments>
 }
 
 struct DockerPaths {
@@ -78,9 +76,13 @@ fn default_rsync() -> String { String::from("rsync") }
 impl Sync for Rsync {
     const MODULE_NAME: &'static str = "rsync-ssh";
 
-    fn new(name: &str, config_json: &Value, module_paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
-        let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
+    fn new(name: &str, config_json: &Value, module_paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
+        let mut config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, module_paths.base_paths.as_ref())?;
+
+        if args.no_docker && args.is_restore && args.restore_to.is_some() {
+            return Err(format!("The restore-to option is not supported for {} without docker", Rsync::MODULE_NAME));
+        }
 
         let remote_path = format!("{}@{}:{}",
                                   ssh_config.user,
@@ -98,7 +100,10 @@ impl Sync for Rsync {
             ""
         };
 
-        let paths = if args.no_docker {
+        // reverse the direction in case of a restore
+        config.to_remote ^= args.is_restore; // exclusive or assignment
+
+        let sync_paths= if args.no_docker {
             if let SourcePath::Single(source_path) = module_paths.source.clone() {
                 if config.to_remote {
                     DockerPaths {
@@ -137,17 +142,14 @@ impl Sync for Rsync {
             config,
             ssh_config,
             module_paths,
-            sync_paths: paths,
-            dry_run: args.dry_run,
-            no_docker: args.no_docker,
-            verbose: args.verbose,
-            print_command: args.debug || args.verbose
+            sync_paths,
+            args: args.clone()
         }));
     }
 
     fn init(&mut self) -> Result<(), String> {
         // Build local docker image if missing
-        if !self.no_docker {
+        if !self.args.no_docker {
             if self.config.detect_renamed || self.config.detect_renamed_lax || self.config.detect_moved {
                 docker::build_image_if_missing(&self.module_paths.base_paths, "rsync-patched.Dockerfile", "vbackup-rsync-patched")?;
             } else {
@@ -157,8 +159,8 @@ impl Sync for Rsync {
 
         file::create_path_dir_if_missing(Path::new(&self.module_paths.module_data_dir), true)?;
 
-        write_known_hosts(&self.ssh_config, &self.module_paths, self.dry_run)?;
-        write_identity_file(&self.ssh_config, &self.module_paths, self.dry_run)?;
+        write_known_hosts(&self.ssh_config, &self.module_paths, self.args.dry_run)?;
+        write_identity_file(&self.ssh_config, &self.module_paths, self.args.dry_run)?;
 
         return Ok(());
     }
@@ -181,20 +183,16 @@ impl Sync for Rsync {
         command.arg_string(format!("{}", &self.sync_paths.from))
             .arg_string(format!("{}", &self.sync_paths.to));
 
-        command.run_configuration(self.print_command, self.dry_run)?;
-
-        return Ok(());
+        return command.run_with_args(self.args.as_ref());
     }
 
     fn restore(&self) -> Result<(), String> {
         let mut command = self.get_base_cmd()?;
 
-        command.arg_string(format!("{}", &self.sync_paths.to))
-            .arg_string(format!("{}", &self.sync_paths.from));
+        command.arg_string(format!("{}", &self.sync_paths.from))
+            .arg_string(format!("{}", &self.sync_paths.to));
 
-        command.run_configuration(self.print_command, self.dry_run)?;
-
-        return Ok(());
+        return command.run_with_args(self.args.as_ref());
     }
 
     fn clear(&mut self) -> Result<(), String> {
@@ -204,7 +202,7 @@ impl Sync for Rsync {
 
 impl Rsync {
     fn get_base_cmd(&self) -> Result<CommandWrapper,String> {
-        if !self.dry_run {
+        if !self.args.dry_run {
             file::create_dir_if_missing(self.module_paths.module_data_dir.as_str(), true)?;
         }
 
@@ -217,13 +215,22 @@ impl Rsync {
                 "vbackup-rsync"
             };
 
+            let mut source_overwrite = None;
+            if self.args.is_restore {
+                if let Some(restore_to) = self.args.restore_to.as_ref() {
+                    source_overwrite.replace(SourcePath::Single(restore_to.clone()));
+                }
+            }
+
+            let source_mount = source_overwrite.as_ref().unwrap_or(docker_paths);
+
             CommandWrapper::new_docker(
                 "rsync-vbackup-tmp",
                 image_name,
                 Some(self.config.local_rsync.as_str()),
                 None,
                 &self.module_paths,
-                (docker_paths, &self.config.dirname),
+                (source_mount, &self.config.dirname),
                 Some(vec![
                     "--env=SSHPASS"
                 ])
@@ -236,7 +243,7 @@ impl Rsync {
         command.arg_str("-e");
 
         // set up the ssh command
-        command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.no_docker, false)?;
+        command.append_ssh_command(&self.ssh_config, &self.module_paths, !self.args.no_docker, false)?;
 
         // Default sync options
         command.arg_str("-rlptD")// nearly the same as --archive mode, but without -g and -o flag to preserve group and owner
@@ -302,11 +309,11 @@ impl Rsync {
             command.arg_str("--compress");
         }
 
-        if self.dry_run {
+        if self.args.dry_run {
             command.arg_str("--dry-run");
         }
 
-        if self.verbose {
+        if self.args.verbose || self.args.show_command_output {
             command.arg_str("--verbose");
         }
 

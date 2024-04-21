@@ -14,6 +14,7 @@ use crate::processing::{timeframe_check,controller_bundler};
 use std::rc::Rc;
 use core::borrow::Borrow;
 use std::borrow::BorrowMut;
+use std::ops::Not;
 
 pub enum ConfigurationUnit {
     Backup(BackupUnit),
@@ -82,7 +83,7 @@ pub struct PreprocessorResult {
 }
 
 pub fn preprocess(configurations: Vec<Configuration>,
-                  args: &Arguments,
+                  args: &Rc<Arguments>,
                   paths: &Rc<Paths>,
                   reporter: &mut ReportingModule,
                   do_backup: bool,
@@ -92,7 +93,8 @@ pub fn preprocess(configurations: Vec<Configuration>,
     }
 
     let without_disabled = filter_disabled(configurations, reporter, args);
-    let with_setup = load_default_setup_strategy(without_disabled);
+    let manual_filtered = filter_manual(without_disabled, reporter, args);
+    let with_setup = load_default_setup_strategy(manual_filtered);
     let with_module_paths = load_module_paths(with_setup, paths);
     let savedata = load_savedata(&with_module_paths, reporter);
     let split = flatten_processing_list(with_module_paths, do_backup, do_sync);
@@ -109,7 +111,7 @@ pub fn preprocess(configurations: Vec<Configuration>,
     });
 }
 
-fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut ReportingModule, args: &Arguments) -> Vec<ConfigurationSplit> {
+fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut ReportingModule, args: &Rc<Arguments>) -> Vec<ConfigurationSplit> {
     // step 1
     //  filter disabled
     //  move to split
@@ -163,6 +165,32 @@ fn filter_disabled(mut configurations: Vec<Configuration>, reporter: &mut Report
         .collect();
 }
 
+fn filter_manual(mut configurations: Vec<ConfigurationSplit>, reporter: &mut ReportingModule, args: &Rc<Arguments>) -> Vec<ConfigurationSplit> {
+    return configurations.drain(..)
+        .filter(|configuration| {
+            let result = if args.run_manual && args.run_manual_only {
+                // if we run only manual configurations, filter only these
+                configuration.config.manual
+            } else if args.run_manual.not() {
+                // if we do not run manual configurations, filter everything else
+                configuration.config.manual.not()
+            } else {
+                // if we do not run manual configuration only, and also do not exclude manual configuration, run everything
+                true
+            };
+
+            if result && args.run_manual {
+                warn!("Configuration '{}' is marked as manual and will be run", configuration.config.name);
+            } else if !result && configuration.config.manual {
+                info!("Configuration '{}' is marked as manual, skipping run", configuration.config.name);
+                reporter.report_status(RunType::RUN, Some(configuration.config.name.clone()), Status::MANUAL);
+            }
+
+            result
+        })
+        .collect();
+}
+
 fn load_default_setup_strategy(mut configurations: Vec<ConfigurationSplit>) -> Vec<ConfigurationSplit> {
     // step 1.5
     //  if the configuration has a default setup copy it to the respective backup or sync part
@@ -189,7 +217,7 @@ fn load_default_setup_strategy(mut configurations: Vec<ConfigurationSplit>) -> V
 fn load_module_paths(mut configurations: Vec<ConfigurationSplit>, paths: &Rc<Paths>) -> Vec<ConfigurationSplit> {
     // step 2
     //  load module paths
-    for mut configuration in &mut configurations {
+    for configuration in &mut configurations {
         configuration.backup_paths = Some(ModulePaths::for_backup_module(paths, "backup", &configuration.config));
         configuration.sync_paths = Some(ModulePaths::for_sync_module(paths, "sync", &configuration.config));
     }
@@ -267,13 +295,16 @@ fn flatten_processing_list(mut configurations: Vec<ConfigurationSplit>, do_backu
 }
 
 fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
-                           args: &Arguments,
+                           args: &Rc<Arguments>,
                            paths: &Rc<Paths>,
                            savedata_collection: &SaveDataCollection,
                            reporter: &mut ReportingModule) -> Result<Vec<ConfigurationUnitBuilder>,String> {
     // step 5
     if args.force {
         info!("Skipping time constraints checks due to forced run");
+        // still needs to run to load the timeframes
+    } else if args.ignore_time_check {
+        warn!("Ignoring time constraints");
         // still needs to run to load the timeframes
     }
 
@@ -330,7 +361,7 @@ fn filter_time_constraints(mut configurations: Vec<ConfigurationUnitBuilder>,
 }
 
 fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
-               args: &Arguments,
+               args: &Rc<Arguments>,
                paths: &Rc<Paths>,
                reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 6
@@ -379,10 +410,15 @@ fn load_checks(mut configurations: Vec<ConfigurationUnitBuilder>,
         .collect();
 }
 
-fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Arguments, reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
+fn filter_additional_check(mut configurations: Vec<ConfigurationUnitBuilder>, args: &Rc<Arguments>, reporter: &mut ReportingModule) -> Vec<ConfigurationUnitBuilder> {
     // step 7
     if args.force {
         debug!("Skipping additional checks due to forced run");
+        return configurations;
+    }
+
+    if args.ignore_additional_check {
+        warn!("Ignoring additional checks");
         return configurations;
     }
 

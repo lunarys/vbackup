@@ -9,7 +9,7 @@ use crate::Arguments;
 use serde_json::Value;
 use std::rc::Rc;
 
-pub fn init(args: &Arguments, paths: &Rc<Paths>, config: &Configuration, check_config: &Option<Value>, reference: Reference) -> Result<Option<CheckModule>,String> {
+pub fn init(args: &Rc<Arguments>, paths: &Rc<Paths>, config: &Configuration, check_config: &Option<Value>, reference: Reference) -> Result<Option<CheckModule>,String> {
     return if check_config.is_some() {
         let check_type = try_option!(check_config.as_ref().unwrap().get("type"), "Check config contains no field 'type'");
         let module_paths = ModulePaths::for_check_module(paths, "check", &config, reference);

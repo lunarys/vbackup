@@ -5,9 +5,12 @@ use crate::util::objects::paths::{ModulePaths, SourcePath};
 use crate::Arguments;
 use crate::util::command::CommandWrapper;
 use std::borrow::Borrow;
+use std::ops::Sub;
+use std::rc::Rc;
 use crate::modules::sync::borg::BorgSyncConfig;
 use crate::util::docker;
 use crate::modules::shared::ssh::{write_known_hosts, write_identity_file};
+use crate::util::io::user::{ask_user_abort, ask_user_option_list_index};
 
 #[derive(Deserialize)]
 struct BorgKeepConfig {
@@ -57,25 +60,23 @@ pub struct Borg {
     config: BorgConfig,
     sync_config: Option<BorgSyncConfig>,
     paths: ModulePaths,
-    dry_run: bool,
-    no_docker: bool,
-    print_command: bool,
-    requires_init: bool,
-    verbose: bool
+    args: Rc<Arguments>,
+    requires_init: bool
 }
 
 impl Borg {
-    pub fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments, sync_config: Option<BorgSyncConfig>) -> Result<Box<Self>, String> {
+    pub fn new(_name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>, sync_config: Option<BorgSyncConfig>) -> Result<Box<Self>, String> {
         let config = json::from_value::<BorgConfig>(config_json.clone())?; // TODO: - clone
+
+        if args.no_docker && args.is_restore && args.restore_to.is_some() {
+            return Err(String::from("The restore-to option is not supported for borg without docker"));
+        }
 
         return Ok(Box::new(Self {
             config,
             sync_config,
             paths,
-            dry_run: args.dry_run,
-            verbose: args.verbose,
-            no_docker: args.no_docker,
-            print_command: args.verbose || args.debug,
+            args: args.clone(),
             requires_init: false // initial value overwritten in init step
         }));
     }
@@ -91,17 +92,17 @@ impl Borg {
             self.requires_init = true;
         }
 
-        if self.dry_run {
-            return Ok(());
-        }
-
-        if !self.no_docker {
+        if !self.args.no_docker {
             docker::build_image_if_missing(&self.paths.base_paths, "borg.Dockerfile", "vbackup-borg")?;
         }
 
+        if self.args.dry_run {
+            return Ok(());
+        }
+
         if let Some(sync_config) = self.sync_config.as_ref() {
-            write_known_hosts(sync_config.ssh_config.borrow(), &self.paths, self.dry_run)?;
-            write_identity_file(sync_config.ssh_config.borrow(), &self.paths, self.dry_run)?;
+            write_known_hosts(sync_config.ssh_config.borrow(), &self.paths, self.args.dry_run)?;
+            write_identity_file(sync_config.ssh_config.borrow(), &self.paths, self.args.dry_run)?;
         }
 
         Ok(())
@@ -145,7 +146,7 @@ impl Borg {
         command.arg_str("--make-parent-dirs");
         command.arg_string(self.get_repo_path());
 
-        command.run_configuration(self.print_command, self.dry_run)
+        return command.run_with_args(self.args.as_ref());
     }
 
     fn run_prune(&self) -> Result<(), String> {
@@ -163,11 +164,11 @@ impl Borg {
         /*
          * add options
          */
-        if self.dry_run {
+        if self.args.dry_run {
             command.arg_str("--dry-run");
         }
 
-        if self.verbose {
+        if self.args.verbose {
             command.arg_str("--stats");
             command.arg_str("--list");
         }
@@ -206,7 +207,7 @@ impl Borg {
 
         command.arg_string(self.get_repo_path());
 
-        command.run_configuration(self.print_command, self.dry_run)
+        return command.run_with_args(self.args.as_ref());
     }
 
     pub fn run_save(&self) -> Result<(), String> {
@@ -216,7 +217,7 @@ impl Borg {
         if self.requires_init {
             self.run_init()?;
 
-            if !self.dry_run {
+            if !self.args.dry_run {
                 file::write(format!("{}/init-marker", self.paths.module_data_dir).as_str(), "1", true)?;
             }
         }
@@ -229,11 +230,11 @@ impl Borg {
         /*
          * add options
          */
-        if self.dry_run {
+        if self.args.dry_run {
             command.arg_str("--dry-run");
         }
 
-        if self.verbose {
+        if self.args.verbose {
             command.arg_str("--stats");
             command.arg_str("--list");
         }
@@ -269,7 +270,7 @@ impl Borg {
          */
         match self.paths.source.borrow() {
             SourcePath::Single(path) => {
-                if self.no_docker {
+                if self.args.no_docker {
                     command.arg_str(path);
                 } else {
                     command.arg_str("/volume");
@@ -277,7 +278,7 @@ impl Borg {
             }
             SourcePath::Multiple(paths) => {
                 for path in paths {
-                    if self.no_docker {
+                    if self.args.no_docker {
                         command.arg_str(path.path.as_str());
                     } else {
                         command.arg_string(format!("/volume/{}", path.name));
@@ -286,7 +287,7 @@ impl Borg {
             }
         }
 
-        command.run_configuration(self.print_command, self.dry_run)?;
+        command.run_with_args(self.args.as_ref())?;
 
         if !self.config.disable_prune {
             self.run_prune()?;
@@ -298,12 +299,84 @@ impl Borg {
     }
 
     pub fn run_restore(&self) -> Result<(), String> {
-        todo!()
+        // if the repo is not initialized during a restore operation assume it was recovered from some other location and does not need to be initialized
+        if self.requires_init && !self.args.dry_run {
+            file::write(format!("{}/init-marker", self.paths.module_data_dir).as_str(), "1", true)?;
+        }
+
+        // TODO: borg writes into the current directory ("."), so better make sure to use "cd /"
+
+        let selected_archive = self.user_select_archive()?;
+
+        ask_user_abort(Some(&format!("Continue to restore '{}'?", selected_archive)))?;
+
+        let mut command = self.get_base_cmd("extract")?;
+
+        if self.args.dry_run {
+            command.arg_str("--dry-run");
+        }
+
+        // TODO: does this make sense?
+        //command.arg_str("--numeric-ids");
+
+        if self.args.verbose {
+            command.arg_str("--list");
+        }
+
+        // archive path is constructed from repo and archive
+        command.arg_string(format!("{}::{}", self.get_repo_path(), selected_archive));
+
+        info!("Starting restore of '{}'...", selected_archive);
+        command.run_with_args(self.args.as_ref())?;
+        info!("Restore done.");
+
+        Ok(())
+    }
+
+    fn user_select_archive(&self) -> Result<String, String> {
+        let mut archive_list = self.get_list_of_archives(Some("{archive}{NEWLINE}"))?; // would also work with '--short' option
+
+        // the list is sorted by timestamp (borg default) so suggest the last entry
+        let selected_index = ask_user_option_list_index(
+            Some("Found multiple backup archives in the borg repository:"),
+            Some("Which archive should be restored?"),
+            archive_list.as_ref(),
+            &|archive| {archive.as_str()},
+            archive_list.len().sub(1)
+        )?;
+
+        return if selected_index < archive_list.len() {
+            Ok(archive_list.swap_remove(selected_index))
+        } else {
+            Err(String::from("Selected index is out of bounds"))
+        }
+    }
+
+    /*
+     * format according to borg list's --format option
+     * entries should be newline-separated if passing a custom format
+     */
+    fn get_list_of_archives(&self, format: Option<&str>) -> Result<Vec<String>, String> {
+        let mut command = self.get_base_cmd("list")?;
+
+        if let Some(format) = format {
+            command.arg_string(format!("--format={}", format));
+        }
+
+        command.arg_string(self.get_repo_path());
+
+        return command.run_get_output().map(|result| {
+            result.split("\n").map(String::from).collect()
+        });
+    }
+
+    fn _run_check_backup(&self) -> Result<(), String> {
+        todo!("check the consistency of the backup?")
     }
 
     fn get_base_cmd(&self, operation: &str) -> Result<CommandWrapper,String> {
         let mut command;
-        if self.no_docker {
+        if self.args.no_docker {
             command = CommandWrapper::new_with_args("borg", vec![operation]);
 
             command.env("BORG_BASE_DIR", self.paths.module_data_dir.as_str());
@@ -327,13 +400,22 @@ impl Borg {
                 options.push(volume_mount_arg.as_str());
             }
 
+            let mut source_overwrite = None;
+            if self.args.is_restore {
+                if let Some(restore_to) = self.args.restore_to.as_ref() {
+                    source_overwrite.replace(SourcePath::Single(restore_to.clone()));
+                }
+            }
+
+            let source_mount =  source_overwrite.as_ref().unwrap_or(self.paths.source.borrow());
+
             command = CommandWrapper::new_docker(
                 "borg-vbackup-tmp",
                 "vbackup-borg",
                 Some("borg"),
                 Some(vec![operation]),
                 &self.paths,
-                (self.paths.source.borrow(), "/volume"),
+                (source_mount, "/volume"),
                 Some(options)
             );
 
@@ -346,14 +428,14 @@ impl Borg {
 
         // configure ssh connection
         if let Some(borg_sync) = self.sync_config.as_ref() {
-            let ssh_command = command.build_ssh_command(&borg_sync.ssh_config, &self.paths, !self.no_docker, false);
+            let ssh_command = command.build_ssh_command(&borg_sync.ssh_config, &self.paths, !self.args.no_docker, false);
             command.arg_string(format!("--rsh={}", ssh_command));
         }
 
         // set umask
         command.arg_string(format!("--umask={}", self.config.umask));
 
-        /*if self.verbose {
+        /*if self.args.verbose {
             command.arg_str("--debug");
         }*/
 
@@ -372,7 +454,7 @@ impl Borg {
 
             format!("ssh://{}@{}:{}{}", borg_sync.ssh_config.user, borg_sync.ssh_config.hostname, borg_sync.ssh_config.port, path)
         } else {
-            if self.no_docker {
+            if self.args.no_docker {
                 self.paths.destination.clone()
             } else {
                 String::from("/destination")

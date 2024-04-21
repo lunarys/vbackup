@@ -3,9 +3,9 @@ use crate::modules::reporting::{ReportingModule, ReportingWrapper};
 use crate::util::objects::time::{TimeFrameReference};
 use crate::util::objects::paths::{Paths,PathBase,ModulePaths,SourcePath};
 use crate::util::objects::configuration::Configuration;
-use crate::util::objects::reporting::{OperationStatus};
+use crate::util::objects::reporting::{OperationStatus, ReportEvent};
 use crate::processing::{preprocessor,scheduler,processor};
-use crate::Arguments;
+use crate::{Arguments, restore};
 
 use crate::{log_error};
 
@@ -27,7 +27,7 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
 
     // List does not need anything else
     if args.operation == "list" {
-        return list(&args, &paths);
+        return list(&Rc::new(args), &paths);
     }
 
     // Set up reporter (if existing)
@@ -55,27 +55,36 @@ pub fn main(mut args: Arguments) -> Result<(),String> {
     // Only actually does something if run, backup or sync
     // TODO: Might solve this via RunType also
     reporter.report_operation(OperationStatus::START(args.operation.clone()));
+    reporter.report_raw(ReportEvent::Version(String::from(env!("CARGO_PKG_VERSION"))));
 
-    let (do_backup, do_sync) = match args.operation.as_str() {
-        "run" => Ok((true, true)),
-        "backup" | "save" => Ok((true, false)),
-        "sync" => Ok((false, true)),
-        unknown => {
-            Err(format!("Unknown operation: '{}'", unknown))
-        }
-    }?;
+    let result = if args.operation == "restore" {
+        args.is_restore = true;
+        restore::main(Rc::new(args), paths)
+    } else {
+        let (do_backup, do_sync) = match args.operation.as_str() {
+            "run" => Ok((true, true)),
+            "backup" | "save" => Ok((true, false)),
+            "sync" => Ok((false, true)),
+            unknown => {
+                Err(format!("Unknown operation: '{}'", unknown))
+            }
+        }?;
 
-    let config_list = get_config_list(&args, paths.as_ref())?;
-    let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &mut reporter, do_backup, do_sync)?;
-    let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
-    let result = processor::process_configurations(&args, &mut reporter, scheduled, preprocessed.savedata);
+        let args = Rc::new(args);
+
+        let config_list = get_config_list(&args, paths.as_ref())?;
+        let preprocessed = preprocessor::preprocess(config_list, &args, &paths, &mut reporter, do_backup, do_sync)?;
+        let scheduled = scheduler::get_exec_order(preprocessed.configurations)?;
+        let result = processor::process_configurations(&args, &mut reporter, scheduled, preprocessed.savedata);
+        result
+    };
 
     reporter.report_operation(OperationStatus::DONE);
     log_error!(reporter.clear());
     return result;
 }
 
-pub fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configuration>, String> {
+pub fn get_config_list(args: &Rc<Arguments>, paths: &Paths) -> Result<Vec<Configuration>, String> {
     // Get directory containing configurations
     let volume_config_path = format!("{}/volumes", &paths.config_dir);
 
@@ -106,7 +115,7 @@ pub fn get_config_list(args: &Arguments, paths: &Paths) -> Result<Vec<Configurat
     return Ok(configs);
 }
 
-pub fn list(args: &Arguments, paths: &Rc<Paths>) -> Result<(), String> {
+pub fn list(args: &Rc<Arguments>, paths: &Rc<Paths>) -> Result<(), String> {
 
     // Helper to output an additional check nicely formatted
     fn print_check(config: &Option<Value>) {

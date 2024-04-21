@@ -10,6 +10,7 @@ extern crate fs2;
 
 mod processing;
 mod vbackup;
+mod restore;
 mod modules;
 mod util;
 
@@ -35,7 +36,18 @@ pub struct Arguments {
     pub base_config: String,
     pub no_docker: bool,
     pub no_reporting: bool,
-    pub override_disabled: bool
+    pub override_disabled: bool,
+    pub is_restore: bool,
+    pub restore_to: Option<String>,
+    pub show_command: bool,
+    pub show_command_output: bool,
+    pub hide_command: bool,
+    pub run_manual: bool,
+    pub run_all: bool,
+    pub run_manual_only: bool,
+    pub ignore_checks: bool,
+    pub ignore_time_check: bool,
+    pub ignore_additional_check: bool
 }
 
 fn main() {
@@ -50,7 +62,18 @@ fn main() {
         base_config: String::from("/etc/vbackup/config.json"),
         no_docker: false,
         no_reporting: false,
-        override_disabled: false
+        override_disabled: false,
+        is_restore: false,
+        restore_to: None,
+        show_command: false,
+        show_command_output: false,
+        hide_command: false,
+        run_manual: false,
+        run_all: false,
+        run_manual_only: false,
+        ignore_checks: false,
+        ignore_time_check: false,
+        ignore_additional_check: false
     };
 
     {
@@ -79,7 +102,33 @@ fn main() {
             .add_option(&["--no-reporting"], StoreTrue, "Disable reporting for this run");
         parser.refer(&mut args.override_disabled)
             .add_option(&["--override-disabled", "--run-disabled"], StoreTrue, "Ignore the disabled status on configurations");
+        parser.refer(&mut args.restore_to)
+            .add_option(&["--restore-to"], StoreOption, "Restore only: Restore to the given directory");
+        parser.refer(&mut args.show_command)
+            .add_option(&["--show-command", "--print-command"], StoreTrue, "Print the commands that are executed. Default for debug and verbose log level");
+        parser.refer(&mut args.show_command_output)
+            .add_option(&["-o", "--show-command-output"], StoreTrue, "Do not print command output when printing executed commands");
+        parser.refer(&mut args.hide_command)
+            .add_option(&["--hide-command"], StoreTrue, "Disable default command output for verbose or debug logging");
+        parser.refer(&mut args.run_manual)
+            .add_option(&["--manual"], StoreTrue, "Run only configurations that are marked as manual");
+        parser.refer(&mut args.run_all)
+            .add_option(&["--all"], StoreTrue, "Run everything except disabled configurations, includes run manual configurations");
+        parser.refer(&mut args.ignore_checks)
+            .add_option(&["--ignore-checks"], StoreTrue, "Ignore time checks and additional checks");
+        parser.refer(&mut args.ignore_time_check)
+            .add_option(&["--ignore-time-check", "--ignore-time-checks"], StoreTrue, "Disable all time checks");
+        parser.refer(&mut args.ignore_additional_check)
+            .add_option(&["--ignore-additional-check", "--ignore-additional-checks"],StoreTrue, "Disable all additional checks");
         parser.parse_args_or_exit();
+    }
+
+    // all implies manual, but manual implies not all
+    if args.run_all {
+        args.run_manual = true;
+        args.run_manual_only = false;
+    } else if args.run_manual {
+        args.run_manual_only = true;
     }
 
     let log_level = if args.verbose {
@@ -91,6 +140,18 @@ fn main() {
     } else {
         LevelFilter::Info
     };
+
+    // set defaults for command printing
+    if !args.hide_command {
+        args.show_command_output |= args.verbose | args.debug;
+    }
+    args.show_command |= args.show_command_output;
+
+    // ignore checks implies ignoring both time checks and additional checks
+    if args.ignore_checks {
+        args.ignore_time_check = true;
+        args.ignore_additional_check = true;
+    }
 
     // TODO: Always prints timestamps in UTC
     Builder::new()

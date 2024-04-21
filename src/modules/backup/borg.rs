@@ -1,3 +1,4 @@
+use std::rc::Rc;
 pub use crate::modules::shared::borg::Borg;
 use crate::modules::traits::Backup;
 use serde_json::Value;
@@ -8,7 +9,7 @@ use crate::util::objects::time::ExecutionTiming;
 impl Backup for Borg {
     const MODULE_NAME: &'static str = "borg";
 
-    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         Borg::new(name, config_json, paths, args, None)
     }
 

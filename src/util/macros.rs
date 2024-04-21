@@ -21,6 +21,19 @@ macro_rules! try_result {
     }
 }
 
+#[macro_export]
+macro_rules! try_result_debug {
+    ($res:expr, $err:expr) => {
+        match $res {
+            Ok(val) => val,
+            Err(orig) => {
+                error!("{} ({:?})", $err, orig);
+                return Err(String::from($err));
+            }
+        }
+    }
+}
+
 /**
   * Try to get the content of an option, returning an error if there is no content
   * If an error occurs, it is returned as result of the calling function.

@@ -1,5 +1,6 @@
+use std::os::unix::prelude::ExitStatusExt;
 use crate::util::objects::paths::{SourcePath, ModulePaths};
-use crate::{change_error, try_result, dry_run};
+use crate::{change_error, try_result, dry_run, Arguments};
 
 use std::process::{Command, Child, ExitStatus};
 
@@ -144,21 +145,45 @@ impl CommandWrapper {
         return Ok(());
     }
 
-    pub fn run_configuration(&mut self, print: bool, dry_run: bool) -> Result<(),String> {
-        return self.run_configuration_output(false, print, dry_run);
-    }
-
-    pub fn run_configuration_output(&mut self, output: bool, print: bool, dry_run: bool) -> Result<(),String> {
+    pub fn run_configuration_output(&mut self, output: bool, print_command: bool, dry_run: bool) -> Result<(),String> {
         if dry_run {
             dry_run!(self.to_string());
             return Ok(());
-        } else if print {
+        }
+
+        if print_command {
             println!("-> {}", self.to_string());
-            return self.run();
-        } else if output {
-            return self.run();
+        }
+
+        return if output {
+            self.run()
         } else {
-            return self.run_without_output();
+            self.run_without_output()
+        }
+    }
+
+    pub fn run_with_args(&mut self, args: &Arguments) -> Result<(), String> {
+        return self.run_configuration_output(
+            args.show_command_output,
+            args.show_command,
+            args.dry_run
+        );
+    }
+
+    pub fn run_get_status_with_args(&mut self, args: &Arguments) -> Result<ExitStatus,String> {
+        if args.dry_run {
+            dry_run!(self.to_string());
+            return Ok(ExitStatus::from_raw(0));
+        }
+
+        if args.show_command {
+            println!("-> {}", self.to_string());
+        }
+
+        return if args.show_command_output {
+            self.run_get_status()
+        } else {
+            self.run_get_status_without_output()
         }
     }
 

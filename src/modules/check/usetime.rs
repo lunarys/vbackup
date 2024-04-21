@@ -7,6 +7,7 @@ use crate::util::objects::paths::{ModulePaths};
 use crate::Arguments;
 
 use std::path::Path;
+use std::rc::Rc;
 use serde_json::{Value,json as create_json};
 use serde::{Deserialize};
 
@@ -14,7 +15,7 @@ const USETIME_PROPERTY: &str = "usetime";
 
 pub struct Usetime {
     config: Configuration,
-    dry_run: bool
+    args: Rc<Arguments>
 }
 
 struct BackupInfo {
@@ -45,12 +46,12 @@ fn relative_backup_info() -> String {
 impl Check for Usetime {
     const MODULE_NAME: &'static str = "usetime";
 
-    fn new(_name: &str, config_json: &Value, _paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(_name: &str, config_json: &Value, _paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let config = json::from_value::<Configuration>(config_json.clone())?; // TODO: - clone
 
         return Ok(Box::new(Self {
             config,
-            dry_run: args.dry_run
+            args: args.clone()
         }));
     }
 
@@ -81,7 +82,7 @@ impl Check for Usetime {
 
         debug!("Resetting usetime for server to zero");
 
-        if self.dry_run {
+        if self.args.dry_run {
             dry_run!(format!("Writing usetime=0 to file '{}'", self.config.file));
             return Ok(());
         } else {

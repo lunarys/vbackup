@@ -54,25 +54,30 @@ such that the backup server is not started for each sync separately and can prof
 ## Command line arguments
 `vbackup <operation> [options]`
 
-| Operation | Description             |
-|-----------|-------------------------|
-| run       | Run backup & sync       |
-| backup    | Run only backup         |
-| sync      | Run only sync           |
-| list      | List all configurations |
+| Operation | Description                                                                              |
+|-----------|------------------------------------------------------------------------------------------|
+| run       | Run backup & sync.                                                                       |
+| backup    | Run only backup.                                                                         |
+| sync      | Run only sync.                                                                           |
+| list      | List all configurations.                                                                 |
+| restore   | Restore a configuration. Interactive. Take care when there are files at the destination. |
 
-| Option                              | is flag |      Default value       | Description                                                                                                                                   |
-|-------------------------------------|---------|:------------------------:|-----------------------------------------------------------------------------------------------------------------------------------------------|
-| -n, --name                          | no      |                          | Name of a specific configuration to run operation on.                                                                                         |
-| -c, --config                        | no      | /etc/vbackup/config.json | Specify the base configuration file.                                                                                                          |
-| --dry-run                           | yes     |          false           | Do not perform any permanent changes, instead print what would be done.                                                                       |
-| -v, --verbose                       | yes     |          false           | Enable verbose logging (Loglevel: Trace).                                                                                                     |
-| -d, --debug                         | yes     |          false           | Enable debug logging (Loglevel: Debug).                                                                                                       |
-| -q, --quiet                         | yes     |          false           | Disable info logging (Loglevel: Warn).                                                                                                        |
-| -f, --force                         | yes     |          false           | Disregard all constraints, forcing the run.                                                                                                   |
-| -b, --bare, --no-docker             | yes     |          false           | Do not use docker. Warning: Can't backup docker volumes (duh!) and might affect the structure of the resulting backup. Not tested thoroughly. |
-| --no-reporting                      | yes     |          false           | Disable reporting for this run.                                                                                                               |
-| --override-disabled, --run-disabled | yes     |          false           | Ignore the disabled status on configurations.                                                                                                 |
+| Option                              | is flag |      Default value       | Description                                                                                                                                                                                    |
+|-------------------------------------|---------|:------------------------:|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| -n, --name                          | no      |                          | Name of a specific configuration to run operation on.                                                                                                                                          |
+| -c, --config                        | no      | /etc/vbackup/config.json | Specify the base configuration file.                                                                                                                                                           |
+| --dry-run                           | yes     |          false           | Do not perform any permanent changes, instead print what would be done.                                                                                                                        |
+| -v, --verbose                       | yes     |          false           | Enable verbose logging (Loglevel: Trace).                                                                                                                                                      |
+| -d, --debug                         | yes     |          false           | Enable debug logging (Loglevel: Debug).                                                                                                                                                        |
+| -q, --quiet                         | yes     |          false           | Disable info logging (Loglevel: Warn).                                                                                                                                                         |
+| -f, --force                         | yes     |          false           | Disregard all constraints, forcing the run.                                                                                                                                                    |
+| -b, --bare, --no-docker             | yes     |          false           | Do not use docker. Warning: Can't backup docker volumes (duh!) and might affect the structure of the resulting backup. Not tested thoroughly.                                                  |
+| --no-reporting                      | yes     |          false           | Disable reporting for this run.                                                                                                                                                                |
+| --override-disabled, --run-disabled | yes     |          false           | Ignore the disabled status on configurations.                                                                                                                                                  |
+| --show-command                      | yes     |          false           | Print commands that are executed. Enabled by default if --show-command-output is enabled.                                                                                                      |
+| -o, --show-command-output           | yes     |          false           | Print the output of executed commands.                                                                                                                                                         |
+| --hide-command                      | yes     |          false           | Hide command output that would be printed due to --verbose or --debug. Does not affect --show-command or --show-command-output.                                                                |
+| --restore-to                        | no      |                          | Set a custom location to restore a configuration to. Take care: This applies to all configurations, so better only run either sync OR backup restore with this. Does not work for all modules. |
 
 ## Requirements
 ### Docker mode
@@ -462,7 +467,7 @@ If you want to reset the repository entirely remove the module data directory an
 }
 ```
 
-#### duplicati (over sftp)
+#### duplicati (over sftp) [DEPRECATED]
 Send a backup to a remote destination using [duplicati](https://www.duplicati.com/) over sftp.
 Only really makes sense without creating a local backup before.
 
@@ -674,6 +679,3 @@ Send information about backup and sync runs to additional destinations.
   }
 }
 ```
-
-## Todo
-- Implement automatic restore of backups

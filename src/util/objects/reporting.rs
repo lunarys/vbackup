@@ -1,7 +1,8 @@
 #[derive(Clone)]
 pub enum ReportEvent {
     Operation(OperationStatus),
-    Status(StatusReport)
+    Status(StatusReport),
+    Version(String)
 }
 
 #[derive(Clone)]
@@ -23,7 +24,8 @@ pub enum Status {
     DONE,
     ERROR,
     SKIP,
-    DISABLED
+    DISABLED,
+    MANUAL
 }
 
 #[derive(Clone)]
@@ -40,7 +42,8 @@ impl std::fmt::Display for Status {
             Status::DONE => write!(f, "done"),
             Status::ERROR => write!(f, "failure"),
             Status::SKIP => write!(f, "skip"),
-            Status::DISABLED => write!(f, "disabled")
+            Status::DISABLED => write!(f, "disabled"),
+            Status::MANUAL => write!(f, "disabled (manual)")
         }
     }
 }

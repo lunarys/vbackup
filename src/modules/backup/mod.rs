@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use crate::modules::traits::Backup;
 use crate::util::objects::time::{ExecutionTiming};
 use crate::util::objects::paths::{ModulePaths};
@@ -13,7 +14,7 @@ pub struct BackupModule {
 }
 
 impl BackupModule {
-    pub fn new(backup_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Self, String> {
+    pub fn new(backup_type: &str, name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Self, String> {
         let module: Box<dyn BackupWrapper> = match backup_type.to_lowercase().as_str() {
             tar7zip::Tar7Zip::MODULE_NAME => {
                 tar7zip::Tar7Zip::new(name, config_json, paths, args)?

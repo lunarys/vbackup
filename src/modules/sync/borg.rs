@@ -1,3 +1,4 @@
+use std::rc::Rc;
 pub use crate::modules::shared::borg::Borg;
 use crate::modules::traits::{Sync};
 use serde_json::Value;
@@ -24,7 +25,7 @@ pub struct BorgSyncConfig {
 impl Sync for Borg {
     const MODULE_NAME: &'static str = "borg";
 
-    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Arguments) -> Result<Box<Self>, String> {
+    fn new(name: &str, config_json: &Value, paths: ModulePaths, args: &Rc<Arguments>) -> Result<Box<Self>, String> {
         let config = json::from_value::<DeserializeBorgSyncConfig>(config_json.clone())?;
         let ssh_config = auth_data::resolve::<SshConfig>(&config.host_reference, &config.host, paths.base_paths.as_ref())?;
 

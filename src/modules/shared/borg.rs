@@ -156,9 +156,9 @@ impl Borg {
          * limit to proper prefix
          */
         if let Some(prefix) = self.config.prefix.as_ref() {
-            command.arg_string(format!("--prefix=vbackup_{}_", prefix));
+            command.arg_string(format!("--glob-archives=vbackup_{}_*", prefix));
         } else {
-            command.arg_str("--prefix=vbackup_");
+            command.arg_str("--glob-archives=vbackup_*");
         }
 
         /*
